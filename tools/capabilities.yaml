@@ -1,0 +1,70 @@
+schema_version: 1
+
+capabilities:
+  source_control:
+    required: true
+    purpose: repository inspection, branches, pull requests and review evidence
+    trust: repository-policy-bound
+    destructive_actions: explicit-authorization
+
+  filesystem:
+    required: true
+    purpose: repository-local file inspection and edits
+    trust: repository-scope
+    destructive_actions: explicit-authorization
+
+  documentation_lookup:
+    required: false
+    purpose: official external documentation and dependency verification
+    trust: external-evidence
+
+  browser:
+    required: false
+    purpose: web UI or documentation interaction when an API/tool is insufficient
+    trust: external-ui
+
+  issue_project_management:
+    required: false
+    purpose: issue and project workflow automation
+    trust: repository-policy-bound
+
+  runtime_editor:
+    required: false
+    profiles:
+      - unreal
+    purpose: editor/runtime automation such as Unreal tooling or MCP
+    trust: environment-specific
+    destructive_actions: explicit-authorization
+
+  database_inspection:
+    required: false
+    purpose: bounded data/schema inspection
+    trust: environment-specific
+    destructive_actions: explicit-authorization
+
+  design_visual_authoring:
+    required: false
+    profiles:
+      - mobile
+    purpose: deterministic visual composition, component inspection and repository-owned design interchange
+    trust: repository-artifact-bound
+
+  dcc_pipeline:
+    required: false
+    profiles:
+      - unreal
+    purpose: deterministic DCC/editor interchange with explicit provenance and shipping boundaries
+    trust: repository-artifact-bound
+
+rules:
+  - never-store-secrets-in-repository-config
+  - tool-access-does-not-bypass-repository-policy
+  - current-revision-and-environment-required-for-proof
+  - unavailable-required-tool-is-blocked-not-pass
+  - promote-capability-contracts-not-private-endpoints
+  - proven-tooling-before-custom-invention
+  - accepted-tool-output-requires-deterministic-repository-return-path
+  - generated-artifact-freshness-is-content-or-digest-not-mtime
+  - production-tool-provenance-and-lock-graph-required
+  - dev-editor-proof-tools-excluded-from-shipping-by-default
+  - prefer-bounded-domain-operations-over-broad-low-level-agent-api

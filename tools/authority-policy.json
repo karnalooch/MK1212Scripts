@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "authority": "repository",
+  "admission_order": [
+    "proven_public_pattern_or_reviewed_tool",
+    "platform_native_capability",
+    "proven_open_source_or_dcc",
+    "minimal_project_owned_custom"
+  ],
+  "external_tool_eligibility": {
+    "repository_native_or_deterministic_return_path": true,
+    "saas_only_authority": "research-only"
+  },
+  "generated_artifacts": {
+    "deterministic": true,
+    "freshness": "content-or-digest",
+    "mtime_only_forbidden": true
+  },
+  "provenance": {
+    "exact_upstream_revision": true,
+    "license_evidence": true,
+    "lock_production_tool_dependency_graph": true,
+    "reproducible_install": true
+  },
+  "lifecycle": {
+    "dev_editor_proof_tools_shipping_default": "excluded",
+    "shipping_promotion": "explicit-reviewed"
+  },
+  "agent_api": {
+    "prefer_bounded_domain_operations": true
+  },
+  "validation": {
+    "drift_guards_required_for_declared_boundaries": true,
+    "ambiguous_required_boundary": "fail-closed"
+  }
+}
