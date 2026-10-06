@@ -1,8 +1,8 @@
 # Multiplayer, OOS and runtime research playbook
 
 Status: canonical research workflow  
-Issue: #3  
-Last reviewed: 2026-10-06
+Issues: #3, #5  
+Last reviewed: 2026-10-07
 
 ## Scope
 
@@ -75,6 +75,7 @@ Classify relevant code paths:
 - REPO-OBSERVED;
 - CROSS-TITLE-REFERENCE;
 - HISTORICAL-RE;
+- COMMUNITY-REPORTED;
 - HYPOTHESIS.
 
 Audit for common MP hazards:
@@ -88,6 +89,23 @@ Audit for common MP hazards:
 - save/load reconstruction gaps;
 - callbacks that create forces/characters or alter diplomacy/economy;
 - model changes executed on only one peer.
+
+### Mandatory fragile-boundary matrix
+
+The research catalogue identifies recurring fragile transitions. Treat these as first-class test targets:
+
+- manual battle -> campaign restoration;
+- autoresolve -> post-battle UI;
+- river/bridge battle;
+- coastal assault;
+- siege battle;
+- naval battle;
+- faction turn end -> full AI cycle -> next human turn;
+- invasion/world-event trigger;
+- Papal/diplomacy transition;
+- save -> quit -> reload -> continue.
+
+A feature that touches one of these boundaries SHOULD add barrier logs immediately before and after its own mutation.
 
 ### Phase 2 — deterministic instrumentation
 
@@ -103,8 +121,10 @@ Prefer supported instrumentation first:
 Recommended log schema:
 
 ```text
-MKMP|seq=<n>|turn=<n>|faction=<key>|event=<name>|peer=<role>|cqi=<id>|action=<name>|inputs=<stable values>|result=<stable values>
+MKMP|seq=<n>|turn=<n>|phase=<phase>|faction=<key>|event=<name>|peer=<role>|cqi=<id>|token=<idempotence-token>|action=<name>|inputs=<stable values>|result=<stable values>|fingerprint=<hash>
 ```
+
+For crash/resource investigations also record script-owned counters (tables/timers/spawns/UI children) and external process-memory telemetry when available. Do not label degradation as OOM without allocator/commit evidence.
 
 Use a monotonically increasing deterministic sequence only where its increment semantics are themselves shared and proven.
 
@@ -151,7 +171,21 @@ If divergence occurs inside a broad event:
 5. disable half the branches;
 6. repeat until the first differing operation is isolated.
 
-### Phase 6 — fix at the highest supported layer
+### Phase 6 — apply scripting guardrails
+
+Before implementing a fix, review `SCRIPT_SAFETY_GUARDRAILS.md`.
+
+At minimum answer:
+
+- what makes the operation deterministic?
+- what proves exactly-once execution?
+- what phase is safe?
+- what entity validity checks fail closed?
+- what state persists across save/load?
+- what work/state budget prevents runaway growth?
+- what both-peer evidence proves the result?
+
+### Phase 7 — fix at the highest supported layer
 
 Fix preference:
 
@@ -190,6 +224,19 @@ Before true simultaneous movement, target a safer model:
 - both peers apply the same ordered command set.
 
 This can remove waiting time without requiring the engine to accept two fully active factions at once.
+
+## Resource/OOM-like investigation rule
+
+Read `ATTILA_CRASH_OOM_RESOURCE_HAZARDS.md`.
+
+Use precise language:
+
+- confirmed OOM only with allocation/commit evidence;
+- resource pressure for workload/capacity stress;
+- memory-leak-like only for progressive degradation that has not been measured;
+- capacity-limit crash for count/roster threshold failures.
+
+Long-session tests SHOULD sample both external process counters and script-owned counters.
 
 ## Success criteria for an OOS fix
 
