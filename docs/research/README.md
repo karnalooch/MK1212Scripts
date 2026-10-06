@@ -2,7 +2,7 @@
 
 This directory is the source and evidence model for engineering work that touches Total War: ATTILA scripting, debugging, multiplayer determinism, runtime instrumentation, or future simultaneous-turn feasibility.
 
-Issues: #3, #5  
+Issues: #3, #5, #7  
 Last reviewed: 2026-10-07
 
 ## Why this exists
@@ -62,12 +62,14 @@ flowchart LR
     C[Exact-build runtime proof] --> F[Empirical engine lane]
     W[WH3 docs] --> G[Reference-pattern lane]
     R[Historical CE table] --> H[RE-hypothesis lane]
+    T[twdll exact-build runtime adapter] --> I[Native observability lane]
 
     D --> X[Engineering decision]
     E --> X
     F --> X
     G -->|must verify| X
     H -->|must revalidate| X
+    I -->|runtime evidence only until deterministic proof| X
 ```
 
 ## Documents
@@ -79,6 +81,7 @@ flowchart LR
 - [ATTILA multiplayer stability failure catalogue](ATTILA_MP_STABILITY_FAILURE_CATALOG.md)
 - [Crash, OOM-like and resource-pressure hazards](ATTILA_CRASH_OOM_RESOURCE_HAZARDS.md)
 - [MK1212 scripting safety guardrails](SCRIPT_SAFETY_GUARDRAILS.md)
+- [twdll as the MK1212 runtime observability backend](TWDLL_OBSERVABILITY_BACKEND.md)
 
 ## Evidence states
 
@@ -119,3 +122,15 @@ For runtime-sensitive work:
 8. keep instrumentation separate from gameplay changes where practical.
 
 This directory is the canonical research authority for future MK1212 multiplayer/desync and simultaneous-turn work.
+
+
+## Native runtime evidence lane
+
+The current preferred native observability candidate is **twdll**:
+
+- our fork: https://github.com/karnalooch/twdll
+- upstream: https://github.com/bukowa/twdll
+- API docs: https://bukowa.github.io/twdll/
+- integration contract: [TWDLL_OBSERVABILITY_BACKEND.md](TWDLL_OBSERVABILITY_BACKEND.md)
+
+twdll-derived values are classified as **exact-build runtime evidence** only when their semantics and lifecycle are verified. Merely obtaining a value from native memory does not make it multiplayer-safe.
