@@ -1,6 +1,6 @@
 # twdll as the MK1212 runtime observability backend
 
-Status: research/integration contract  
+Status: implementation-ready / runtime proof pending  
 Issue: #7  
 Last reviewed: 2026-10-07
 
@@ -206,30 +206,39 @@ This is especially useful around:
 - family-tree mutation;
 - building-health changes.
 
-## Desired MKMP adapter
+## Implemented MKMP adapter
 
 Do not expose twdll everywhere in product scripts.
 
-Prefer one narrow adapter owned by the multiplayer/runtime layer:
+The repository now owns one narrow adapter:
+
+`campaigns/main_attila/common/mkmp_runtime.lua`
+
+Current read-only API:
 
 ```text
-mkmp.runtime.available()
-mkmp.runtime.get_build()
-mkmp.runtime.get_campaign_phase()
-mkmp.runtime.get_turn_owner()
-mkmp.runtime.get_world_fingerprint()
-mkmp.runtime.get_faction_fingerprint(faction_key)
-mkmp.runtime.get_force_state(cqi)
-mkmp.runtime.get_battle_state()
-mkmp.runtime.get_resource_stats()
-mkmp.runtime.log_event(name, payload)
+MKMP_Runtime_Initialize()
+MKMP_Runtime_Available()
+MKMP_Runtime_Get_Environment_Fingerprint()
+MKMP_Runtime_Get_Campaign_Snapshot()
+MKMP_Runtime_Get_Battle_Telemetry()
+MKMP_Runtime_Log_Barrier(name)
+MKMP_Runtime_Status()
 ```
 
-Names are provisional.
+The adapter currently consumes only documented twdll capabilities needed for the first observability slice:
 
-The adapter should:
+- `twdll.core.Log`;
+- `twdll.core.GameBuild`;
+- `twdll.core.GetBuildSha`;
+- `twdll.world.GetFactionCount`;
+- `twdll.battle.GetBattleInfo`.
 
-- normalize twdll return values;
+For battle telemetry the adapter deliberately drops the `battle` and `manager` memory-address fields and exposes only semantic `cap` / `size` values.
+
+The adapter:
+
+- normalizes twdll return values;
 - hide raw pointer/address details from ordinary Lua;
 - expose capability checks;
 - provide stable failure behaviour;
@@ -418,3 +427,26 @@ Runtime-derived data may influence gameplay only after a separate issue proves:
 Until then:
 
 > **twdll is an observability backend, not a gameplay oracle.**
+
+
+## Current implementation state
+
+Implemented without claiming runtime proof:
+
+- optional `package.loadlib` under `pcall`;
+- missing DLL -> Lua-only gameplay continues;
+- failed `luaopen_twdll` -> Lua-only gameplay continues;
+- campaign singleton query occurs only from `Common_Initializer` after the campaign world exists;
+- native build SHA and faction count are diagnostic only;
+- battle memory addresses are filtered;
+- deterministic Lua-side semantic campaign snapshot is available for later comparison.
+
+Still intentionally unproven until the final runtime pass:
+
+- current 2026 Attila binary compatibility;
+- save/load reinitialization;
+- two-peer passive behavior;
+- exact host/client equality of semantic snapshots;
+- whether loading twdll itself changes any MP engine behavior.
+
+Those items remain open because they require running Attila, not because the adapter lacks an implementation path.
