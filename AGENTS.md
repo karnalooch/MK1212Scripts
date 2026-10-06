@@ -35,7 +35,7 @@ Rules:
 - Never claim a WH3 API exists in Attila because names or engine concepts look similar.
 - Never reuse a historical `Attila.dll+offset` as a current address without exact-build revalidation and signature/semantic proof.
 - Prefer official Attila scripting, Assembly Kit tools and supported logging before runtime instrumentation.
-- Label claims as DOCUMENTED, REPO-OBSERVED, RUNTIME-PROVEN, CROSS-TITLE-REFERENCE, HISTORICAL-RE, HYPOTHESIS, BLOCKED or REJECTED where research status matters.
+- Label claims as DOCUMENTED, REPO-OBSERVED, RUNTIME-PROVEN, CROSS-TITLE-REFERENCE, HISTORICAL-RE, COMMUNITY-REPORTED, HYPOTHESIS, BLOCKED or REJECTED where research status matters.
 - Treat the WH3 debug-drawing documentation as an observability/design reference only until an Attila equivalent is proven.
 - Treat the 2016 CE table as historical RE methodology/evidence only. Do not implement or distribute its CRC/DRM bypass path.
 - Runtime executable patching, binary mutation and integrity-bypass work remain outside normal repository work and require a separate explicit decision.
@@ -46,16 +46,28 @@ Canonical research docs:
 - `docs/research/WH3_DEBUG_DRAWING_REFERENCE.md`
 - `docs/research/ATTILA_CE_TABLE_1_6_0_9824.md`
 - `docs/research/MP_RUNTIME_RESEARCH_PLAYBOOK.md`
+- `docs/research/ATTILA_MP_STABILITY_FAILURE_CATALOG.md`
+- `docs/research/ATTILA_CRASH_OOM_RESOURCE_HAZARDS.md`
+- `docs/research/SCRIPT_SAFETY_GUARDRAILS.md`
 
-## Multiplayer determinism
+## Multiplayer determinism and script safety
 
-Multiplayer work is synchronization-sensitive.
+Multiplayer work is synchronization-sensitive. `docs/research/SCRIPT_SAFETY_GUARDRAILS.md` is normative for runtime changes.
 
-- Any value that changes the shared campaign model must be deterministic across peers.
-- Do not introduce Lua `math.random()` into model-changing multiplayer paths. Use an engine/campaign deterministic mechanism only after verifying its Attila behavior.
-- Treat local UI events, local faction state, unordered table iteration and asynchronous callbacks as synchronization boundaries until proven otherwise.
+Mandatory rules:
+
+- Any value that changes the shared campaign model MUST be deterministic across peers.
+- Do not introduce Lua `math.random()`, `math.randomseed`, `os.time` or `os.clock` into shared-model runtime paths. CI rejects obvious new occurrences.
+- Every high-impact model mutation MUST have an explicit exactly-once story: listener scope, phase, idempotence token/flag and retry behaviour.
+- Treat local UI events, local faction state, unordered `pairs()` iteration and asynchronous callbacks as synchronization boundaries until proven otherwise.
+- Local UI handlers MUST NOT directly mutate shared model unless identical execution on all peers is proven.
+- Entity lookups MUST fail closed when faction/character/force/region/building state is missing or unexpected.
+- Recurring timers, tables, UI components, save serialization and spawned entities MUST be bounded and have cleanup ownership.
+- Post-battle, end-turn/AI-cycle, invasion and Papal/diplomacy transitions are high-risk boundaries and require targeted instrumentation when touched.
+- Local configuration MUST NOT alter shared MP model unless values are verified identical or transferred through a proven shared mechanism.
+- Do not call progressive slowdown/crashing an OOM or memory leak without memory/allocation evidence; use the resource-risk terminology in the canonical docs.
 - Do not claim a desync/OOS fix from single-player or single-client evidence.
-- Exact-SHA multiplayer evidence must record the triggering event/turn and the result on both peers when the task requires runtime proof.
+- Exact-SHA multiplayer evidence must record game build, mod list/load order, host/client roles, triggering event/turn and both-peer results.
 - Existing synchronization hazards are technical debt to audit deliberately; do not silently broaden a change into a mass rewrite.
 
 ## Gumball repository contract
@@ -91,6 +103,7 @@ For repository-policy changes run:
 
 - `python scripts/gumball.py doctor`
 - `python scripts/ci/check_repository.py`
+- `python scripts/ci/check_mp_safety_diff.py --base <base-sha>` when runtime Lua changes are involved
 
 Then use the GitHub Actions results for repository policy, governance, security and the caller-local Aggregate CI gate.
 
