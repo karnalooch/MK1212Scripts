@@ -49,6 +49,28 @@ Canonical research docs:
 - `docs/research/ATTILA_MP_STABILITY_FAILURE_CATALOG.md`
 - `docs/research/ATTILA_CRASH_OOM_RESOURCE_HAZARDS.md`
 - `docs/research/SCRIPT_SAFETY_GUARDRAILS.md`
+- `docs/research/TWDLL_OBSERVABILITY_BACKEND.md`
+
+## Native runtime observability
+
+For work involving Lua↔DLL integration, runtime memory/state, engine hooks or semantic fingerprints, read `docs/research/TWDLL_OBSERVABILITY_BACKEND.md` first.
+
+Mandatory rules:
+
+- `karnalooch/twdll` is the preferred experimental native observability backend; preserve upstream provenance to `bukowa/twdll`.
+- Load/capability handling MUST fail closed: missing or incompatible DLL disables native diagnostics and MUST NOT break ordinary MK1212 gameplay.
+- Raw pointers, module addresses, hook addresses, thread IDs, wall-clock timing and local UI state MUST NOT drive shared multiplayer gameplay.
+- twdll-returned semantic values remain observability-only until both-peer exact-build determinism is proven.
+- Ordinary gameplay modules SHOULD depend on a narrow `mkmp.runtime` adapter rather than calling twdll directly.
+- Native instrumentation MUST be bounded and must not poll or log without ownership/rate limits.
+- A runtime-derived gameplay decision requires a separate issue/proof showing peer equality, phase stability, save/load stability and deterministic fallback behaviour.
+- Do not use twdll integration as a route to CRC/DRM bypass or modified Attila binary redistribution.
+
+Links:
+
+- our fork: https://github.com/karnalooch/twdll
+- upstream: https://github.com/bukowa/twdll
+- API docs: https://bukowa.github.io/twdll/
 
 ## Multiplayer determinism and script safety
 
