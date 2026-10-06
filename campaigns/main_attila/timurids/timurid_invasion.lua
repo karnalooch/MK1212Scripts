@@ -124,8 +124,8 @@ end
 
 function SpawnTimuridArmyInZone(faction_name, unit_list, region, zone)
 	local turn_number = cm:model():turn_number();
-	local x = math.random(zone.x1, zone.x2);
-	local y = math.random(zone.y2, zone.y1);
+	local x = MK1212_Random_Int(zone.x1, zone.x2, "timurids.spawn_x:"..faction_name..":"..tostring(turn_number));
+	local y = MK1212_Random_Int(zone.y2, zone.y1, "timurids.spawn_y:"..faction_name..":"..tostring(turn_number));
 
 	cm:create_force(
 		faction_name, 					-- name of faction
