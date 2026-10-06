@@ -20,6 +20,52 @@ flowchart LR
 
 The diagram describes ownership boundaries, not a network synchronization guarantee.
 
+## Native observability extension
+
+Issue #7 introduces a **read-only-first native observability lane** using twdll.
+
+- our fork: https://github.com/karnalooch/twdll
+- upstream: https://github.com/bukowa/twdll
+- API docs: https://bukowa.github.io/twdll/
+- canonical integration contract: [research/TWDLL_OBSERVABILITY_BACKEND.md](research/TWDLL_OBSERVABILITY_BACKEND.md)
+
+```mermaid
+flowchart TB
+    subgraph LUA["Lua layer"]
+        GAMEPLAY["MK1212 gameplay"]
+        RUNTIME["MKMP runtime adapter"]
+        LOGS["Structured diagnostics"]
+    end
+
+    subgraph DLL["Native layer"]
+        TWDLL["twdll_attila.dll"]
+    end
+
+    subgraph ATTILA["ATTILA engine"]
+        W["WORLD"]
+        M["CAMPAIGN_MODEL"]
+        U["CAMPAIGN_UI"]
+        B["BATTLE"]
+    end
+
+    GAMEPLAY --> RUNTIME
+    RUNTIME --> TWDLL
+
+    TWDLL <--> W
+    TWDLL <--> M
+    TWDLL <--> U
+    TWDLL <--> B
+
+    TWDLL --> RUNTIME
+    RUNTIME --> LOGS
+
+    RUNTIME -. "shared gameplay only after deterministic proof" .-> GAMEPLAY
+```
+
+The runtime adapter exists so ordinary Lua does not need raw memory/pointer knowledge.
+
+Initial rule: **native data is diagnostic evidence, not automatic gameplay authority**.
+
 ## Source layout
 
 - `campaigns/main_attila/` — campaign bootstrap and gameplay systems.

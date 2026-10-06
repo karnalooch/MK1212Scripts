@@ -5,6 +5,7 @@ This is the documentation router and authority map for this fork.
 ## Start here
 
 - [Attila research authority](research/README.md) — source hierarchy for Assembly Kit, scripting, multiplayer, runtime instrumentation and cross-title research.
+- [twdll observability backend](research/TWDLL_OBSERVABILITY_BACKEND.md) — native Lua↔C++↔Attila architecture, safety boundaries, fallback contract and MP fingerprint plan.
 - [Architecture](ARCHITECTURE.md) — repository layout, runtime boundaries and authoritative surfaces.
 - [Gumball adoption](GUMBALL_ADOPTION.md) — repository-platform baseline, current immutable platform pin and deferred items.
 - [Diagram style](DIAGRAM_STYLE.md) — required Blueprint-style diagram conventions.
@@ -18,6 +19,7 @@ This is the documentation router and authority map for this fork.
 | --- | --- |
 | Game/mod behavior | Lua/TSV/content under `campaigns/`, `lua_scripts/`, `script/`, `db/`, `text/`, `ui/` |
 | Attila scripting/debug/runtime research | `docs/research/README.md` and its linked research documents |
+| Native runtime observability / twdll | `docs/research/TWDLL_OBSERVABILITY_BACKEND.md` |
 | Agent workflow | `AGENTS.md` |
 | Gumball adoption | `gumball.yaml` + `docs/GUMBALL_ADOPTION.md` |
 | Repository lifecycle / labels / CI cost | `.gumball/repository-os.json` |
@@ -37,3 +39,19 @@ Do not create a second document for a subject already owned by one of these surf
 - [ATTILA MP stability failure catalogue](research/ATTILA_MP_STABILITY_FAILURE_CATALOG.md)
 - [Crash/OOM-like/resource-pressure hazards](research/ATTILA_CRASH_OOM_RESOURCE_HAZARDS.md)
 - [Multiplayer scripting safety guardrails](research/SCRIPT_SAFETY_GUARDRAILS.md)
+- [twdll runtime observability backend](research/TWDLL_OBSERVABILITY_BACKEND.md)
+
+
+## Native observability map
+
+```mermaid
+flowchart LR
+    LUA["MK1212 Lua"] --> ADAPTER["MKMP runtime adapter"]
+    ADAPTER --> DLL["twdll_attila.dll"]
+    DLL --> ENGINE["ATTILA runtime"]
+    ENGINE --> DLL
+    DLL --> ADAPTER
+    ADAPTER --> PROOF["Logs / state fingerprints / diagnostics"]
+```
+
+Use the linked twdll document before proposing any Lua↔DLL integration or runtime-derived gameplay behaviour.
