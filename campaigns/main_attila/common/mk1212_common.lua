@@ -740,6 +740,53 @@ end
 ---------------- Saving/Loading ----------------
 ------------------------------------------------
 
+MK1212_SAVE_SCHEMA_VERSION = 2;
+MK1212_SAVE_MAX_ENTRIES = 20000;
+MK1212_SAVE_MAX_STRING_BYTES = 1048576;
+
+function MK1212_SaveSortedKeys(tab)
+	local keys = {};
+
+	for key, _ in pairs(tab) do
+		table.insert(keys, key);
+	end
+
+	table.sort(
+		keys,
+		function(a, b)
+			return tostring(a) < tostring(b);
+		end
+	);
+
+	return keys;
+end
+
+function MK1212_SaveCommitString(context, savename, savestring, entry_count)
+	local entries = entry_count or 0;
+
+	if entries > MK1212_SAVE_MAX_ENTRIES then
+		error(
+			"MK1212 save refused: "..tostring(savename)..
+			" entries="..tostring(entries)..
+			" max="..tostring(MK1212_SAVE_MAX_ENTRIES)
+		);
+	end
+
+	if string.len(savestring) > MK1212_SAVE_MAX_STRING_BYTES then
+		error(
+			"MK1212 save refused: "..tostring(savename)..
+			" bytes="..tostring(string.len(savestring))..
+			" max="..tostring(MK1212_SAVE_MAX_STRING_BYTES)
+		);
+	end
+
+	-- Sidecar versioning keeps the established payload format backward-compatible
+	-- with existing saves while making future migrations explicit.
+	cm:save_value(savename.."__schema", MK1212_SAVE_SCHEMA_VERSION, context);
+	cm:save_value(savename, savestring, context);
+end
+
+
 cm:register_loading_game_callback(
 	function(context)
 		FACTION_TURN = cm:load_value("FACTION_TURN", "nil", context);
@@ -773,7 +820,7 @@ function SaveTable(context, tab, savename)
 		savestring = savestring..tab[i]..",";
 	end
 		
-	cm:save_value(savename, savestring, context);
+	MK1212_SaveCommitString(context, savename, savestring, #tab);
 end
 
 function LoadTable(context, savename)
@@ -806,38 +853,47 @@ end
 
 function SaveKeyPairTable(context, tab, savename)
 	local savestring = "";
-	
-	for key,value in pairs(tab) do
-		savestring = savestring..key..","..value..",;";
+	local keys = MK1212_SaveSortedKeys(tab);
+
+	for i = 1, #keys do
+		local key = keys[i];
+		local value = tab[key];
+		savestring = savestring..tostring(key)..","..tostring(value)..",;";
 	end
 
-	cm:save_value(savename, savestring, context);
+	MK1212_SaveCommitString(context, savename, savestring, #keys);
 end
 
 function SaveBooleanPairTable(context, tab, savename)
 	local savestring = "";
-	
-	for key,value in pairs(tab) do
-		savestring = savestring..key..","..tostring(value)..",;";
+	local keys = MK1212_SaveSortedKeys(tab);
+
+	for i = 1, #keys do
+		local key = keys[i];
+		local value = tab[key];
+		savestring = savestring..tostring(key)..","..tostring(value)..",;";
 	end
 
-	cm:save_value(savename, savestring, context);
+	MK1212_SaveCommitString(context, savename, savestring, #keys);
 end
 
 function SaveKeyPairTables(context, tab, savename)
 	local savestring = "";
-	
-	for key, value in pairs(tab) do
-		savestring = savestring..key..",";
+	local keys = MK1212_SaveSortedKeys(tab);
 
-		for i = 1, #value do
-			savestring = savestring..value[i]..",";
+	for i = 1, #keys do
+		local key = keys[i];
+		local value = tab[key];
+		savestring = savestring..tostring(key)..",";
+
+		for j = 1, #value do
+			savestring = savestring..tostring(value[j])..",";
 		end
 
 		savestring = savestring..";";
 	end
 
-	cm:save_value(savename, savestring, context);
+	MK1212_SaveCommitString(context, savename, savestring, #keys);
 end
 
 function LoadKeyPairTable(context, savename)
@@ -912,7 +968,9 @@ function LoadKeyPairTables(context, savename)
 				end
 			end
 
-			if #tab2 > 0 then
+			-- Preserve an explicit empty child table. Older saves already emit
+			-- "key,;" for empty values; treating empty as missing loses meaning.
+			if second_split[1] then
 				tab[second_split[1]] = DeepCopy(tab2);
 			end
 		end

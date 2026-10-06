@@ -297,12 +297,15 @@ cm:register_loading_game_callback(
 
 function SaveNicknamesStatsTable(context, tab, savename)
 	local savestring = "";
-	
-	for cqi, tab2 in pairs(tab) do
-		savestring = savestring..cqi..","..tostring(tab2["regions_taken"])..","..tostring(tab2["captives_killed"])..","..tostring(tab2["times_excommunicated"])..","..tostring(tab2["turns_without_revolt"])..","..tostring(tab2["heroic_victories"])..",;";
+	local keys = MK1212_SaveSortedKeys(tab);
+
+	for i = 1, #keys do
+		local cqi = keys[i];
+		local tab2 = tab[cqi];
+		savestring = savestring..tostring(cqi)..","..tostring(tab2["regions_taken"])..","..tostring(tab2["captives_killed"])..","..tostring(tab2["times_excommunicated"])..","..tostring(tab2["turns_without_revolt"])..","..tostring(tab2["heroic_victories"])..",;";
 	end
 
-	cm:save_value(savename, savestring, context);
+	MK1212_SaveCommitString(context, savename, savestring, #keys);
 end
 
 
