@@ -855,7 +855,7 @@ function RefreshPopeElectionPanel()
 
 		button_vote_uic:SetState("inactive");
 
-		for j = 1, math.random(8) do
+		for j = 1, MK1212_Random_Int(1, 8, "pope_ui.placeholder_votes:"..tostring(i)) do
 			local faction_logo_uic = UIComponent(list_box_uic:CreateComponent("faction_logo_"..tostring(i).."_"..tostring(j), "UI/new/faction_flags/mk_fact_unknown_flag_small"));
 
 			faction_logo_uic:SetMoveable(true);
