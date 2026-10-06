@@ -33,6 +33,23 @@ This is a **symptom description**, not proof of a leak.
 
 Use when a repeatable content-count threshold or engine limit is reported.
 
+## Crash/OOM/resource hazard matrix
+
+| Hazard | Evidence state | Failure shape | Script contribution risk | Guardrail |
+| --- | --- | --- | --- | --- |
+| confirmed allocator/commit exhaustion | not yet project-proven | OOM/alloc failure | unbounded tables/serialization/logs may amplify | measure before claiming; hard bounds |
+| long-session degradation | COMMUNITY-REPORTED | slower battle transitions, eventual CTD | retained Lua state/timers/logs can amplify | soak counters + cleanup ownership |
+| large battle/siege pressure | COMMUNITY-REPORTED | frame collapse / CTD | script UI/logging/polling adds work | disable high-volume instrumentation; bounded work |
+| AI roster >70 custom-battle crash | COMMUNITY-REPORTED / TWC-linked | custom battle screen/AI roster crash | adding unit/content cardinality | roster/content budget, compatibility check |
+| VRAM detection/reporting limits | COMMUNITY-REPORTED | graphics pressure/stutter/crash | little direct Lua control | record graphics/env; do not misdiagnose as script OOM |
+| >32 logical CPU crash (historical) | DOCUMENTED, fixed 2023 | load/crash on modern CPU | none directly | exact game build/environment fingerprint |
+| campaign/battle AI lock-up | DOCUMENTED | hang/crash during AI phase | per-turn scans/spawns can amplify complexity | bounded/event-driven work |
+| family-tree state crash | DOCUMENTED | later Faction-tab silent CTD | invalid character/family mutation | entity validation + save/load parity |
+| duplicate timers/listeners | engineering risk | CPU growth / duplicate mutation | direct | ownership, uniqueness, one-active-instance |
+| unbounded UI children | engineering risk | UI slowdown/crash | direct | reuse/destroy + hard max |
+| spawn storm | engineering risk | campaign load/AI/memory pressure | direct | per-event/turn budget |
+| log flood | engineering risk | I/O/disk/memory pressure | direct | rate/size limits, opt-in traces |
+
 ## Official engine/environment hazards
 
 ### >32 logical processor crash
