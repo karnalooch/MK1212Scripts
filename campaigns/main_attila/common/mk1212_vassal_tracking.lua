@@ -368,7 +368,7 @@ function Vassal_Make_Peace_With_Other_Vassals(faction)
 		local current_faction_name = current_faction:name();
 
 		if current_faction:at_war_with(faction) then
-			if HasValue(FACTIONS_TO_FACTIONS_VASSALIZED[faction:name()], current_faction) then
+			if HasValue(FACTIONS_TO_FACTIONS_VASSALIZED[faction:name()], current_faction_name) then
 				cm:force_make_peace(current_faction_name, faction:name());
 			end
 		end

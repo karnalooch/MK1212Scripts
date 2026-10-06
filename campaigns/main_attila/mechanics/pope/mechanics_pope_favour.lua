@@ -171,7 +171,7 @@ function Activate_Papal_Favour_System()
 		true
 	);
 	cm:add_listener(
-		"CharacterBecomesFactionLeader_Pope",
+		"CharacterBecomesFactionLeader_Pope_Favour",
 		"CharacterBecomesFactionLeader",
 		true,
 		function(context) Remove_Excommunication(context) end,
@@ -259,7 +259,7 @@ function Deactivate_Papal_Favour_System()
 	cm:remove_listener("CharacterPostBattleEnslave_Pope");
 	cm:remove_listener("CharacterPostBattleRelease_Pope");
 	cm:remove_listener("CharacterPostBattleSlaughter_Pope");
-	cm:remove_listener("CharacterBecomesFactionLeader_Pope");
+	cm:remove_listener("CharacterBecomesFactionLeader_Pope_Favour");
 	cm:remove_listener("DilemmaChoiceMadeEvent_Pope");
 	cm:remove_listener("FactionReligionConverted_Pope");
 	cm:remove_listener("MissionFailed_Check_Mission");

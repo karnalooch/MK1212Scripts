@@ -64,7 +64,7 @@ function Add_Nicknames_Tracking_Listeners()
 	if cm:is_new_game() then
 		for k, v in pairs(HISTORICAL_CHARACTERS_TO_NICKNAMES) do
 			if string.find(k, "mk_fact_") then
-				local faction = cm:model():world():faction_by_key(faction_name);
+				local faction = cm:model():world():faction_by_key(k);
 
 				if not faction:is_null_interface() then
 					local cqi = faction:faction_leader():cqi();
