@@ -92,6 +92,40 @@ Mandatory rules:
 - Exact-SHA multiplayer evidence must record game build, mod list/load order, host/client roles, triggering event/turn and both-peer results.
 - Existing synchronization hazards are technical debt to audit deliberately; do not silently broaden a change into a mass rewrite.
 
+## Output data integrity — treat it like money in the bank
+
+> **Output data is money in the bank. Do not corrupt it, silently reinterpret it, or casually rewrite it.**
+
+This applies to save-game state, serialized Lua tables, generated files, persistent flags, external helper outputs, fingerprints, logs used as proof, and any data consumed later by MK1212 or tooling.
+
+Mandatory rules:
+
+- Persistent/output formats MUST have explicit ownership and, when evolvable, a schema/version.
+- Existing valid saves and outputs MUST be preserved unless an explicit migration plan says otherwise.
+- A change that alters persisted meaning MUST define backward-compatibility, migration, defaulting and rollback behaviour.
+- Serialization MUST be deterministic when order can affect comparison, hashing, replay, MP parity or future parsing.
+- Writers MUST validate inputs and invariants before committing persistent state.
+- Partial or failed writes MUST NOT leave a half-valid state that later code accepts as authoritative.
+- Destructive overwrite/delete operations MUST be justified, bounded and recoverable where practical.
+- Unknown/newer schema versions MUST fail closed rather than being guessed into an older shape.
+- Missing fields MUST use documented deterministic defaults; never invent peer-local/random fallback values.
+- Save/load code MUST preserve explicit empty state when empty and missing have different meanings.
+- Generated IDs, operation tokens and serialized keys MUST be stable and collision-aware.
+- Output size/cardinality MUST be bounded where unbounded growth could corrupt saves, exhaust resources or create pathological load times.
+- When a migration is risky, prefer copy/transform/verify/swap semantics over in-place mutation.
+- Before replacing canonical output, verify the new artifact/state first; do not destroy the last known-good copy just because generation succeeded.
+- Runtime diagnostics and fingerprints used as evidence MUST record the exact game build, repository SHA and schema version so old proof is not silently compared to incompatible new output.
+- In multiplayer, shared persistent state MUST have identical semantic meaning on every peer; byte-for-byte equality is preferred for canonical serializers and fingerprints where practical.
+
+Review question for every persistence/output change:
+
+```text
+If this write is wrong, can it destroy a user's long-running campaign
+or make two peers load different semantic state?
+```
+
+If the answer is "yes" or "not sure", the change is high risk and requires explicit migration/proof rather than an ad-hoc edit.
+
 ## Gumball repository contract
 
 This repository adopts Gumball `standard` in `preserve-local` mode.
