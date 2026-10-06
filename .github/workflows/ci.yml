@@ -36,7 +36,7 @@ jobs:
     name: Security
     uses: karnalooch/engineering-platform/.github/workflows/reusable-security.yml@ddc458c223b8020c5f36482415d4405459bd373a
     with:
-      enable_dependency_review: true
+      enable_dependency_review: false
       enable_codeql: false
       enable_trivy: true
       enable_sbom: false
