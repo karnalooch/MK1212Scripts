@@ -22,6 +22,32 @@ REGIONS_RAZED = {};
 LAST_CHARACTER_SELECTED = nil;
 LAST_SACKED_SETTLEMENT = "";
 
+function MK1212_Random_Int(minimum, maximum, token)
+	if minimum == nil or maximum == nil or minimum > maximum then
+		error("MK1212_Random_Int invalid bounds for "..tostring(token)..": "..tostring(minimum)..".."..tostring(maximum));
+	end
+
+	-- Total War campaign RNG is the project-wide boundary for any random value
+	-- that can influence campaign state. Do not replace this with Lua math.random.
+	local result = cm:random_number(maximum, minimum);
+
+	if result < minimum or result > maximum then
+		error("MK1212_Random_Int out-of-range result for "..tostring(token)..": "..tostring(result));
+	end
+
+	if dev and dev.log then
+		dev.log(
+			"[MKMP][RNG] turn="..tostring(cm:model():turn_number())..
+			" token="..tostring(token)..
+			" min="..tostring(minimum)..
+			" max="..tostring(maximum)..
+			" result="..tostring(result)
+		);
+	end
+
+	return result;
+end
+
 function Add_MK1212_Common_Listeners()
 	cm:add_listener(
 		"FactionTurnStart_Global",
@@ -240,7 +266,7 @@ function Check_Character_Age(character, random)
 					"",								-- Family Name Key
 					"",								-- Clan Name Key
 					"", 							-- Other Name Key
-					math.random(16, 30), 			-- Age
+					MK1212_Random_Int(16, 30, "common.heir_age:"..character:faction():name()..":"..tostring(character:cqi())), 			-- Age
 					true, 							-- Is Male?
 					"", 							-- Father Lookup
 					"", 							-- Mother Lookup
@@ -496,7 +522,7 @@ function Generate_Unit_List(faction_name, number_of_units)
 		local unit_list = {};
 
 		for i = 1, number_of_units do
-			table.insert(unit_list, available_units[math.random(#available_units)]);
+			table.insert(unit_list, available_units[MK1212_Random_Int(1, #available_units, "common.separatist_unit:"..faction_name..":"..tostring(i))]);
 		end
 
 		return unit_list;
