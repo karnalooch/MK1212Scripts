@@ -82,6 +82,7 @@ flowchart LR
 - [Crash, OOM-like and resource-pressure hazards](ATTILA_CRASH_OOM_RESOURCE_HAZARDS.md)
 - [MK1212 scripting safety guardrails](SCRIPT_SAFETY_GUARDRAILS.md)
 - [twdll as the MK1212 runtime observability backend](TWDLL_OBSERVABILITY_BACKEND.md)
+- [MP final validation plan](MP_FINAL_VALIDATION_PLAN.md)
 
 ## Evidence states
 
