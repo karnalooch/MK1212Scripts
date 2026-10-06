@@ -22,7 +22,7 @@ REQUIRED_FILES = (
     ".github/workflows/ci.yml",
 )
 TEXT_SUFFIXES = {".lua", ".tsv", ".md", ".yml", ".yaml", ".json", ".py"}
-CONFLICT_MARKERS = (b"<<<<<<<", b"=======", b">>>>>>>")
+CONFLICT_MARKER_RE = re.compile(rb"(?m)^\\s*(?:<{7}(?:\\s|$)|={7}(?:\\s|$)|>{7}(?:\\s|$))")
 
 
 def fail(message: str) -> None:
@@ -49,7 +49,7 @@ for path in ROOT.rglob("*"):
     if not path.is_file() or path.suffix.lower() not in TEXT_SUFFIXES:
         continue
     data = path.read_bytes()
-    if any(marker in data for marker in CONFLICT_MARKERS):
+    if CONFLICT_MARKER_RE.search(data):
         fail(f"merge-conflict marker found: {path.relative_to(ROOT)}")
 
 try:
