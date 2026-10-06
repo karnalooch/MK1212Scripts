@@ -34,3 +34,6 @@ Do not create a second document for a subject already owned by one of these surf
 - [WH3 debug drawing reference boundary](research/WH3_DEBUG_DRAWING_REFERENCE.md)
 - [Historical Attila 1.6.0-9824 CE-table notes](research/ATTILA_CE_TABLE_1_6_0_9824.md)
 - [MP/OOS/runtime research playbook](research/MP_RUNTIME_RESEARCH_PLAYBOOK.md)
+- [ATTILA MP stability failure catalogue](research/ATTILA_MP_STABILITY_FAILURE_CATALOG.md)
+- [Crash/OOM-like/resource-pressure hazards](research/ATTILA_CRASH_OOM_RESOURCE_HAZARDS.md)
+- [Multiplayer scripting safety guardrails](research/SCRIPT_SAFETY_GUARDRAILS.md)

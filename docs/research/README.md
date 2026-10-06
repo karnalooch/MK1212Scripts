@@ -2,8 +2,8 @@
 
 This directory is the source and evidence model for engineering work that touches Total War: ATTILA scripting, debugging, multiplayer determinism, runtime instrumentation, or future simultaneous-turn feasibility.
 
-Issue: #3  
-Last reviewed: 2026-10-06
+Issues: #3, #5  
+Last reviewed: 2026-10-07
 
 ## Why this exists
 
@@ -76,6 +76,9 @@ flowchart LR
 - [WH3 debug drawing reference and compatibility boundary](WH3_DEBUG_DRAWING_REFERENCE.md)
 - [Historical Attila CE table research notes](ATTILA_CE_TABLE_1_6_0_9824.md)
 - [Multiplayer/runtime research playbook](MP_RUNTIME_RESEARCH_PLAYBOOK.md)
+- [ATTILA multiplayer stability failure catalogue](ATTILA_MP_STABILITY_FAILURE_CATALOG.md)
+- [Crash, OOM-like and resource-pressure hazards](ATTILA_CRASH_OOM_RESOURCE_HAZARDS.md)
+- [MK1212 scripting safety guardrails](SCRIPT_SAFETY_GUARDRAILS.md)
 
 ## Evidence states
 
@@ -86,6 +89,7 @@ Use one of these labels in issues, PRs and research notes:
 - **RUNTIME-PROVEN** — reproduced on an exact Attila build/configuration.
 - **CROSS-TITLE-REFERENCE** — useful behaviour/pattern from another Total War title, not yet proven in Attila.
 - **HISTORICAL-RE** — reverse-engineering evidence from another/older Attila build.
+- **COMMUNITY-REPORTED** — a symptom/workaround reported by players or modders; useful for prioritisation but not root-cause proof.
 - **HYPOTHESIS** — plausible but unverified.
 - **BLOCKED** — missing tool, build, environment, permission, or evidence.
 - **REJECTED** — tested and shown false for the tested build/configuration.

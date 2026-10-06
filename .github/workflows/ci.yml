@@ -56,6 +56,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Set up Python 3.14
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -67,6 +68,11 @@ jobs:
 
       - name: Validate MK1212 repository shape
         run: python scripts/ci/check_repository.py
+
+      - name: Guard multiplayer-sensitive Lua additions
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+        run: python scripts/ci/check_mp_safety_diff.py --base "${BASE_SHA}"
 
   aggregate:
     name: Aggregate CI gate

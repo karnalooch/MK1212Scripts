@@ -15,11 +15,15 @@ REQUIRED_FILES = (
     "docs/README.md",
     "docs/ARCHITECTURE.md",
     "docs/GUMBALL_ADOPTION.md",
+    "docs/research/ATTILA_MP_STABILITY_FAILURE_CATALOG.md",
+    "docs/research/ATTILA_CRASH_OOM_RESOURCE_HAZARDS.md",
+    "docs/research/SCRIPT_SAFETY_GUARDRAILS.md",
     ".gumball/repository-os.json",
     ".gumball/proof-broker.json",
     "tools/capabilities.yaml",
     "tools/authority-policy.json",
     ".github/workflows/ci.yml",
+    "scripts/ci/check_mp_safety_diff.py",
 )
 TEXT_SUFFIXES = {".lua", ".tsv", ".md", ".yml", ".yaml", ".json", ".py"}
 CONFLICT_MARKER_RE = re.compile(rb"(?m)^\\s*(?:<{7}(?:\\s|$)|={7}(?:\\s|$)|>{7}(?:\\s|$))")
