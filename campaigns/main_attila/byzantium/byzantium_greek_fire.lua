@@ -171,7 +171,7 @@ function DillemaOrIncidentStarted_Byzantium_Greek_Fire(context)
 			
 				if string.find(building:name(), "castle") or string.find(building:name(), "city")  then
 					local health = building:percent_health();
-					local damage_amount = math.random(10, 40);
+					local damage_amount = MK1212_Random_Int(10, 40, "greek_fire.damage:"..building:name());
 				
 					damage_amount = health - damage_amount;
 				
