@@ -43,6 +43,7 @@ jobs:
       enable_docs_only_light_lane: true
     permissions:
       contents: read
+      security-events: write
 
   repository_static:
     name: Repository static contract
