@@ -4,6 +4,7 @@ This is the documentation router and authority map for this fork.
 
 ## Start here
 
+- [Attila research authority](research/README.md) — source hierarchy for Assembly Kit, scripting, multiplayer, runtime instrumentation and cross-title research.
 - [Architecture](ARCHITECTURE.md) — repository layout, runtime boundaries and authoritative surfaces.
 - [Gumball adoption](GUMBALL_ADOPTION.md) — repository-platform baseline, current immutable platform pin and deferred items.
 - [Diagram style](DIAGRAM_STYLE.md) — required Blueprint-style diagram conventions.
@@ -16,6 +17,7 @@ This is the documentation router and authority map for this fork.
 | Subject | Authority |
 | --- | --- |
 | Game/mod behavior | Lua/TSV/content under `campaigns/`, `lua_scripts/`, `script/`, `db/`, `text/`, `ui/` |
+| Attila scripting/debug/runtime research | `docs/research/README.md` and its linked research documents |
 | Agent workflow | `AGENTS.md` |
 | Gumball adoption | `gumball.yaml` + `docs/GUMBALL_ADOPTION.md` |
 | Repository lifecycle / labels / CI cost | `.gumball/repository-os.json` |
@@ -25,3 +27,10 @@ This is the documentation router and authority map for this fork.
 | CI truth | `.github/workflows/ci.yml` and its caller-local `Aggregate CI gate` |
 
 Do not create a second document for a subject already owned by one of these surfaces.
+
+## Attila research set
+
+- [Assembly Kit and scripting authority](research/ATTILA_ASSEMBLY_KIT.md)
+- [WH3 debug drawing reference boundary](research/WH3_DEBUG_DRAWING_REFERENCE.md)
+- [Historical Attila 1.6.0-9824 CE-table notes](research/ATTILA_CE_TABLE_1_6_0_9824.md)
+- [MP/OOS/runtime research playbook](research/MP_RUNTIME_RESEARCH_PLAYBOOK.md)
