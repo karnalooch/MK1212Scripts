@@ -1087,6 +1087,24 @@ Do not add checks that merely make legacy CI permanently red. Add them as each d
 
 ---
 
+# Remediation backlog created from this audit
+
+The audit is intentionally split into focused follow-up issues:
+
+| Issue | Scope |
+| --- | --- |
+| #10 | deterministic RNG boundary for model-changing Lua RNG |
+| #11 | runtime MP gates for Challenges / Ironman / Lucky Nations / local settings |
+| #12 | deterministic vassal tracking operations |
+| #13 | canonical, bounded save serialization |
+| #14 | immediate Lua correctness and listener/lifecycle defects |
+| #15 | two-peer proof of Papal/story/battle/event/RNG semantics |
+| #16 | identical hardcoded-limit environment in MP |
+
+Issue #7 remains the native observability/twdll research track.
+
+The order is deliberate: #10 and #11 remove direct divergence mechanisms before deeper runtime experiments.
+
 # What this audit does not prove
 
 This is a static/code-path audit.
