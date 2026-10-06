@@ -8,8 +8,9 @@ Start with:
 
 1. `docs/README.md`
 2. `docs/ARCHITECTURE.md`
-3. `docs/GUMBALL_ADOPTION.md`
-4. the affected Lua/TSV code and its nearest related scripts
+3. `docs/research/README.md` for Attila scripting/debug/runtime or multiplayer work
+4. `docs/GUMBALL_ADOPTION.md`
+5. the affected Lua/TSV code and its nearest related scripts
 
 ## Scope and source preservation
 
@@ -18,6 +19,33 @@ Start with:
 - Keep `campaigns/`, `lua_scripts/`, `script/`, `db/`, `text/` and `ui/` behavior unchanged unless the task explicitly targets game/mod behavior.
 - Do not relicense or redistribute Creative Assembly/SEGA game binaries or assets from this repository.
 - Runtime executable patching, DRM/CRC bypasses and redistributed modified game binaries are outside normal repository work and require a separate explicit decision.
+
+## Total War source authority
+
+For ATTILA scripting, debugging, multiplayer, runtime instrumentation, or simultaneous-turn research, read `docs/research/README.md` and use this authority order:
+
+1. official Total War: ATTILA Assembly Kit and ATTILA scripting documentation;
+2. current MK1212 code at the exact repository SHA;
+3. exact-build empirical Attila runtime evidence;
+4. modern Total War / WH3 documentation as a design/reference analogy;
+5. historical reverse-engineering artefacts such as the Attila 1.6.0-9824 Cheat Engine table.
+
+Rules:
+
+- Never claim a WH3 API exists in Attila because names or engine concepts look similar.
+- Never reuse a historical `Attila.dll+offset` as a current address without exact-build revalidation and signature/semantic proof.
+- Prefer official Attila scripting, Assembly Kit tools and supported logging before runtime instrumentation.
+- Label claims as DOCUMENTED, REPO-OBSERVED, RUNTIME-PROVEN, CROSS-TITLE-REFERENCE, HISTORICAL-RE, HYPOTHESIS, BLOCKED or REJECTED where research status matters.
+- Treat the WH3 debug-drawing documentation as an observability/design reference only until an Attila equivalent is proven.
+- Treat the 2016 CE table as historical RE methodology/evidence only. Do not implement or distribute its CRC/DRM bypass path.
+- Runtime executable patching, binary mutation and integrity-bypass work remain outside normal repository work and require a separate explicit decision.
+
+Canonical research docs:
+
+- `docs/research/ATTILA_ASSEMBLY_KIT.md`
+- `docs/research/WH3_DEBUG_DRAWING_REFERENCE.md`
+- `docs/research/ATTILA_CE_TABLE_1_6_0_9824.md`
+- `docs/research/MP_RUNTIME_RESEARCH_PLAYBOOK.md`
 
 ## Multiplayer determinism
 
@@ -48,10 +76,14 @@ Changes to `.github/**`, `AGENTS.md`, `gumball.yaml`, `.gumball/**`, `SECURITY.m
 
 ## Work tracking
 
-GitHub Issues are currently disabled for this fork. Do not fabricate issue tracking.
+Use the canonical Gumball flow:
 
-- While Issues remain disabled, the PR body must carry the task goal, scope/non-scope, acceptance criteria and verification.
-- Once Issues are enabled, restore the canonical Gumball Issue -> branch -> PR flow.
+1. GitHub Issue with goal, scope/non-scope, acceptance criteria and proof requirements;
+2. dedicated branch linked to that issue;
+3. PR that references/closes the issue when appropriate;
+4. exact-SHA validation before merge.
+
+Do not bypass Issue -> branch -> PR for normal engineering work.
 
 ## Validation
 
