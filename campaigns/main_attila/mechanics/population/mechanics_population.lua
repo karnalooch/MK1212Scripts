@@ -900,12 +900,15 @@ cm:register_loading_game_callback(
 
 function SavePopulationNumbersTable(context, tab, savename)
 	local savestring = "";
-	
-	for key, tab2 in pairs(tab) do
-		savestring = savestring..key..","..tostring(tab[key][1])..","..tostring(tab[key][2])..","..tostring(tab[key][3])..","..tostring(tab[key][4])..","..tostring(tab[key][5])..",;";
+	local keys = MK1212_SaveSortedKeys(tab);
+
+	for i = 1, #keys do
+		local key = keys[i];
+		local values = tab[key];
+		savestring = savestring..tostring(key)..","..tostring(values[1])..","..tostring(values[2])..","..tostring(values[3])..","..tostring(values[4])..","..tostring(values[5])..",;";
 	end
 
-	cm:save_value(savename, savestring, context);
+	MK1212_SaveCommitString(context, savename, savestring, #keys);
 end
 
 function SaveFactionPopulationNumbersTable(context, tab, savename)
