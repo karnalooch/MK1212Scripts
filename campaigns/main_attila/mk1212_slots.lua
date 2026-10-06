@@ -8,6 +8,24 @@
 ------------------------------------------------------------------------------
 
 DISCLAIMER_ACCEPTED = false;
+MK1212_HARDCODED_LIMITS_FINGERPRINT = "slots10=unknown";
+
+function MK1212_Get_Hardcoded_Limits_Fingerprint()
+	local modified = svr:LoadBool("SBOOL_Hardcoded_Limits_Modified") or false;
+	return "slots10="..(modified and "1" or "0");
+end
+
+function MK1212_Log_Hardcoded_Limits_State()
+	MK1212_HARDCODED_LIMITS_FINGERPRINT = MK1212_Get_Hardcoded_Limits_Fingerprint();
+
+	if dev and dev.log then
+		dev.log(
+			"[MKMP][ENV] hardcoded_limits="..
+			MK1212_HARDCODED_LIMITS_FINGERPRINT..
+			" multiplayer="..tostring(cm:is_multiplayer())
+		);
+	end
+end
 
 function Add_MK1212_Slots_Listeners()
 	cm:add_listener(
@@ -52,6 +70,7 @@ function Add_MK1212_Slots_Listeners()
 	end]]--
 
 	DISCLAIMER_ACCEPTED = svr:LoadBool("SBOOL_Hardcoded_Limits_Modified") or false;
+	MK1212_Log_Hardcoded_Limits_State();
 
 	CreateDisclaimerPrompt();
 end
@@ -64,6 +83,17 @@ function OnComponentLClickUp_Slots_UI(context)
 			local button_disclaimer_uic = UIComponent(root:Find("button_disclaimer"));
 			local button_discord_uic = UIComponent(root:Find("button_discord"));
 			local disclaimer_prompt_uic = UIComponent(root:Find("disclaimer_prompt"));
+
+			if cm:is_multiplayer() then
+				if dev and dev.log then
+					dev.log("[MKMP][ENV] refused in-campaign hardcoded-limit mutation in multiplayer");
+				end
+
+				disclaimer_prompt_uic:SetVisible(false);
+				disclaimer_prompt_uic:UnLockPriority();
+				button_disclaimer_uic:SetVisible(false);
+				return;
+			end
 
 			ModifyHardcodedLimits();
 			RefreshProvinceSelection();
@@ -161,6 +191,20 @@ function TimeTrigger_Slots_UI(context)
 			disclaimer_prompt_uic:UnLockPriority();
 		end
 
+		if cm:is_multiplayer() then
+			local main_settlement_panel_uic = UIComponent(root:Find("main_settlement_panel"));
+
+			if main_settlement_panel_uic and main_settlement_panel_uic:Visible() then
+				local button_disclaimer_uic = UIComponent(main_settlement_panel_uic:Find("button_disclaimer"));
+
+				if button_disclaimer_uic then
+					button_disclaimer_uic:SetVisible(false);
+				end
+			end
+
+			return;
+		end
+
 		if not DISCLAIMER_ACCEPTED then
 			local main_settlement_panel_uic = UIComponent(root:Find("main_settlement_panel"));
 
@@ -209,6 +253,14 @@ function CreateDisclaimerPrompt()
 end
 
 function ModifyHardcodedLimits()
+	if cm:is_multiplayer() then
+		if dev and dev.log then
+			dev.log("[MKMP][ENV] ModifyHardcodedLimits blocked during multiplayer campaign runtime");
+		end
+
+		return false;
+	end
+
 	DISCLAIMER_ACCEPTED = true;
 
 	if not util.fileExists("MK1212_10slots.exe") then
@@ -234,6 +286,8 @@ function ModifyHardcodedLimits()
 
 	svr:SaveBool("SBOOL_Prompt_Already_Shown", true);
 	svr:SaveBool("SBOOL_Hardcoded_Limits_Modified", true);
+	MK1212_Log_Hardcoded_Limits_State();
+	return true;
 end
 
 function RefreshProvinceSelection()
