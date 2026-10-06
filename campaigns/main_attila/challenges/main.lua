@@ -18,6 +18,13 @@ CHALLENGES_ENABLED = {
 };
 
 function Challenge_Initializer()
+	if cm:is_multiplayer() then
+		CHALLENGES_ENABLED["judgement_day"] = false;
+		CHALLENGES_ENABLED["no_retreat"] = false;
+		CHALLENGES_ENABLED["this_is_total_war"] = false;
+		return;
+	end
+
 	if cm:is_new_game() then
 		for k, v in pairs(CHALLENGES_ENABLED) do
 			CHALLENGES_ENABLED[k] = svr:LoadBool("SBOOL_challenge_"..k);

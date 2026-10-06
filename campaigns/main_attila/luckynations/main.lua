@@ -27,5 +27,10 @@ LUCKY_NATIONS = {
 };
 
 function Lucky_Nations_Initializer()
+	if cm:is_multiplayer() then
+		LUCKY_NATIONS_ENABLED = false;
+		return;
+	end
+
 	Add_Lucky_Nations_Listeners();
 end
