@@ -40,6 +40,7 @@ Do not create a second document for a subject already owned by one of these surf
 - [Crash/OOM-like/resource-pressure hazards](research/ATTILA_CRASH_OOM_RESOURCE_HAZARDS.md)
 - [Multiplayer scripting safety guardrails](research/SCRIPT_SAFETY_GUARDRAILS.md)
 - [twdll runtime observability backend](research/TWDLL_OBSERVABILITY_BACKEND.md)
+- [MP final validation plan](research/MP_FINAL_VALIDATION_PLAN.md)
 
 
 ## Native observability map

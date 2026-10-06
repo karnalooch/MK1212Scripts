@@ -50,6 +50,7 @@ Canonical research docs:
 - `docs/research/ATTILA_CRASH_OOM_RESOURCE_HAZARDS.md`
 - `docs/research/SCRIPT_SAFETY_GUARDRAILS.md`
 - `docs/research/TWDLL_OBSERVABILITY_BACKEND.md`
+- `docs/research/MP_FINAL_VALIDATION_PLAN.md`
 
 ## Native runtime observability
 

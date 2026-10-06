@@ -19,7 +19,7 @@ MKMP_RUNTIME = {
 	native_faction_count = nil
 };
 
-local function MKMP_Runtime_Log_Internal(message)
+function MKMP_Runtime_Log(message)
 	local text = "[MKMP][RUNTIME] "..tostring(message);
 
 	if MKMP_RUNTIME.module
@@ -60,7 +60,7 @@ function MKMP_Runtime_Initialize()
 
 	if not package or type(package.loadlib) ~= "function" then
 		MKMP_RUNTIME.reason = "package.loadlib_unavailable";
-		MKMP_Runtime_Log_Internal(MKMP_RUNTIME.reason);
+		MKMP_Runtime_Log(MKMP_RUNTIME.reason);
 		return false;
 	end
 
@@ -72,13 +72,13 @@ function MKMP_Runtime_Initialize()
 
 	if not load_ok then
 		MKMP_RUNTIME.reason = "loadlib_error:"..tostring(loader);
-		MKMP_Runtime_Log_Internal(MKMP_RUNTIME.reason);
+		MKMP_Runtime_Log(MKMP_RUNTIME.reason);
 		return false;
 	end
 
 	if type(loader) ~= "function" then
 		MKMP_RUNTIME.reason = "dll_unavailable:"..tostring(load_error);
-		MKMP_Runtime_Log_Internal(MKMP_RUNTIME.reason);
+		MKMP_Runtime_Log(MKMP_RUNTIME.reason);
 		return false;
 	end
 
@@ -86,7 +86,7 @@ function MKMP_Runtime_Initialize()
 
 	if not open_ok or type(module_or_error) ~= "table" then
 		MKMP_RUNTIME.reason = "luaopen_failed:"..tostring(module_or_error);
-		MKMP_Runtime_Log_Internal(MKMP_RUNTIME.reason);
+		MKMP_Runtime_Log(MKMP_RUNTIME.reason);
 		return false;
 	end
 
@@ -117,7 +117,7 @@ function MKMP_Runtime_Initialize()
 	MKMP_RUNTIME.available = true;
 	MKMP_RUNTIME.reason = "ready";
 
-	MKMP_Runtime_Log_Internal(
+	MKMP_Runtime_Log(
 		"ready game="..MKMP_RUNTIME.game_build..
 		" twdll_sha="..MKMP_RUNTIME.twdll_sha..
 		" factions="..tostring(MKMP_RUNTIME.native_faction_count)
@@ -187,6 +187,22 @@ function MKMP_Runtime_Get_Campaign_Snapshot()
 	return table.concat(parts, "|");
 end
 
+function MKMP_Runtime_Hash_String(value)
+	local text = tostring(value or "");
+	local hash = 0;
+
+	-- Keep arithmetic comfortably below Lua's exact-integer range for doubles.
+	for i = 1, string.len(text) do
+		hash = (hash * 131 + string.byte(text, i)) % 2147483647;
+	end
+
+	return tostring(hash);
+end
+
+function MKMP_Runtime_Get_Campaign_Fingerprint()
+	return MKMP_Runtime_Hash_String(MKMP_Runtime_Get_Campaign_Snapshot());
+end
+
 function MKMP_Runtime_Get_Battle_Telemetry()
 	if not MKMP_RUNTIME.available
 	or not MKMP_RUNTIME.module
@@ -209,10 +225,10 @@ function MKMP_Runtime_Get_Battle_Telemetry()
 end
 
 function MKMP_Runtime_Log_Barrier(name)
-	MKMP_Runtime_Log_Internal(
+	MKMP_Runtime_Log(
 		"barrier="..tostring(name)..
 		" env="..MKMP_Runtime_Get_Environment_Fingerprint()..
-		" state="..MKMP_Runtime_Get_Campaign_Snapshot()
+		" fingerprint="..MKMP_Runtime_Get_Campaign_Fingerprint()
 	);
 end
 
