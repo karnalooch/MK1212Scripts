@@ -203,6 +203,7 @@ function FactionTurnStart_Islam_Mecca(context)
 end
 
 function CharacterPerformsOccupationDecision_Islam_Mecca(context, type)
+	local faction = context:character():faction();
 	local region = FindClosestRegion(context:character():logical_position_x(), context:character():logical_position_y(), "none"); -- Taking the character's region may be inaccurate if they're at sea or across a strait.
 
 	if region then
@@ -212,7 +213,6 @@ function CharacterPerformsOccupationDecision_Islam_Mecca(context, type)
 			if type == "RAZE" then
 				Mecca_Destroyed(faction);
 			elseif SackExploitCheck_Pope(region_name) == true then
-				local faction = context:character():faction();
 				local religion = faction:state_religion();
 
 				if religion == "att_rel_semitic_paganism" or religion == "mk_rel_ibadi_islam" or religion == "mk_rel_shia_islam" then
