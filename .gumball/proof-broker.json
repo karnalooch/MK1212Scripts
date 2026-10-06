@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "source": {
+    "name": "Gumball",
+    "version": "0.7.0",
+    "canonical_commit": "ddc458c223b8020c5f36482415d4405459bd373a"
+  },
+  "defaults": {
+    "allowed_permissions": [
+      "write",
+      "maintain",
+      "admin"
+    ],
+    "dispatch_ref": "default",
+    "allow_branch_workflow_definition": false,
+    "require_exact_sha_input": true,
+    "require_request_id_run_name": true,
+    "manual_workflow_dispatch_fallback": true,
+    "reconcile_interval_minutes": 60,
+    "status_label_template": "proof-status:$proof:$status",
+    "trusted_actor_logins": [
+      "karnalooch"
+    ]
+  },
+  "proofs": {}
+}

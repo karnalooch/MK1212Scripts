@@ -1,0 +1,101 @@
+name: Gumball CI
+
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: gumball-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  repository_policy:
+    name: Repository policy
+    uses: karnalooch/engineering-platform/.github/workflows/reusable-repo-policy.yml@ddc458c223b8020c5f36482415d4405459bd373a
+    with:
+      max_non_lfs_mib: 10
+    permissions:
+      contents: read
+
+  governance:
+    name: Governance
+    uses: karnalooch/engineering-platform/.github/workflows/reusable-governance.yml@ddc458c223b8020c5f36482415d4405459bd373a
+    with:
+      require_manual_merge_marker: true
+    permissions:
+      contents: read
+
+  security:
+    name: Security
+    uses: karnalooch/engineering-platform/.github/workflows/reusable-security.yml@ddc458c223b8020c5f36482415d4405459bd373a
+    with:
+      enable_dependency_review: false
+      enable_codeql: false
+      enable_trivy: true
+      enable_sbom: false
+      enable_docs_only_light_lane: true
+    permissions:
+      contents: read
+      security-events: write
+
+  repository_static:
+    name: Repository static contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+
+      - name: Gumball doctor
+        run: python scripts/gumball.py doctor
+
+      - name: Validate MK1212 repository shape
+        run: python scripts/ci/check_repository.py
+
+  aggregate:
+    name: Aggregate CI gate
+    needs:
+      - repository_policy
+      - governance
+      - security
+      - repository_static
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions: {}
+    steps:
+      - name: Require all baseline evidence
+        env:
+          REPOSITORY_POLICY: ${{ needs.repository_policy.result }}
+          GOVERNANCE: ${{ needs.governance.result }}
+          SECURITY: ${{ needs.security.result }}
+          REPOSITORY_STATIC: ${{ needs.repository_static.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          failed=0
+          for item in             "repository_policy=${REPOSITORY_POLICY}"             "governance=${GOVERNANCE}"             "security=${SECURITY}"             "repository_static=${REPOSITORY_STATIC}"; do
+            name="${item%%=*}"
+            result="${item#*=}"
+            printf '%s: %s\n' "${name}" "${result}"
+            if [[ "${result}" != "success" ]]; then
+              failed=1
+            fi
+          done
+          exit "${failed}"

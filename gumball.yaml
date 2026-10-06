@@ -1,0 +1,63 @@
+schema_version: 1
+name: MK1212Scripts
+platform_version: 0.7.0
+profile: standard
+
+adoption:
+  mode: preserve-local
+  flow:
+    - audit
+    - plan
+    - apply
+    - verify
+
+ci:
+  aggregate_gate: caller-local
+  fail_closed: true
+  anti_noop: true
+  expensive_pr_proofs: false
+
+governance:
+  immutable_external_refs: true
+  least_privilege_permissions: true
+  preserve_stronger_local_controls: true
+
+docs:
+  index_required: true
+  ssot_map_required: true
+  blueprint_diagram_style: required
+
+agents:
+  enabled: true
+  preserve_local_instructions: true
+  evaluate_upstream_promotion: true
+
+promotion:
+  states:
+    - candidate
+    - proven
+    - platform
+
+tools:
+  manifest: tools/capabilities.yaml
+  authority_policy: tools/authority-policy.json
+  authority: repository
+  admission_policy: proven-before-custom
+  authoritative_external_tool_return_path: deterministic-required
+  dev_editor_proof_shipping_default: excluded
+  secrets_in_repo_config: forbidden
+  required_tool_unavailable: blocked
+
+repository_os:
+  policy: .gumball/repository-os.json
+  lifecycle: required
+  projects: disabled
+  labels: required
+  release_lineage: required_for_release_profiles
+  ci_cost_governor: required
+
+proof_broker:
+  policy: .gumball/proof-broker.json
+  trusted_dispatch: supported
+  manual_fallback: required
+  duplicate_heavy_work: forbidden
