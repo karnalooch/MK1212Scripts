@@ -17,7 +17,8 @@ ARMY_SELECTED_REGION = nil;
 ARMY_SELECTED_TABLE = {};
 ARMY_SELECTED_STRENGTHS_TABLE = {};
 REGION_SELECTED = "";
-REGION_TO_TRANSFER = nil;
+REGIONS_TO_TRANSFER = {};
+MAX_PENDING_REGION_TRANSFERS = 64;
 REGIONS_RAZED = {};
 LAST_CHARACTER_SELECTED = nil;
 LAST_SACKED_SETTLEMENT = "";
@@ -99,13 +100,6 @@ function Add_MK1212_Common_Listeners()
 		true
 	);
 	cm:add_listener(
-		"RegionRebels_Global",
-		"RegionRebels",
-		true,
-		function(context) RegionRebels_Global(context) end,
-		true
-	);
-	cm:add_listener(
 		"SettlementSelected_Global",
 		"SettlementSelected",
 		true,
@@ -146,15 +140,19 @@ function FactionTurnStart_Global(context)
 	FACTION_TURN = context:faction():name();
 	SACKED_SETTLEMENTS = {}; -- Array is reset every faction turn.
 
-	-- Crash fix by postponing AI region transfers by 1 turn.
-	if REGION_TO_TRANSFER then
-		local faction_name = REGION_TO_TRANSFER[1];
-		local region_name = REGION_TO_TRANSFER[2];
+	-- Crash fix: execute deferred AI region transfers from a bounded queue.
+	-- The queue is cleared before processing so a still-unsafe transfer can
+	-- explicitly requeue itself without duplicating the old record.
+	if #REGIONS_TO_TRANSFER > 0 then
+		local pending_transfers = REGIONS_TO_TRANSFER;
+		REGIONS_TO_TRANSFER = {};
 
-		if context:faction():name() ~= faction_name then
-			Transfer_Region_To_Faction(region_name, faction_name);
+		for i = 1, #pending_transfers do
+			local transfer = pending_transfers[i];
 
-			REGION_TO_TRANSFER = nil;
+			if transfer and transfer.faction and transfer.region then
+				Transfer_Region_To_Faction(transfer.region, transfer.faction);
+			end
 		end
 	end
 
@@ -584,6 +582,65 @@ function Religion_Check(faction)
 	FACTIONS_TO_RELIGIONS[faction_name] = state_religion;
 end
 
+function Queue_Region_Transfer(region_name, faction_name)
+	for i = 1, #REGIONS_TO_TRANSFER do
+		local queued = REGIONS_TO_TRANSFER[i];
+
+		if queued.region == region_name and queued.faction == faction_name then
+			return true;
+		end
+	end
+
+	if #REGIONS_TO_TRANSFER >= MAX_PENDING_REGION_TRANSFERS then
+		error(
+			"MK1212 region transfer queue full: max="..
+			tostring(MAX_PENDING_REGION_TRANSFERS)
+		);
+	end
+
+	table.insert(
+		REGIONS_TO_TRANSFER,
+		{
+			region = region_name,
+			faction = faction_name
+		}
+	);
+
+	return true;
+end
+
+function Serialize_Region_Transfer_Queue()
+	local output = {};
+
+	for i = 1, #REGIONS_TO_TRANSFER do
+		local queued = REGIONS_TO_TRANSFER[i];
+		table.insert(output, queued.faction.."|"..queued.region);
+	end
+
+	return output;
+end
+
+function Load_Region_Transfer_Queue(context)
+	local encoded = LoadTable(context, "REGIONS_TO_TRANSFER");
+	local output = {};
+
+	for i = 1, #encoded do
+		local token = encoded[i];
+		local separator = string.find(token, "|", 1, true);
+
+		if separator then
+			local faction_name = string.sub(token, 1, separator - 1);
+			local region_name = string.sub(token, separator + 1);
+
+			if faction_name ~= "" and region_name ~= "" then
+				table.insert(output, {faction = faction_name, region = region_name});
+			end
+		end
+	end
+
+	return output;
+end
+
 function Transfer_Region_To_Faction(region_name, faction_name)
 	-- If a region has a governor then they will die when a region is transferred, so we need to temporarily give them immortality.
 	local region = cm:model():world():region_manager():region_by_key(region_name);
@@ -601,7 +658,7 @@ function Transfer_Region_To_Faction(region_name, faction_name)
 			cm:transfer_region_to_faction(region_name, faction_name);
 		end
 	else
-		REGION_TO_TRANSFER = {faction_name, region_name};
+		Queue_Region_Transfer(region_name, faction_name);
 	end
 end
 
@@ -795,6 +852,7 @@ cm:register_loading_game_callback(
 		SACKED_SETTLEMENTS = LoadTable(context, "SACKED_SETTLEMENTS");
 		SACKED_SETTLEMENTS2 = LoadTable(context, "SACKED_SETTLEMENTS2");
 		SACKED_SETTLEMENTS_TOTAL = LoadKeyPairTables(context, "SACKED_SETTLEMENTS_TOTAL");
+		REGIONS_TO_TRANSFER = Load_Region_Transfer_Queue(context);
 	end
 );
 
@@ -806,6 +864,7 @@ cm:register_saving_game_callback(
 		SaveTable(context, SACKED_SETTLEMENTS, "SACKED_SETTLEMENTS");
 		SaveTable(context, SACKED_SETTLEMENTS2, "SACKED_SETTLEMENTS2");
 		SaveKeyPairTables(context, SACKED_SETTLEMENTS_TOTAL, "SACKED_SETTLEMENTS_TOTAL");
+		SaveTable(context, Serialize_Region_Transfer_Queue(), "REGIONS_TO_TRANSFER");
 	end
 );
 
