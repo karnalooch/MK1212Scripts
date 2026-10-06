@@ -24,6 +24,23 @@ Community reports are useful for prioritising reproductions. They are not root-c
 - **HYPOTHESIS** — explanation not yet proven.
 - **BLOCKED** — source/test unavailable.
 
+## MP/OOS hazard matrix
+
+| Hazard / boundary | Evidence | Typical symptom | What we can harden | Required proof |
+| --- | --- | --- | --- | --- |
+| battle -> campaign restoration | DOCUMENTED + COMMUNITY-REPORTED | OOS/crash after manual battle or post-battle UI | minimal transition-time UI, barrier logs, exactly-once result handling | both-peer pre/post fingerprints |
+| autoresolve -> post-battle UI | DOCUMENTED | MP crash from popup before post-battle UI | defer optional UI; separate model/UI phases | exact-build autoresolve regression |
+| river/bridge battle | COMMUNITY-REPORTED | repeatable battle desync | avoid extra script mutation; mandatory regression | vanilla-vs-modded A/B |
+| coastal assault | COMMUNITY-REPORTED | battle desync | same; record naval/disembark state | repeated exact-save repro |
+| siege/naval special paths | DOCUMENTED/COMMUNITY-REPORTED | crash/desync/pathing failure | no extra polling/UI/spawn pressure during battle transition | scenario-specific soak/repro |
+| end-turn / AI cycle | COMMUNITY-REPORTED | desync/disconnect when cycling factions | state hash barrier, bounded per-turn work | both peers through full AI cycle |
+| script event/invasion | REPO-OBSERVED + COMMUNITY-REPORTED | OOS after scripted mutation | deterministic RNG, one-shot token, spawn budget, save parity | forced-early reproducer |
+| Papal/diplomacy transition | COMMUNITY-REPORTED | next-turn crash/desync | one-shot war/event guards, pre/post relation logs | dedicated Papal MP matrix |
+| local UI -> shared mutation | DOCUMENTED risk + REPO-OBSERVED patterns | peer-only state change, crash | hard separation of UI intent/model mutation | identical peer event proof |
+| mod/DLC/load-order mismatch | DOCUMENTED + COMMUNITY-REPORTED | different version, crash, hidden divergence | environment fingerprint; fail test setup closed | exact manifest equality |
+| save/resync mismatch | COMMUNITY-REPORTED | resync helps temporarily or not at all | persisted-state audit, schema/version | replay same trigger after reload |
+| stale local config | COMMUNITY-REPORTED | startup/campaign crash or divergent behaviour | local config isolation/version validation | config fingerprint |
+
 ## High-value official evidence
 
 ### MP crash: popup before post-battle UI
