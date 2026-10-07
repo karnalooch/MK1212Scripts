@@ -126,7 +126,7 @@ class MultiplayerSourceContractTests(unittest.TestCase):
         self.assertIn("package.loadlib", source)
         self.assertIn("pcall(", source)
         self.assertIn('MKMP_RUNTIME.reason = "dll_unavailable:"', source)
-        self.assertIn("gameplay continues unchanged", source)
+        self.assertIn("gameplay must continue unchanged", source.lower())
         self.assertIn("Deliberately drop process-local memory addresses", source)
         self.assertIn("cap = info.cap", source)
         self.assertIn("size = info.size", source)
