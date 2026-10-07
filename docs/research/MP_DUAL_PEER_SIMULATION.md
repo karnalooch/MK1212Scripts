@@ -260,6 +260,8 @@ This requires only Python from the normal repository CI environment.
 
 No game files, Steam login, Attila installation, GPU, DLL or second machine are required.
 
+A simulator failure fails the caller-local static job and therefore propagates to the fail-closed Aggregate CI gate.
+
 ## What this proves
 
 A green harness supports the claim:
