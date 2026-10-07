@@ -86,6 +86,7 @@ Enabled:
 | Population | `experimental_local_ui` | enabled |
 | Region Trading | `experimental_local_ui` | enabled |
 | Occupation Decisions / region gifting | `experimental_local_ui` | enabled |
+| Religion conversion UI recheck | `experimental_local_ui` | enabled |
 | Crusade event system | `experimental_local_ui` | enabled |
 | Pope/Crusade UI | `experimental_local_ui` | enabled |
 | HRE Story Events | `shared_model` | enabled |
@@ -99,6 +100,7 @@ Enabled:
 | Ironman/Achievements | local save/turn behavior; not a missing core campaign mechanic |
 | Lucky Nations | local frontend/SVR modifier; affects treasury/effects/autoresolve |
 | legacy MK1212 networking helper | stale UI/chat/timer experiment, not a synchronization backend |
+| Change Capital helper | invokes a local external executable; blocked as an in-session external mutator |
 
 ## Initialization architecture
 
@@ -110,6 +112,7 @@ flowchart TD
     PROFILE --> STORY["Story_Initializer"]
 
     COMMON --> OCC["Occupation Decisions"]
+    COMMON --> REL["Religion conversion recheck"]
     MECH --> ANNEX["Annex Vassals"]
     MECH --> BUFFER["Buffer States"]
     MECH --> DEC["Decisions"]
@@ -127,6 +130,7 @@ flowchart TD
     PROFILE -. blocked .-> IM["Ironman"]
     PROFILE -. blocked .-> LN["Lucky Nations"]
     PROFILE -. blocked .-> NET["Legacy networking helper"]
+    PROFILE -. blocked .-> CAP["Change Capital EXE"]
 ```
 
 ## Why local-UI features are marked experimental
@@ -143,6 +147,7 @@ Examples include:
 - Buffer States;
 - generic Decisions;
 - region gifting after occupation;
+- religion conversion UI recheck;
 - HRE UI actions;
 - Crusade/Pope UI.
 
