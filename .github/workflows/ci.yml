@@ -77,6 +77,26 @@ jobs:
       - name: Run deterministic MP dual-peer simulation
         run: python -m unittest discover -s scripts/ci -p "test_mp_*.py" -v
 
+  native_twdll:
+    name: Native twdll Attila build
+    runs-on: windows-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configure Attila x86 build
+        shell: pwsh
+        run: cmake -S native/twdll -B build/twdll-attila -A Win32 -DTW_GAME=attila
+
+      - name: Build twdll target
+        shell: pwsh
+        run: cmake --build build/twdll-attila --config Release --target twdll --parallel 2
+
   aggregate:
     name: Aggregate CI gate
     needs:
@@ -84,6 +104,7 @@ jobs:
       - governance
       - security
       - repository_static
+      - native_twdll
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -95,11 +116,17 @@ jobs:
           GOVERNANCE: ${{ needs.governance.result }}
           SECURITY: ${{ needs.security.result }}
           REPOSITORY_STATIC: ${{ needs.repository_static.result }}
+          NATIVE_TWDLL: ${{ needs.native_twdll.result }}
         shell: bash
         run: |
           set -euo pipefail
           failed=0
-          for item in             "repository_policy=${REPOSITORY_POLICY}"             "governance=${GOVERNANCE}"             "security=${SECURITY}"             "repository_static=${REPOSITORY_STATIC}"; do
+          for item in \
+            "repository_policy=${REPOSITORY_POLICY}" \
+            "governance=${GOVERNANCE}" \
+            "security=${SECURITY}" \
+            "repository_static=${REPOSITORY_STATIC}" \
+            "native_twdll=${NATIVE_TWDLL}"; do
             name="${item%%=*}"
             result="${item#*=}"
             printf '%s: %s\n' "${name}" "${result}"

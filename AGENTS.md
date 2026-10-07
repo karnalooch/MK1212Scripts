@@ -59,7 +59,7 @@ For work involving Lua↔DLL integration, runtime memory/state, engine hooks or 
 
 Mandatory rules:
 
-- `karnalooch/twdll` is the preferred experimental native observability backend; preserve upstream provenance to `bukowa/twdll`.
+- `native/twdll/` is the canonical MK1212 native observability source of truth. It was imported from `karnalooch/twdll` at `85c4db9836e3150df8ec5b38315de9940f8d624c`; preserve upstream provenance to `bukowa/twdll`. The old fork is historical/reference only unless a later explicit task changes that policy.
 - Load/capability handling MUST fail closed: missing or incompatible DLL disables native diagnostics and MUST NOT break ordinary MK1212 gameplay.
 - Raw pointers, module addresses, hook addresses, thread IDs, wall-clock timing and local UI state MUST NOT drive shared multiplayer gameplay.
 - twdll-returned semantic values remain observability-only until both-peer exact-build determinism is proven.
@@ -70,7 +70,9 @@ Mandatory rules:
 
 Links:
 
-- our fork: https://github.com/karnalooch/twdll
+- canonical MK1212 native source: `native/twdll/`
+- import/provenance record: `native/twdll/UPSTREAM.md`
+- historical fork/reference: https://github.com/karnalooch/twdll
 - upstream: https://github.com/bukowa/twdll
 - API docs: https://bukowa.github.io/twdll/
 

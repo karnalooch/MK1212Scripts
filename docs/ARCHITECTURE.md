@@ -24,7 +24,9 @@ The diagram describes ownership boundaries, not a network synchronization guaran
 
 Issue #7 introduces a **read-only-first native observability lane** using twdll.
 
-- our fork: https://github.com/karnalooch/twdll
+- canonical MK1212 native source: `native/twdll/`
+- imported baseline: `karnalooch/twdll@85c4db9836e3150df8ec5b38315de9940f8d624c`
+- historical fork/reference: https://github.com/karnalooch/twdll
 - upstream: https://github.com/bukowa/twdll
 - API docs: https://bukowa.github.io/twdll/
 - canonical integration contract: [research/TWDLL_OBSERVABILITY_BACKEND.md](research/TWDLL_OBSERVABILITY_BACKEND.md)
@@ -74,6 +76,7 @@ Initial rule: **native data is diagnostic evidence, not automatic gameplay autho
 - `db/` — database table fragments.
 - `text/` — localization data.
 - `ui/` — UI assets/content.
+- `native/twdll/` — canonical MK1212 native observability/runtime-extension source, including vendored MinHook.
 
 ## Repository-engineering layer
 
