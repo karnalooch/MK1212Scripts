@@ -1,6 +1,7 @@
-param([int]$LaunchTimeoutSeconds = 600, [switch]$PrepareOnly)
+param([int]$LaunchTimeoutSeconds = 600, [switch]$PrepareOnly, [switch]$NoDll)
 $ErrorActionPreference = 'Stop'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Mode = if ($NoDll) { 'no-dll' } else { 'native' }
 $Manifest = Get-Content (Join-Path $Here 'payload-manifest.json') -Raw | ConvertFrom-Json
 if ($Manifest.schema -ne 1 -or $Manifest.source_sha -notmatch '^[0-9a-f]{40}$') { throw 'Invalid probe manifest' }
 $ExpectedSourceSha = $Manifest.source_sha
@@ -35,7 +36,7 @@ $oldProbes = @(Get-ChildItem -LiteralPath $Data -File | Where-Object {
     $_.Name -like '*mk1212*twdll*probe*.pack' -or
     $_.Name -eq 'mk1212_pr45_runtime_scripts.pack'
 })
-$Stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
+$Stamp = $Mode + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff')
 $Backup = Join-Path $Here ('backup-' + $Stamp)
 $Evidence = Join-Path $Here ('evidence-' + $Stamp)
 New-Item -ItemType Directory -Path $Backup,$Evidence | Out-Null
@@ -80,6 +81,27 @@ Probe_Trace("bootstrap_enter");
 '@
 $Suffix = @'
 Probe_Trace("bootstrap_complete");
+local probe_world_samples = 0;
+local function Probe_World(phase)
+    if probe_world_samples >= 5 then return; end
+    probe_world_samples = probe_world_samples + 1;
+    local ok, err = pcall(function()
+        local runtime = MKMP_RUNTIME;
+        local world = runtime and runtime.module and runtime.module.world;
+        if not world then Probe_Trace("world phase="..phase.." state=module_unavailable"); return; end
+        if type(world.GetMemoryAddress) ~= "function" or type(world.GetFactionCount) ~= "function" then
+            Probe_Trace("world phase="..phase.." state=capability_missing"); return;
+        end
+        -- Never log or use raw addresses as gameplay authority.
+        local present = world.GetMemoryAddress() ~= nil;
+        local count = world.GetFactionCount();
+        local state = "count_unavailable";
+        if not present then state = "world_not_captured";
+        elseif type(count) == "number" and count >= 0 and count == math.floor(count) then state = "ready"; end
+        Probe_Trace("world phase="..phase.." state="..state.." factions="..tostring(count));
+    end);
+    if not ok then Probe_Trace("world phase="..phase.." state=query_failed error="..tostring(err)); end
+end
 local Probe_Original_Initializer = Common_Initializer;
 function Common_Initializer(...)
     Probe_Trace("initializer_enter");
@@ -92,7 +114,14 @@ function Common_Initializer(...)
         Probe_Trace("native_initialize_begin");
         MKMP_Runtime_Initialize();
         local status = MKMP_Runtime_Status();
-        Probe_Trace("runtime_status available="..tostring(status.available).." reason="..tostring(status.reason));
+        Probe_Trace("runtime_status available="..tostring(status.available).." reason="..tostring(status.reason).." luaopen_calls="..tostring(status.luaopen_calls));
+        Probe_World("initializer");
+        if eh and eh.add_listener then
+            eh:add_listener("PR45_World_Probe", "FactionTurnStart", true, function()
+                Probe_World("faction_turn_start");
+                if probe_world_samples >= 5 then eh:remove_listener("PR45_World_Probe"); end
+            end, true);
+        end
     end);
     if not ok then Probe_Trace("diagnostics_failed error="..tostring(err)); end
 end
@@ -132,7 +161,8 @@ $DebugLog = Join-Path $GameRoot 'MK1212_mp_debug.log'
 $Trace = Join-Path $GameRoot 'PR45_RUNTIME_TRACE.txt'
 $Dll = Join-Path $GameRoot 'twdll.dll'
 $DllAttila = Join-Path $GameRoot 'twdll_attila.dll'
-$Managed = @($Dll,$DllAttila,$NativeLog,$DebugLog,$Trace)
+$DllBare = Join-Path $GameRoot 'twdll'
+$Managed = @($Dll,$DllAttila,$DllBare,$NativeLog,$DebugLog,$Trace)
 $States = @()
 foreach ($path in $Managed) {
     $exists = Test-Path $path
@@ -159,7 +189,7 @@ $WorkshopAttributes = (Get-Item $Workshop).Attributes
 $Installed = $false
 $RunError = $null
 $RestoreErrors = @()
-$Result = [ordered]@{ schema=1; source_sha=$ExpectedSourceSha; bootstrap_enter=$false; initializer_enter=$false; native_ready=$false; debug_ready=$false; pack_preserved=$false; rollback_ok=$false; run_error=$null }
+$Result = [ordered]@{ schema=1; mode=$Mode; source_sha=$ExpectedSourceSha; fallback_ready=$false; bootstrap_enter=$false; initializer_enter=$false; native_ready=$false; debug_ready=$false; pack_preserved=$false; rollback_ok=$false; run_error=$null }
 try {
     if ((Hash $Workshop) -ne $OriginalHash) { throw 'Workshop pack changed during preparation' }
     foreach ($state in $ProbeStates) {
@@ -176,17 +206,22 @@ try {
     foreach ($path in $Managed) {
         if (Test-Path $path) { (Get-Item $path).IsReadOnly = $false; Remove-Item $path -Force }
     }
-    Copy-Item $DllSource $Dll
-    Copy-Item $DllSource $DllAttila
+    if (-not $NoDll) {
+        Copy-Item $DllSource $Dll
+        Copy-Item $DllSource $DllAttila
+    }
+    $InstalledDllHash = if ($NoDll) { $null } else { Hash $Dll }
+    $DllFilesAbsent = -not ((Test-Path $Dll) -or (Test-Path $DllAttila) -or (Test-Path $DllBare))
     $provenance = [ordered]@{
         schema=1; source_sha=$ExpectedSourceSha; started_at=(Get-Date).ToString('o')
         game_root=$GameRoot; workshop_scripts_pack=$Workshop
         workshop_scripts_original_sha256=$OriginalHash; workshop_scripts_patched_sha256=$PatchedHash
         attila_sha256=(Hash $Exe); empire_retail_sha256=(Hash (Join-Path $GameRoot 'empire.retail.dll'))
-        twdll_sha256=(Hash $Dll); payload=$Applied; overlay_mode='workshop-preserving'; isolated_probe_count=$ProbeStates.Count
+        mode=$Mode; dll_files_absent=$DllFilesAbsent; twdll_sha256=$InstalledDllHash; payload=$Applied; overlay_mode='workshop-preserving'; isolated_probe_count=$ProbeStates.Count
     }
     $provenance | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'manifest.json')
     Copy-Item $ModData (Join-Path $Evidence 'moddata.used.json')
+    Write-Host "Probe mode: $Mode"
     Write-Host 'Start/load SINGLE PLAYER, reach the campaign map, wait 10 seconds, then exit normally.' -ForegroundColor Yellow
     if ($PrepareOnly) { throw 'Preparation-only rollback test' }
     Start-Process 'steam://rungameid/325610'
@@ -212,6 +247,9 @@ try {
     if (Test-Path $traceCopy) {
         $txt = [string](Get-Content $traceCopy -Raw)
         $Result.bootstrap_enter = $txt.Contains("source_sha=$ExpectedSourceSha bootstrap_enter")
+        $Result.fallback_ready = @($txt -split "`n" | Where-Object {
+            $_.Contains("source_sha=$ExpectedSourceSha runtime_status available=false reason=dll_unavailable:") -and $_.Contains('luaopen_calls=0')
+        }).Count -gt 0
         $Result.initializer_enter = $txt.Contains("source_sha=$ExpectedSourceSha initializer_enter")
     }
     $nativeCopy = Join-Path $Evidence 'twdll.log'
@@ -256,7 +294,9 @@ try {
     $Result.rollback_ok = $RestoreErrors.Count -eq 0
     $Result.run_error = $RunError
     $Result.restore_errors = $RestoreErrors
-    $Result.pass = $Result.bootstrap_enter -and $Result.initializer_enter -and $Result.native_ready -and $Result.debug_ready -and $Result.pack_preserved -and $Result.rollback_ok -and -not $RunError
+    $RuntimePass = $Result.native_ready -and $Result.debug_ready
+    if ($NoDll) { $RuntimePass = $DllFilesAbsent -and $Result.fallback_ready -and -not $Result.native_ready -and -not (Test-Path $nativeCopy) }
+    $Result.pass = $Result.bootstrap_enter -and $Result.initializer_enter -and $RuntimePass -and $Result.pack_preserved -and $Result.rollback_ok -and -not $RunError
     $Result | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'result.json')
     $zip = Join-Path $Here ('MK1212-PR45-SP-EVIDENCE-' + $Stamp + '.zip')
     Compress-Archive -Path "$Evidence\*" -DestinationPath $zip

@@ -672,3 +672,37 @@ on end turn. Root cause is unproven. Do not infer world-state readiness from DLL
 identity readiness or lift MP feature gates based on this SP result.
 
 PR #45 remains unmerged; this evidence does not authorize merge.
+
+### Final SP probes: bounded world observation and no-DLL fallback
+
+Source inspection confirms GetFactionCount is the correct Attila binding. Its
+GlobalGetter reads g_world, which starts null, is set by LogWorldHook from the
+WORLD constructor hook, and is cleared at teardown. Prior product logs show hook
+installation but no WORLD constructor capture. A missed constructor due to late
+loading is a hypothesis; native pointer acquisition is not changed by this probe.
+
+The test-only bootstrap now reports world state separately from DLL readiness:
+module_unavailable, capability_missing, world_not_captured, count_unavailable,
+query_failed or ready. It samples at initialization and up to four FactionTurnStart
+events per Lua state, then removes its listener. Raw addresses are never emitted
+or used for gameplay. A nil initialization sample no longer stands in for later
+world readiness. No production gameplay code or native hook behavior is changed.
+
+RUN-MK1212-PR45-NO-DLL-TEST.cmd selects -NoDll. The harness backs up and temporarily
+isolates twdll.dll, twdll_attila.dll and extensionless twdll in the game directory.
+It requires a fresh dll_unavailable trace with luaopen_calls=0, no native log,
+completed gameplay initialization, preserved pack and successful rollback. A DLL
+found through another search location cannot satisfy fallback PASS. Normal mode
+still requires exact-payload native/debug ready markers. Result and provenance
+record the mode; synthetic preparation alone never counts as runtime PASS.
+
+Windows rollback fixtures cover both modes, both PowerShell engines, existing
+read-only versus absent files, stale probe packs and unrelated Workshop scripts.
+Local Lua 5.1 mock proof covers ready/missing-world/missing-DLL/query-error paths,
+the five-sample bound and unchanged gameplay initializer execution. These are
+code-level tests, not new runtime acceptance.
+
+Owner actions: native mode: campaign battle -> return to campaign -> save/load,
+and pass one turn for world observation; fallback mode: start SP, move an army,
+end turn and save/load, then exit. Return both mode-labelled evidence archives.
+Previously accepted UI smoke steps need not be repeated. PR remains unmerged.

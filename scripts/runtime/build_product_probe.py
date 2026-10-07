@@ -101,7 +101,7 @@ def build(output: Path, dll: Path, rpfm: Path, root: Path = ROOT) -> Path:
         (stage / 'tools').mkdir()
         shutil.copy2(dll, stage / 'payload/twdll.dll')
         shutil.copy2(rpfm, stage / 'tools/rpfm_cli.exe')
-        for name in ('RUN-MK1212-PR45-SP-TEST.ps1', 'RUN-MK1212-PR45-SP-TEST.cmd'):
+        for name in ('RUN-MK1212-PR45-SP-TEST.ps1', 'RUN-MK1212-PR45-SP-TEST.cmd', 'RUN-MK1212-PR45-NO-DLL-TEST.cmd'):
             shutil.copy2(root / 'scripts/runtime' / name, stage / name)
         # Prove CLI operation and exact payload bytes through a real PFH round-trip.
         proof_pack = stage / 'packaging-proof.pack'
@@ -123,6 +123,10 @@ def build(output: Path, dll: Path, rpfm: Path, root: Path = ROOT) -> Path:
         (stage / 'README-FIRST.txt').write_text(
             'MK1212 product SP probe\nExact source: ' + sha + '\n\n'
             'Close Attila and CA Launcher; keep Steam running.\n'
+            'Native: RUN-MK1212-PR45-SP-TEST.cmd. Test battle -> campaign -> save/load.\n'
+            'Fallback: RUN-MK1212-PR45-NO-DLL-TEST.cmd. Start SP, move army, end turn, save/load.\n'
+            'No-DLL mode temporarily isolates local DLL candidates and requires loader failure.\n'
+            'World observations are bounded to initialization and four faction-turn events.\n'
             'Previous MK1212 probe packs are backed up and isolated automatically.\n'
             'Run RUN-MK1212-PR45-SP-TEST.cmd, click Play, start/load SINGLE PLAYER,\n'
             'reach the campaign map, wait ten seconds, then exit normally.\n'

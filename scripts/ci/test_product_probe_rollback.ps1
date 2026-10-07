@@ -7,8 +7,9 @@ $Base = Join-Path $PWD 'build/rollback-fixtures'
 function Hash($Path) { (Get-FileHash $Path -Algorithm SHA256).Hash }
 try {
     foreach ($Engine in @('powershell.exe', 'pwsh.exe')) {
+    foreach ($NoDllMode in @($false,$true)) {
     foreach ($ExistingFiles in @($true,$false)) {
-        $fixture = Join-Path $Base ($Engine + '-' + [string]$ExistingFiles)
+        $fixture = Join-Path $Base ($Engine + '-' + [string]$ExistingFiles + '-' + [string]$NoDllMode)
         $workshop = Join-Path $fixture 'steamapps/workshop/content/325610/1234/1-1212scripts.pack'
         $game = Join-Path $fixture 'steamapps/common/Total War Attila'
         $appdata = Join-Path $fixture 'appdata'
@@ -34,7 +35,7 @@ try {
         ) | ConvertTo-Json -Depth 8 | Set-Content $moddata
         $beforePack = Hash $workshop
         $beforeMods = Hash $moddata
-        $managedNames = @('twdll.dll','twdll_attila.dll','twdll.log','MK1212_mp_debug.log','PR45_RUNTIME_TRACE.txt')
+        $managedNames = @('twdll','twdll.dll','twdll_attila.dll','twdll.log','MK1212_mp_debug.log','PR45_RUNTIME_TRACE.txt')
         $hashes = @{}
         $attributes = @{}
         if ($ExistingFiles) {
@@ -60,13 +61,20 @@ try {
         Set-Content $unrelated 'Ordinary mod must remain untouched'
         $unrelatedHash = Hash $unrelated
         $env:APPDATA = $appdata
-        $beforeEvidence = @(Get-ChildItem $ProbeRoot -Directory -Filter 'evidence-*').Count
-        & $Engine -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ProbeRoot 'RUN-MK1212-PR45-SP-TEST.ps1') -PrepareOnly
+        $beforeEvidence = @(Get-ChildItem $ProbeRoot -Directory -Filter 'evidence-*' | ForEach-Object { $_.FullName })
+        $ModeArgs = @()
+        if ($NoDllMode) { $ModeArgs += '-NoDll' }
+        & $Engine -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ProbeRoot 'RUN-MK1212-PR45-SP-TEST.ps1') -PrepareOnly @ModeArgs
         if ($LASTEXITCODE -ne 1) { throw 'Preparation-only proof must not report runtime PASS' }
-        if (@(Get-ChildItem $ProbeRoot -Directory -Filter 'evidence-*').Count -ne $beforeEvidence + 1) { throw 'Harness did not produce fresh evidence' }
-        $latest = Get-ChildItem $ProbeRoot -Directory -Filter 'evidence-*' | Sort-Object Name -Descending | Select-Object -First 1
+        if (@(Get-ChildItem $ProbeRoot -Directory -Filter 'evidence-*').Count -ne $beforeEvidence.Count + 1) { throw 'Harness did not produce fresh evidence' }
+        $latest = Get-ChildItem $ProbeRoot -Directory -Filter 'evidence-*' | Where-Object { $_.FullName -notin $beforeEvidence }
+        if (@($latest).Count -ne 1) { throw 'Expected exactly one fresh evidence folder' }
         $provenance = Get-Content (Join-Path $latest.FullName 'manifest.json') -Raw | ConvertFrom-Json
         if ($provenance.game_root -ne $game.Replace('/', '\')) { throw 'Harness selected the wrong game path' }
+        if ($NoDllMode -and (-not $provenance.dll_files_absent -or $null -ne $provenance.twdll_sha256)) { throw 'No-DLL isolation failed' }
+        if (-not $NoDllMode -and (-not $provenance.twdll_sha256 -or $provenance.dll_files_absent)) { throw 'Native installation failed' }
+        $overlay = Get-Content (Join-Path $latest.FullName 'overlay.json') -Raw | ConvertFrom-Json
+        if ($overlay.preserved_lua_count -ne 2 -or @($overlay.applied).Count -ne 3) { throw 'Workshop-preserving overlay contract failed' }
         $result = Get-Content (Join-Path $latest.FullName 'result.json') -Raw | ConvertFrom-Json
         if (-not $result.rollback_ok -or $result.pass -or $result.run_error -ne 'Preparation-only rollback test') { throw 'Unexpected synthetic rollback result' }
         if ((Hash $workshop) -ne $beforePack -or (Hash $moddata) -ne $beforeMods) { throw 'Pack or launcher state was not preserved' }
@@ -85,7 +93,8 @@ try {
             } elseif (Test-Path $p) { throw "Unexpected probe created: $name" }
         }
         if ((Hash $unrelated) -ne $unrelatedHash) { throw 'Unrelated mod was modified' }
-        Write-Host "Synthetic rollback PASS: engine=$Engine; pre-existing files=$ExistingFiles"
+        Write-Host "Synthetic rollback PASS: no-dll=$NoDllMode; engine=$Engine; pre-existing files=$ExistingFiles"
+    }
     }
     }
 } finally {
