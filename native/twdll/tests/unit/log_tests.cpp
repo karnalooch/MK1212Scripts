@@ -63,7 +63,7 @@ int main() {
     std::vector<std::thread> threads;
     threads.reserve(kThreads);
     for (int t = 0; t < kThreads; ++t) {
-        threads.emplace_back([t]() {
+        threads.emplace_back([t, kLinesPerThread]() {
             for (int i = 0; i < kLinesPerThread; ++i) {
                 Log("thread=%d seq=%d", t, i);
             }
