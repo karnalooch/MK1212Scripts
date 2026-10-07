@@ -92,9 +92,7 @@ jobs:
       - name: Validate CA launcher JSON parser on Windows PowerShell 5.1
         shell: powershell
         run: |
-          $sample = @'
-[{"uuid":"1-1212allscriptsdisabled.pack","order":1,"active":false,"packfile":"D:/SteamLibrary/steamapps/workshop/content/325610/3148519158/1-1212allscriptsdisabled.pack"},{"uuid":"1-1212scripts.pack","order":2,"active":true,"packfile":"D:/SteamLibrary/steamapps/workshop/content/325610/1934544571/1-1212scripts.pack"},{"uuid":"1212compbuild_v2.pack","order":4,"active":true,"packfile":"D:/SteamLibrary/steamapps/workshop/content/325610/1429109380/1212compbuild_v2.pack"}]
-'@
+          $sample = '[{"uuid":"1-1212allscriptsdisabled.pack","order":1,"active":false,"packfile":"D:/SteamLibrary/steamapps/workshop/content/325610/3148519158/1-1212allscriptsdisabled.pack"},{"uuid":"1-1212scripts.pack","order":2,"active":true,"packfile":"D:/SteamLibrary/steamapps/workshop/content/325610/1934544571/1-1212scripts.pack"},{"uuid":"1212compbuild_v2.pack","order":4,"active":true,"packfile":"D:/SteamLibrary/steamapps/workshop/content/325610/1429109380/1212compbuild_v2.pack"}]'
 
           $parsedModData = $sample | ConvertFrom-Json
           $mods = New-Object System.Collections.ArrayList
@@ -125,14 +123,14 @@ jobs:
           if ($scriptCandidates.Count -ne 1) { throw "Expected exactly one scripts record, got $($scriptCandidates.Count)" }
 
           $selected = $scriptCandidates[0]
-          $path = [string]($selected.packfile)
+          $selectedPath = [string]($selected.packfile)
 
           if ([string]($selected.uuid) -ne "1-1212scripts.pack") { throw "Wrong uuid selected" }
-          if ($path -ne "D:/SteamLibrary/steamapps/workshop/content/325610/1934544571/1-1212scripts.pack") {
-              throw "Wrong scalar pack path selected: $path"
+          if ($selectedPath -ne "D:/SteamLibrary/steamapps/workshop/content/325610/1934544571/1-1212scripts.pack") {
+              throw "Wrong scalar pack path selected: $selectedPath"
           }
 
-          Write-Host "Windows PowerShell 5.1 launcher JSON parser contract PASS: $path"
+          Write-Host "Windows PowerShell 5.1 launcher JSON parser contract PASS: $selectedPath"
 
       - name: Assemble product proof bundle
         shell: pwsh
