@@ -1,0 +1,224 @@
+name: Build canonical Attila runtime harness
+
+on:
+  push:
+    branches:
+      - artifact-canonical-attila-runtime
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact tested source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: 7c6f5b6d691313f128e9212e37c87c2292e79504
+          path: source
+
+      - name: Assert exact source SHA
+        shell: pwsh
+        run: |
+          Push-Location source
+          $actual = (git rev-parse HEAD).Trim()
+          Pop-Location
+          if ($actual -ne "7c6f5b6d691313f128e9212e37c87c2292e79504") { throw "Expected 7c6f5b6d691313f128e9212e37c87c2292e79504, got $actual" }
+
+      - name: Configure Attila x86 Release
+        shell: pwsh
+        run: cmake -S source/native/twdll -B build/twdll-attila -A Win32 -DTW_GAME=attila -DBUILD_TESTING=ON -DTWDLL_WARNINGS_AS_ERRORS=ON
+
+      - name: Build DLL and native tests
+        shell: pwsh
+        run: |
+          cmake --build build/twdll-attila --config Release --target twdll twdll_signature_scanner_tests twdll_log_tests twdll_security_tests --parallel 2
+          ctest --test-dir build/twdll-attila -C Release --output-on-failure
+
+      - name: Verify DLL identity
+        shell: pwsh
+        run: |
+          $dll = Resolve-Path "build/twdll-attila/Release/twdll.dll"
+          $bytes = [System.IO.File]::ReadAllBytes($dll)
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+          $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
+          if ($machine -ne 0x014c) { throw "Expected PE32/x86" }
+          $ascii = [System.Text.Encoding]::ASCII.GetString($bytes)
+          if (-not $ascii.Contains("luaopen_twdll")) { throw "luaopen_twdll missing" }
+          if (-not $ascii.Contains("7c6f5b6d691313f128e9212e37c87c2292e79504")) { throw "Exact SHA missing" }
+
+      - name: Install prebuilt RPFM CLI 4.5.4
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/Frodo45127/rpfm/releases/download/v4.5.4/rpfm-v4.5.4-x86_64-pc-windows-msvc.zip" -OutFile "rpfm.zip"
+          Expand-Archive "rpfm.zip" -DestinationPath "rpfm" -Force
+          $cli = Get-ChildItem "rpfm" -Recurse -File | Where-Object { $_.Name -like "rpfm_cli*" } | Select-Object -First 1
+          if (-not $cli) { throw "rpfm_cli not found" }
+          "RPFM_CLI=$($cli.FullName)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build canonical twdll test packs
+        shell: pwsh
+        run: |
+          $testSrc = "source/native/twdll/tests/attila/pack"
+          $sharedDst = Join-Path $testSrc "shared"
+          New-Item -ItemType Directory -Force -Path $sharedDst | Out-Null
+          Copy-Item -Force "source/native/twdll/tests/shared/*.lua" $sharedDst
+
+          & "$env:RPFM_CLI" --game attila pack create --pack-path "twdll_test_attila.pack"
+          if ($LASTEXITCODE -ne 0) { throw "test pack create failed" }
+          & "$env:RPFM_CLI" --game attila pack add --pack-path "twdll_test_attila.pack" -F "$testSrc;"
+          if ($LASTEXITCODE -ne 0) { throw "test pack add failed" }
+
+          New-Item -ItemType Directory -Force -Path "empty-pack" | Out-Null
+          & "$env:RPFM_CLI" --game attila pack create --pack-path "twdll.pack"
+          if ($LASTEXITCODE -ne 0) { throw "base pack create failed" }
+          & "$env:RPFM_CLI" --game attila pack add --pack-path "twdll.pack" -F "empty-pack;"
+          if ($LASTEXITCODE -ne 0) { throw "base pack add failed" }
+
+      - name: Download canonical ConsulScriptum Attila pack
+        shell: pwsh
+        run: Invoke-WebRequest -Uri "https://github.com/bukowa/ConsulScriptum/releases/download/v1.0.0/consulscriptum_attila.pack" -OutFile "consulscriptum_attila.pack"
+
+      - name: Assemble canonical one-click harness
+        shell: pwsh
+        run: |
+          $root = "MK1212-twdll-CANONICAL-ATTILA-7c6f5b6d691313f128e9212e37c87c2292e79504"
+          New-Item -ItemType Directory -Force -Path "$root/payload" | Out-Null
+
+          Copy-Item "build/twdll-attila/Release/twdll.dll" "$root/payload/twdll.dll"
+          Copy-Item "build/twdll-attila/Release/twdll.dll" "$root/payload/twdll_attila.dll"
+          Copy-Item "twdll_test_attila.pack" "$root/payload/twdll_test_attila.pack"
+          Copy-Item "twdll.pack" "$root/payload/twdll.pack"
+          Copy-Item "consulscriptum_attila.pack" "$root/payload/consulscriptum_attila.pack"
+          Copy-Item "source/native/twdll/tests/attila/extra.pack" "$root/payload/extra.pack"
+          Copy-Item "source/native/twdll/tests/attila/tests.save" "$root/payload/tests.save"
+
+          $runner = @(
+            'param([string]$GameRoot = "D:\SteamLibrary\steamapps\common\Total War Attila")',
+            '$ErrorActionPreference = "Stop"',
+            '$Here = Split-Path -Parent $MyInvocation.MyCommand.Path',
+            '$Payload = Join-Path $Here "payload"',
+            '$App = Join-Path $env:APPDATA "The Creative Assembly\Attila"',
+            '$Scripts = Join-Path $App "scripts"',
+            '$Saves = Join-Path $App "save_games"',
+            '$UserScript = Join-Path $Scripts "user.script.txt"',
+            '$Data = Join-Path $GameRoot "data"',
+            '$Exe = Join-Path $GameRoot "Attila.exe"',
+            '$Stamp = Get-Date -Format "yyyyMMdd-HHmmss"',
+            '$Backup = Join-Path $Here ("backup-" + $Stamp)',
+            '$Evidence = Join-Path $Here ("evidence-" + $Stamp)',
+            'New-Item -ItemType Directory -Force -Path $Backup,$Evidence,$Scripts,$Saves | Out-Null',
+            'if (!(Test-Path $Exe)) { throw "Attila.exe not found: $Exe" }',
+            '',
+            '# Backup only files touched by this harness.',
+            'if (Test-Path $UserScript) { Copy-Item $UserScript (Join-Path $Backup "user.script.txt") -Force }',
+            'foreach ($name in @("twdll.dll","twdll_attila.dll","twdll.log","twdll_reload_marker.flag","twdll_no_save_reload.flag")) {',
+            '  $p = Join-Path $GameRoot $name; if (Test-Path $p) { Copy-Item $p (Join-Path $Backup $name) -Force }',
+            '}',
+            'foreach ($name in @("twdll_test_attila.pack","twdll.pack","consulscriptum_attila.pack","extra.pack","000_mk1212_twdll_sp_probe_v4_movie.pack","zzz_mk1212_twdll_sp_probe_v3.pack","zzz_mk1212_twdll_sp_probe_v2.pack","mk1212_twdll_sp_probe.pack")) {',
+            '  $p = Join-Path $Data $name; if (Test-Path $p) { Copy-Item $p (Join-Path $Backup $name) -Force; Remove-Item $p -Force }',
+            '}',
+            'if (Test-Path (Join-Path $Saves "tests.save")) { Copy-Item (Join-Path $Saves "tests.save") (Join-Path $Backup "tests.save") -Force }',
+            '',
+            'Copy-Item (Join-Path $Payload "twdll.dll") $GameRoot -Force',
+            'Copy-Item (Join-Path $Payload "twdll_attila.dll") $GameRoot -Force',
+            'foreach ($name in @("twdll_test_attila.pack","twdll.pack","consulscriptum_attila.pack","extra.pack")) { Copy-Item (Join-Path $Payload $name) $Data -Force }',
+            'Copy-Item (Join-Path $Payload "tests.save") $Saves -Force',
+            'Remove-Item (Join-Path $GameRoot "twdll.log") -Force -ErrorAction SilentlyContinue',
+            'Remove-Item (Join-Path $GameRoot "twdll_reload_marker.flag") -Force -ErrorAction SilentlyContinue',
+            'Remove-Item (Join-Path $GameRoot "twdll_no_save_reload.flag") -Force -ErrorAction SilentlyContinue',
+            '',
+            '$user = @(',
+            '  ''mod "twdll_test_attila.pack";'',',
+            '  ''mod "twdll.pack";'',',
+            '  ''mod "consulscriptum_attila.pack";'',',
+            '  ''mod "extra.pack";'',',
+            '  ''game_startup_mode campaign_load "tests.save";'',',
+            '  ''log_lua_errors_to_file;'',',
+            '  ''log_lua_output_to_file;''',
+            ')',
+            '$user | Set-Content -Path $UserScript -Encoding ASCII',
+            '(Get-Item $UserScript).IsReadOnly = $true',
+            '',
+            '$reg = "HKCU:\SOFTWARE\The Creative Assembly\Attila"',
+            'if (!(Test-Path $reg)) { New-Item $reg -Force | Out-Null }',
+            'Set-ItemProperty -Path $reg -Name "last_game_version" -Value 131076 -Type DWord',
+            '',
+            '# Provenance before launch.',
+            '$manifest = [ordered]@{',
+            '  source_sha = "7c6f5b6d691313f128e9212e37c87c2292e79504"; game_root = $GameRoot; started_at = (Get-Date).ToString("o");',
+            '  attila_sha256 = (Get-FileHash $Exe -Algorithm SHA256).Hash.ToLower();',
+            '  empire_retail_sha256 = if (Test-Path (Join-Path $GameRoot "empire.retail.dll")) { (Get-FileHash (Join-Path $GameRoot "empire.retail.dll") -Algorithm SHA256).Hash.ToLower() } else { $null };',
+            '  twdll_sha256 = (Get-FileHash (Join-Path $GameRoot "twdll.dll") -Algorithm SHA256).Hash.ToLower()',
+            '}',
+            '$manifest | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $Evidence "manifest.json")',
+            'Copy-Item $UserScript (Join-Path $Evidence "user.script.used.txt") -Force',
+            '',
+            'Write-Host ""',
+            'Write-Host "=== CANONICAL TWDLL ATTILA TEST ===" -ForegroundColor Cyan',
+            'Write-Host "Starting Attila.exe directly (Steam client may need to be running)."',
+            '$proc = Start-Process -FilePath $Exe -WorkingDirectory $GameRoot -PassThru',
+            'Write-Host "PID: $($proc.Id)"',
+            'Write-Host "The test save should load automatically. Wait ~20-30 s after campaign appears, then EXIT Attila normally."',
+            '',
+            'try { Wait-Process -Id $proc.Id } finally {',
+            '  try { (Get-Item $UserScript).IsReadOnly = $false } catch {}',
+            '  $log = Join-Path $GameRoot "twdll.log"',
+            '  if (Test-Path $log) { Copy-Item $log (Join-Path $Evidence "twdll.log") -Force }',
+            '  foreach ($p in Get-ChildItem $App -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -match "lua|script" -and $_.Extension -match "log|txt" }) {',
+            '    Copy-Item $p.FullName (Join-Path $Evidence ("appdata-" + $p.Name)) -Force -ErrorAction SilentlyContinue',
+            '  }',
+            '  if (Test-Path (Join-Path $Backup "user.script.txt")) { Copy-Item (Join-Path $Backup "user.script.txt") $UserScript -Force } else { Remove-Item $UserScript -Force -ErrorAction SilentlyContinue }',
+            '  $zip = Join-Path $Here ("TWDLL-RUNTIME-EVIDENCE-" + $Stamp + ".zip")',
+            '  Compress-Archive -Path "$Evidence\*" -DestinationPath $zip -Force',
+            '  Write-Host ""',
+            '  if (Test-Path $log) {',
+            '    $content = Get-Content $log -Raw',
+            '    if ($content -match "All tests and save/load cycle PASSED") { Write-Host "RUNTIME RESULT: PASS (including save/load)" -ForegroundColor Green }',
+            '    elseif ($content -match "Final Result: SUCCESS") { Write-Host "RUNTIME RESULT: UNIT TESTS PASS; lifecycle result not confirmed" -ForegroundColor Yellow }',
+            '    else { Write-Host "RUNTIME RESULT: NOT PASS / inspect twdll.log" -ForegroundColor Red }',
+            '  } else { Write-Host "RUNTIME RESULT: NO twdll.log" -ForegroundColor Red }',
+            '  Write-Host "Evidence: $zip"',
+            '}'
+          )
+          $runner | Set-Content -Encoding UTF8 "$root/RUN-CANONICAL-TEST.ps1"
+
+          @(
+            '@echo off',
+            'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0RUN-CANONICAL-TEST.ps1"',
+            'echo.',
+            'pause'
+          ) | Set-Content -Encoding ASCII "$root/RUN-CANONICAL-TEST.cmd"
+
+          @(
+            "CANONICAL ATTILA RUNTIME HARNESS",
+            "Exact twdll source: 7c6f5b6d691313f128e9212e37c87c2292e79504",
+            "",
+            "Before running: close Attila and the CA Launcher. Keep Steam running.",
+            "Double-click RUN-CANONICAL-TEST.cmd.",
+            "The harness launches Attila.exe directly and loads upstream tests.save.",
+            "Do NOT start MK1212 for this test.",
+            "When the campaign has loaded, wait 20-30 seconds for unit tests + save/load, then exit normally.",
+            "After exit, upload the generated TWDLL-RUNTIME-EVIDENCE-*.zip here.",
+            "",
+            "The runner backs up and restores user.script.txt and only removes/replaces twdll/probe test files."
+          ) | Set-Content -Encoding UTF8 "$root/README-FIRST.txt"
+
+          Get-ChildItem $root -Recurse -File | Get-FileHash -Algorithm SHA256 |
+            ForEach-Object {
+              $rel = $_.Path.Substring((Resolve-Path $root).Path.Length + 1)
+              "$($_.Hash.ToLower())  $rel"
+            } | Set-Content -Encoding ASCII "$root/SHA256SUMS.txt"
+
+          Compress-Archive -Path $root -DestinationPath "MK1212-twdll-CANONICAL-ATTILA-7c6f5b6d691313f128e9212e37c87c2292e79504.zip" -Force
+
+      - name: Upload canonical harness
+        uses: actions/upload-artifact@v4
+        with:
+          name: MK1212-twdll-CANONICAL-ATTILA-7c6f5b6d691313f128e9212e37c87c2292e79504
+          path: MK1212-twdll-CANONICAL-ATTILA-7c6f5b6d691313f128e9212e37c87c2292e79504.zip
+          retention-days: 7
+          if-no-files-found: error
