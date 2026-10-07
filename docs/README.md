@@ -7,6 +7,7 @@ This is the documentation router and authority map for this fork.
 - [Attila research authority](research/README.md) — source hierarchy for Assembly Kit, scripting, multiplayer, runtime instrumentation and cross-title research.
 - [Upstream author handoff: multiplayer hardening](research/MULTIPLAYER_HARDENING_AUTHOR_HANDOFF.md) — detailed English report covering findings, merged fixes, remaining MP gates and final validation status.
 - [twdll observability backend](research/TWDLL_OBSERVABILITY_BACKEND.md) — native Lua↔C++↔Attila architecture, safety boundaries, fallback contract and MP fingerprint plan.
+- [Dual-peer MP simulation harness](research/MP_DUAL_PEER_SIMULATION.md) — CI-only fake HOST/CLIENT determinism, persistence fuzzing, source contracts and fault injection.
 - [Architecture](ARCHITECTURE.md) — repository layout, runtime boundaries and authoritative surfaces.
 - [Gumball adoption](GUMBALL_ADOPTION.md) — repository-platform baseline, current immutable platform pin and deferred items.
 - [Diagram style](DIAGRAM_STYLE.md) — required Blueprint-style diagram conventions.
@@ -41,6 +42,7 @@ Do not create a second document for a subject already owned by one of these surf
 - [Crash/OOM-like/resource-pressure hazards](research/ATTILA_CRASH_OOM_RESOURCE_HAZARDS.md)
 - [Multiplayer scripting safety guardrails](research/SCRIPT_SAFETY_GUARDRAILS.md)
 - [twdll runtime observability backend](research/TWDLL_OBSERVABILITY_BACKEND.md)
+- [Dual-peer MP simulation harness](research/MP_DUAL_PEER_SIMULATION.md)
 
 
 ## Native observability map
