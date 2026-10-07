@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - Added `twdll.battle.EnableSmeHealthBars([enabled=true])` — updates health bars on unit cards and 3D banners in real time for 1-man units (SMEs, monsters, single heroes) based on remaining hit points.
 
 ### Fixed
+- Fixed `twdll.log` byte ceilings on Windows by writing in binary append mode, preventing CRLF translation from exceeding the advertised 4096-byte line and 8 MiB file budgets.
 - Fixed DLL initialization so an incomplete required Lua runtime API fails closed instead of continuing into module registration with unresolved native entry points.
 - Fixed native hook lifecycle so partial MinHook failures roll back immediately and hooks remain owned until the final Lua environment using twdll is collected.
 - Fixed `twdll.tweakers.SetInt(name, val)` returning `true` when setting non-existent tweaker names, properly returning `false` on unresolved names matching `SetFloat` and `SetBool`.

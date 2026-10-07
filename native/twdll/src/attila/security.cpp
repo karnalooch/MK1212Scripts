@@ -4,9 +4,8 @@
 #include <algorithm>
 #include <cctype>
 
-bool is_valid_game_host() {
-    char exe_path[MAX_PATH] = {0};
-    if (GetModuleFileNameA(NULL, exe_path, MAX_PATH) == 0) {
+bool is_attila_executable_path(const char* exe_path) {
+    if (!exe_path || exe_path[0] == '\0') {
         return false;
     }
 
@@ -20,13 +19,18 @@ bool is_valid_game_host() {
         ? path_lower
         : path_lower.substr(slash + 1);
 
-    if (exe_name != "attila.exe") {
+    return exe_name == "attila.exe";
+}
+
+bool is_valid_game_host() {
+    char exe_path[MAX_PATH] = {0};
+    if (GetModuleFileNameA(NULL, exe_path, MAX_PATH) == 0) {
         return false;
     }
 
-    if (GetModuleHandleA("empire.retail.dll") == NULL) {
+    if (!is_attila_executable_path(exe_path)) {
         return false;
     }
 
-    return true;
+    return GetModuleHandleA("empire.retail.dll") != NULL;
 }
