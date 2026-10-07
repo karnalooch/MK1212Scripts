@@ -89,6 +89,51 @@ jobs:
           if (-not $raw.Contains("MKMP_Runtime_Initialize")) { throw "Patched bootstrap marker not found in pack" }
           if ($raw.Contains("OLD_RUNTIME_SENTINEL")) { throw "Old runtime payload survived replacement" }
 
+      - name: Validate CA launcher JSON parser on Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $sample = @'
+[{"uuid":"1-1212allscriptsdisabled.pack","order":1,"active":false,"packfile":"D:/SteamLibrary/steamapps/workshop/content/325610/3148519158/1-1212allscriptsdisabled.pack"},{"uuid":"1-1212scripts.pack","order":2,"active":true,"packfile":"D:/SteamLibrary/steamapps/workshop/content/325610/1934544571/1-1212scripts.pack"},{"uuid":"1212compbuild_v2.pack","order":4,"active":true,"packfile":"D:/SteamLibrary/steamapps/workshop/content/325610/1429109380/1212compbuild_v2.pack"}]
+'@
+
+          $parsedModData = $sample | ConvertFrom-Json
+          $mods = New-Object System.Collections.ArrayList
+
+          if ($parsedModData -is [System.Array]) {
+              foreach ($entry in $parsedModData) {
+                  if ($entry -is [System.Array]) {
+                      foreach ($inner in $entry) { [void]$mods.Add($inner) }
+                  } else {
+                      [void]$mods.Add($entry)
+                  }
+              }
+          } else {
+              [void]$mods.Add($parsedModData)
+          }
+
+          $scriptCandidates = New-Object System.Collections.ArrayList
+          foreach ($m in $mods) {
+              $uuid = [string]($m.uuid)
+              $packfile = [string]($m.packfile)
+              $normalizedPack = $packfile.Replace("\\", "/").ToLowerInvariant()
+              if ($uuid -eq "1-1212scripts.pack" -or $normalizedPack.EndsWith("/1-1212scripts.pack")) {
+                  [void]$scriptCandidates.Add($m)
+              }
+          }
+
+          if ($mods.Count -ne 3) { throw "Expected 3 flattened records, got $($mods.Count)" }
+          if ($scriptCandidates.Count -ne 1) { throw "Expected exactly one scripts record, got $($scriptCandidates.Count)" }
+
+          $selected = $scriptCandidates[0]
+          $path = [string]($selected.packfile)
+
+          if ([string]($selected.uuid) -ne "1-1212scripts.pack") { throw "Wrong uuid selected" }
+          if ($path -ne "D:/SteamLibrary/steamapps/workshop/content/325610/1934544571/1-1212scripts.pack") {
+              throw "Wrong scalar pack path selected: $path"
+          }
+
+          Write-Host "Windows PowerShell 5.1 launcher JSON parser contract PASS: $path"
+
       - name: Assemble product proof bundle
         shell: pwsh
         run: |
