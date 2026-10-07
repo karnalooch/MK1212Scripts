@@ -285,6 +285,40 @@ class DualPeerSimulationTests(unittest.TestCase):
             codec.atomic_write(storage, "safe", "01234567890", entries=1)
         self.assertEqual(storage, {"safe": "old"})
 
+    def test_native_adapter_bootstraps_in_singleplayer_and_multiplayer(self) -> None:
+        for multiplayer in (False, True):
+            probe = NativeAdapterProbe(mode="ready")
+
+            with self.subTest(multiplayer=multiplayer):
+                self.assertTrue(probe.initialize(multiplayer=multiplayer))
+                self.assertTrue(probe.status()["available"])
+                self.assertEqual(probe.status()["reason"], "ready")
+                self.assertEqual(probe.luaopen_calls, 1)
+                self.assertEqual(probe.multiplayer, multiplayer)
+
+    def test_native_adapter_initialization_is_idempotent_per_lua_state(self) -> None:
+        probe = NativeAdapterProbe(mode="ready")
+
+        self.assertTrue(probe.initialize(multiplayer=False))
+        self.assertTrue(probe.initialize(multiplayer=False))
+
+        self.assertEqual(probe.initialize_calls, 2)
+        self.assertEqual(probe.luaopen_calls, 1)
+        self.assertTrue(probe.status()["available"])
+
+    def test_native_adapter_identity_mismatch_fails_closed(self) -> None:
+        bad_game = NativeAdapterProbe(mode="ready", game_build="Rome2")
+        bad_sha = NativeAdapterProbe(mode="ready", twdll_sha="unknown")
+
+        self.assertFalse(bad_game.initialize(multiplayer=False))
+        self.assertFalse(bad_sha.initialize(multiplayer=True))
+        self.assertFalse(bad_game.status()["available"])
+        self.assertFalse(bad_sha.status()["available"])
+        self.assertIn("game_build_mismatch", bad_game.status()["reason"])
+        self.assertIn("invalid_build_sha", bad_sha.status()["reason"])
+        self.assertIsNone(bad_game.sanitized_battle_telemetry())
+        self.assertIsNone(bad_sha.sanitized_battle_telemetry())
+
     def test_native_adapter_failures_never_change_shared_gameplay_transcript(self) -> None:
         modes = (
             "dll_missing",
