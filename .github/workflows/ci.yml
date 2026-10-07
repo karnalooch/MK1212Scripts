@@ -82,6 +82,9 @@ jobs:
       - name: Validate MK1212 repository shape
         run: python scripts/ci/check_repository.py
 
+      - name: Run twdll native source contracts
+        run: python -m unittest discover -s scripts/ci -p "test_twdll_*.py" -v
+
       - name: Guard multiplayer-sensitive Lua additions
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
@@ -93,7 +96,7 @@ jobs:
   native_twdll:
     name: Native twdll Attila build
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -115,19 +118,23 @@ jobs:
 
       - name: Configure Attila x86 build
         shell: pwsh
-        run: cmake -S native/twdll -B build/twdll-attila -A Win32 -DTW_GAME=attila -DBUILD_TESTING=ON
+        run: cmake -S native/twdll -B build/twdll-attila -A Win32 -DTW_GAME=attila -DBUILD_TESTING=ON -DTWDLL_WARNINGS_AS_ERRORS=ON
 
-      - name: Build twdll target
+      - name: Build Release twdll and native stress tests
         shell: pwsh
-        run: cmake --build build/twdll-attila --config Release --target twdll --parallel 2
+        run: cmake --build build/twdll-attila --config Release --target twdll twdll_signature_scanner_tests twdll_log_tests twdll_security_tests --parallel 2
 
-      - name: Build native scanner tests
-        shell: pwsh
-        run: cmake --build build/twdll-attila --config Release --target twdll_signature_scanner_tests --parallel 2
-
-      - name: Run native scanner tests
+      - name: Run Release native stress tests
         shell: pwsh
         run: ctest --test-dir build/twdll-attila -C Release --output-on-failure
+
+      - name: Build Debug twdll and native stress tests
+        shell: pwsh
+        run: cmake --build build/twdll-attila --config Debug --target twdll twdll_signature_scanner_tests twdll_log_tests twdll_security_tests --parallel 2
+
+      - name: Run Debug native stress tests
+        shell: pwsh
+        run: ctest --test-dir build/twdll-attila -C Debug --output-on-failure
 
       - name: Verify Attila DLL PE contract
         shell: pwsh
