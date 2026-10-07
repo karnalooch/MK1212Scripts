@@ -2,7 +2,7 @@
 
 This directory is the source and evidence model for engineering work that touches Total War: ATTILA scripting, debugging, multiplayer determinism, runtime instrumentation, or future simultaneous-turn feasibility.
 
-Issues: #3, #5, #7  
+Issues: #3, #5, #7, #28  
 Last reviewed: 2026-10-07
 
 ## Why this exists
@@ -82,6 +82,7 @@ flowchart LR
 - [Crash, OOM-like and resource-pressure hazards](ATTILA_CRASH_OOM_RESOURCE_HAZARDS.md)
 - [MK1212 scripting safety guardrails](SCRIPT_SAFETY_GUARDRAILS.md)
 - [twdll as the MK1212 runtime observability backend](TWDLL_OBSERVABILITY_BACKEND.md)
+- [Dual-peer multiplayer simulation harness](MP_DUAL_PEER_SIMULATION.md)
 - [Upstream author handoff: multiplayer hardening](MULTIPLAYER_HARDENING_AUTHOR_HANDOFF.md)
 
 ## Evidence states
