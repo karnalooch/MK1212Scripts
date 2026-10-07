@@ -9,6 +9,7 @@ Last reviewed: 2026-10-07
 - MK1212 repository: https://github.com/karnalooch/MK1212Scripts
 - Canonical MK1212 native source: `native/twdll/`
 - Import/provenance record: `native/twdll/UPSTREAM.md`
+- Post-merge monorepo audit: `docs/research/TWDLL_MONOREPO_AUDIT.md`
 - Imported twdll baseline: `karnalooch/twdll@85c4db9836e3150df8ec5b38315de9940f8d624c`
 - Historical twdll fork/reference: https://github.com/karnalooch/twdll
 - Upstream twdll: https://github.com/bukowa/twdll
@@ -242,11 +243,11 @@ For battle telemetry the adapter deliberately drops the `battle` and `manager` m
 The adapter:
 
 - normalizes twdll return values;
-- hide raw pointer/address details from ordinary Lua;
-- expose capability checks;
-- provide stable failure behaviour;
-- centralize logging;
-- make later backend replacement possible.
+- hides raw pointer/address details from ordinary Lua;
+- exposes capability checks;
+- provides stable failure behaviour;
+- centralizes logging;
+- makes later backend replacement possible.
 
 ## Load lifecycle
 
@@ -373,6 +374,21 @@ For MK1212 this integration does not authorize:
 - gameplay changes driven by unproven local runtime state.
 
 `native/twdll/` is the MK1212 maintenance surface for controlled experimentation. The old `karnalooch/twdll` repository remains untouched as historical/upstream reference, and upstream provenance must remain visible.
+
+## Build identity after the monorepo migration
+
+`twdll.core.GetBuildSha()` returns the value compiled from `git rev-parse HEAD`. With `native/twdll/` inside MK1212Scripts, that value is the MK1212Scripts commit SHA used for the native build.
+
+This is intentional. Runtime evidence should record the same repository SHA as the Lua/mod source under test, avoiding two independent source identities for one experiment. The original imported twdll SHA remains provenance only and is recorded in `native/twdll/UPSTREAM.md`.
+
+Repository CI now has a separate proof boundary:
+
+- compile the Attila target with the Visual Studio Win32 generator;
+- assert caller-local jobs checked out the exact PR head (or exact push SHA);
+- verify the resulting `twdll.dll` is an x86 PE image;
+- verify the built image contains the `luaopen_twdll` export marker.
+
+These are repository/build proofs only. They do **not** prove that the current Attila executable can load or safely run the DLL.
 
 ## Validation plan
 

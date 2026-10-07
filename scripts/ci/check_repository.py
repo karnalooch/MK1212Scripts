@@ -33,6 +33,7 @@ REQUIRED_FILES = (
     "campaigns/main_attila/common/mkmp_debug.lua",
     "docs/research/MP_DUAL_PEER_SIMULATION.md",
     "docs/research/MP_DEBUG_LOGGING.md",
+    "docs/research/TWDLL_MONOREPO_AUDIT.md",
     "native/twdll/AGENTS.md",
     "native/twdll/CMakeLists.txt",
     "native/twdll/LICENSE",
@@ -137,6 +138,20 @@ platform_refs = set(
 )
 if platform_refs != {PLATFORM_SHA}:
     fail("engineering-platform workflow pin mismatch: " + (", ".join(sorted(platform_refs)) or "none"))
+
+ci_workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+exact_head_ref = "ref: ${{ github.event.pull_request.head.sha || github.sha }}"
+if ci_workflow.count(exact_head_ref) != 2:
+    fail("caller-local CI must pin both checkout steps to the exact PR head / push SHA")
+
+for expected in (
+    "Assert exact checked-out revision",
+    "Verify Attila DLL PE contract",
+    "IMAGE_FILE_MACHINE_I386 (0x014c)",
+    "luaopen_twdll",
+):
+    if expected not in ci_workflow:
+        fail(f"native/exact-head CI contract missing: {expected}")
 
 raw_math_random = sum(path.read_bytes().count(b"math.random") for path in lua_files)
 print(

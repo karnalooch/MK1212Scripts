@@ -28,8 +28,35 @@ The former `vendor/minhook` git submodule is replaced by a self-contained vendor
 
 The imported twdll source matches the pinned source snapshot byte-for-byte except for deliberate monorepo integration differences:
 
-- twdll root GitHub workflow files are not installed as active MK1212 workflows;
+- upstream `.github/workflows/*` files remain preserved below `native/twdll/.github/workflows/` as inert provenance; GitHub only activates workflows from repository-root `.github/workflows/`;
+- `native/twdll/.gitmodules` is intentionally removed;
 - the MinHook gitlink is replaced by the pinned vendored source snapshot;
-- monorepo-specific provenance and CI documentation may be added around the imported source.
+- `UPSTREAM.md` and monorepo CI/documentation are MK1212-owned additions.
+
+## Verified migration evidence
+
+Migration issue #36 was merged by PR #37 into master commit `6c974969b66302acc203ed76868c437004f96fa9`.
+
+A recursive Git-tree audit against `karnalooch/twdll@85c4db9836e3150df8ec5b38315de9940f8d624c` found:
+
+- 0 missing imported twdll paths;
+- 0 mismatched imported twdll blobs;
+- 0 unexpected twdll paths after accounting for the deliberate monorepo differences above;
+- the vendored MinHook tree matches all 79 entries from `TsudaKageyu/minhook@d94c64d32ea37bc4f5ee47d580709f70c6fb6080`.
+
+The large test-save Git blobs are preserved exactly:
+
+- Attila: `17840d85fe5ca6300f2b251bdfe5a352e351d702`;
+- Rome II: `d60dc6e3503358e9ca3fc414d3f7fadd2a8752c7`.
+
+The detailed audit is recorded in `docs/research/TWDLL_MONOREPO_AUDIT.md`.
+
+## Runtime build identity
+
+`twdll.core.GetBuildSha()` is compiled from `git rev-parse HEAD`. Because `native/twdll/` now lives inside MK1212Scripts, the returned SHA is the **MK1212Scripts repository commit** used for the build, not the historical standalone twdll commit. This is the canonical native build identity for future exact-build diagnostics.
+
+## Security scan exception
+
+Trivy finding `AVD-DS-0002` is ignored only for `native/twdll/docs/lua/ldoc/Dockerfile`. That imported docs-only container intentionally starts as root so its entrypoint can switch to the mounted workdir owner. The exception is path-scoped, guarded by `scripts/ci/check_repository.py`, and does not apply to MK1212 runtime/native build code.
 
 Do not silently resync from either external repository. Any future upstream sync must be an explicit, reviewed change that records the old and new source SHAs.
