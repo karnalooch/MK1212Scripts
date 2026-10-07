@@ -152,6 +152,7 @@ class MultiplayerSourceContractTests(unittest.TestCase):
             "population": "experimental_local_ui",
             "region_trading": "experimental_local_ui",
             "occupation_decisions": "experimental_local_ui",
+            "religion_conversion_ui": "experimental_local_ui",
             "crusades": "experimental_local_ui",
             "pope_ui": "experimental_local_ui",
             "hre_story": "shared_model",
@@ -178,6 +179,14 @@ class MultiplayerSourceContractTests(unittest.TestCase):
         self.assertIn('MKMP_FeatureEnabled("pope_ui")', pope)
         self.assertIn('MKMP_FeatureEnabled("hre_story")', story)
         self.assertIn('MKMP_FeatureEnabled("sicily_story")', story)
+        global_ui = read("campaigns/main_attila/common/ui/mk1212_global_ui.lua")
+        start = read("campaigns/main_attila/mk1212_start.lua")
+        self.assertIn('MKMP_FeatureEnabled("religion_conversion_ui")', global_ui)
+        self.assertIn('MKMP_FeatureEnabled("change_capital")', start)
+        self.assertRegex(
+            features,
+            r'\["change_capital"\]\s*=\s*\{enabled\s*=\s*false,\s*mode\s*=\s*"blocked_external_mutator"\}',
+        )
         self.assertIn("Experimental Full Multiplayer Script Profile", frontend)
 
     def test_peer_local_modifiers_remain_blocked_in_full_profile(self) -> None:
