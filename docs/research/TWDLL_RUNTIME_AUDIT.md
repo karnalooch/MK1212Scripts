@@ -81,6 +81,7 @@ Vendored MinHook remains pinned to `TsudaKageyu/minhook@d94c64d32ea37bc4f5ee47d5
 | TWD-A16 | MEDIUM | x86 `FindPushRef` used `uintptr_t` width and unaligned pointer dereference for a 4-byte x86 immediate. | **FIXED**; reads a `uint32_t` via `memcpy`. |
 | TWD-A17 | MEDIUM | `FindString` could read one byte beyond the supplied range at the final loop position. | **FIXED**; the scan now reserves a byte for the required NUL terminator. |
 | TWD-A18 | MEDIUM | `FindPrologue` could wrap an unsigned address when asked to scan to address zero. | **FIXED**; invalid origins fail closed and the loop has an explicit terminal condition. |
+| TWD-A19 | MEDIUM | The logger enforced byte ceilings while the file was opened in Windows text mode, so `\n` expanded to `\r\n` and could exceed the advertised 4096-byte line / 8 MiB file limits by one byte. | **FIXED** during stress testing in #42/#43; `twdll.log` is opened in binary append mode and the byte-budget regression test proves the exact ceiling. |
 
 ## Remaining risks — not papered over
 
@@ -223,6 +224,25 @@ That exact-head run proved:
 
 The follow-up commit that records this evidence is documentation-only and must itself retain a green exact-head gate before merge.
 
+## Stress follow-up — issue #42 / PR #43
+
+The post-audit stress pass deliberately tightened the proof boundary beyond the original #41 native build check.
+
+Exact stress head `dcc1284016b7f07b27575018eb1d8124aac3af4f` completed **Gumball CI run #47 / run ID 37630813021** successfully.
+
+The stress lane now proves on Windows x86:
+
+- active Attila C++ path compiles in **Release and Debug** with MSVC `/W4 /WX`;
+- signature scanner passes its boundary suite plus **5,000 deterministic randomized exact/wildcard cases per configuration**;
+- logger passes formatting, truncation-marker, **8-thread / 2,000-line concurrent write**, exact **8 MiB** cap and no-growth-at-cap tests;
+- host guard accepts only an exact case-insensitive `attila.exe` basename and rejects the CI test process;
+- all three native CTest executables pass in **Release and Debug**;
+- PE32/x86 and `luaopen_twdll` artifact contracts remain green;
+- Linux source-contract tests continuously guard the #40/#41 fail-closed and MinHook rollback invariants;
+- repository policy, governance, Trivy, deterministic MP repository simulation and Aggregate CI all remain green.
+
+The stress suite itself found **TWD-A19**, proving that the additional test layer is not ceremonial.
+
 ## Proof labels
 
 At this stage:
@@ -230,6 +250,10 @@ At this stage:
 - source/code review: **REPO-OBSERVED**;
 - exact functional-head native x86 compiler/link proof: **PASS**;
 - exact functional-head scanner regression suite: **PASS**;
+- Release + Debug `/W4 /WX` native stress suite: **PASS**;
+- logger concurrency/exact-budget stress: **PASS**;
+- host guard native regression suite: **PASS**;
+- source-contract guard for audit fixes: **PASS**;
 - repository policy/governance/Trivy/Aggregate proof: **PASS**;
 - current Attila load proof: **NOT RUN**;
 - save/load runtime proof: **NOT RUN**;
