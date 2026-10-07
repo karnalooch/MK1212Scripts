@@ -42,7 +42,7 @@ class ProductProbeTests(unittest.TestCase):
         result = probe.instrument(source, 'a' * 40)
         self.assertLess(result.index('Probe_Trace("bootstrap_enter")'), result.index('Probe_Require("common/mk1212_common")'))
         self.assertIn('error(result, 0)', result)
-        self.assertIn('size < 65536', result)
+        self.assertIn('size + string.len(line) <= 65536', result)
         self.assertIn('probe_lines >= 128', result)
 
 

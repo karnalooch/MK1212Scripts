@@ -44,8 +44,9 @@ local function Probe_Trace(message)
         local file = io.open("PR45_RUNTIME_TRACE.txt", "ab");
         if not file then return; end
         local size = file:seek("end");
-        if size and size < 65536 then
-            file:write("schema=1 source_sha=SHA ", string.sub(tostring(message), 1, 512), "\\n");
+        local line = "schema=1 source_sha=SHA "..string.sub(tostring(message), 1, 512).."\\n";
+        if size and size + string.len(line) <= 65536 then
+            file:write(line);
         end
         file:close();
     end);

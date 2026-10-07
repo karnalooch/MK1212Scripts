@@ -22,6 +22,7 @@ $DllSource = Join-Path $Here 'payload\twdll.dll'
 function Hash($Path) { (Get-FileHash $Path -Algorithm SHA256).Hash.ToLowerInvariant() }
 if ((Hash $DllSource) -ne $Manifest.dll_sha256 -or (Hash $Rpfm) -ne $Manifest.rpfm_sha256) { throw 'Probe binary hash mismatch' }
 $PatchRoot = Join-Path $Here 'payload\patch-src'
+if (@(Get-ChildItem $PatchRoot -Recurse -File).Count -ne @($Manifest.files).Count) { throw 'Unexpected files in patch payload' }
 foreach ($entry in $Manifest.files) {
     if ($entry.path -notmatch '^campaigns/main_attila/[A-Za-z0-9_/]+\.lua$') { throw 'Invalid payload path' }
     if ((Hash (Join-Path $PatchRoot $entry.path)) -ne $entry.sha256) { throw "Payload hash mismatch: $($entry.path)" }
