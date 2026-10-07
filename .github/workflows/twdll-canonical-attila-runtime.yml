@@ -171,7 +171,16 @@ jobs:
             '  foreach ($p in Get-ChildItem $App -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -match "lua|script" -and $_.Extension -match "log|txt" }) {',
             '    Copy-Item $p.FullName (Join-Path $Evidence ("appdata-" + $p.Name)) -Force -ErrorAction SilentlyContinue',
             '  }',
+            '  # Restore the environment exactly after evidence is captured.',
             '  if (Test-Path (Join-Path $Backup "user.script.txt")) { Copy-Item (Join-Path $Backup "user.script.txt") $UserScript -Force } else { Remove-Item $UserScript -Force -ErrorAction SilentlyContinue }',
+            '  foreach ($name in @("twdll.dll","twdll_attila.dll","twdll.log","twdll_reload_marker.flag","twdll_no_save_reload.flag")) {',
+            '    $p = Join-Path $GameRoot $name; Remove-Item $p -Force -ErrorAction SilentlyContinue; $b = Join-Path $Backup $name; if (Test-Path $b) { Copy-Item $b $p -Force }',
+            '  }',
+            '  foreach ($name in @("twdll_test_attila.pack","twdll.pack","consulscriptum_attila.pack","extra.pack","000_mk1212_twdll_sp_probe_v4_movie.pack","zzz_mk1212_twdll_sp_probe_v3.pack","zzz_mk1212_twdll_sp_probe_v2.pack","mk1212_twdll_sp_probe.pack")) {',
+            '    $p = Join-Path $Data $name; Remove-Item $p -Force -ErrorAction SilentlyContinue; $b = Join-Path $Backup $name; if (Test-Path $b) { Copy-Item $b $p -Force }',
+            '  }',
+            '  Remove-Item (Join-Path $Saves "tests.save") -Force -ErrorAction SilentlyContinue',
+            '  if (Test-Path (Join-Path $Backup "tests.save")) { Copy-Item (Join-Path $Backup "tests.save") (Join-Path $Saves "tests.save") -Force }',
             '  $zip = Join-Path $Here ("TWDLL-RUNTIME-EVIDENCE-" + $Stamp + ".zip")',
             '  Compress-Archive -Path "$Evidence\*" -DestinationPath $zip -Force',
             '  Write-Host ""',
@@ -204,7 +213,7 @@ jobs:
             "When the campaign has loaded, wait 20-30 seconds for unit tests + save/load, then exit normally.",
             "After exit, upload the generated TWDLL-RUNTIME-EVIDENCE-*.zip here.",
             "",
-            "The runner backs up and restores user.script.txt and only removes/replaces twdll/probe test files."
+            "The runner backs up and restores user.script.txt, DLLs, probe/test packs and tests.save after evidence capture."
           ) | Set-Content -Encoding UTF8 "$root/README-FIRST.txt"
 
           Get-ChildItem $root -Recurse -File | Get-FileHash -Algorithm SHA256 |
