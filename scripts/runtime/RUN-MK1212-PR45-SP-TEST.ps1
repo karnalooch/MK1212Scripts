@@ -29,12 +29,12 @@ foreach ($entry in $Manifest.files) {
     if ($entry.path -notmatch '^campaigns/main_attila/[A-Za-z0-9_/]+\.lua$') { throw 'Invalid payload path' }
     if ((Hash (Join-Path $PatchRoot $entry.path)) -ne $entry.sha256) { throw "Payload hash mismatch: $($entry.path)" }
 }
-# Refuse previous probe contamination rather than accepting ambiguous evidence.
+# Isolate leftover MK1212 test packs temporarily; retain verified backups.
 $Data = Join-Path $GameRoot 'data'
-$oldProbes = @(Get-ChildItem $Data -Filter '*twdll*probe*.pack')
-if ($oldProbes.Count -gt 0 -or (Test-Path (Join-Path $Data 'mk1212_pr45_runtime_scripts.pack'))) {
-    throw 'Previous probe packs remain in data; remove them before this isolated test'
-}
+$oldProbes = @(Get-ChildItem -LiteralPath $Data -File | Where-Object {
+    $_.Name -like '*mk1212*twdll*probe*.pack' -or
+    $_.Name -eq 'mk1212_pr45_runtime_scripts.pack'
+})
 $Stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
 $Backup = Join-Path $Here ('backup-' + $Stamp)
 $Evidence = Join-Path $Here ('evidence-' + $Stamp)
@@ -71,6 +71,18 @@ foreach ($path in $Managed) {
     }
     $States += $state
 }
+$ProbeBackup = Join-Path $Backup 'previous-probes'
+New-Item -ItemType Directory -Path $ProbeBackup | Out-Null
+$ProbeStates = @()
+foreach ($probe in $oldProbes) {
+    $saved = Join-Path $ProbeBackup $probe.Name
+    $sha = Hash $probe.FullName
+    Copy-Item -LiteralPath $probe.FullName -Destination $saved
+    if ((Hash $saved) -ne $sha) { throw "Old probe backup hash mismatch: $($probe.Name)" }
+    $ProbeStates += @{ path=$probe.FullName; backup=$saved; sha256=$sha; attributes=$probe.Attributes; touched=$false }
+}
+@($ProbeStates | ForEach-Object { @{ path=$_.path; backup=$_.backup; sha256=$_.sha256 } }) |
+    ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'previous-probes.json')
 $WorkshopAttributes = (Get-Item $Workshop).Attributes
 $Installed = $false
 $RunError = $null
@@ -78,6 +90,14 @@ $RestoreErrors = @()
 $Result = [ordered]@{ schema=1; source_sha=$ExpectedSourceSha; bootstrap_enter=$false; initializer_enter=$false; native_ready=$false; debug_ready=$false; pack_preserved=$false; rollback_ok=$false; run_error=$null }
 try {
     if ((Hash $Workshop) -ne $OriginalHash) { throw 'Workshop pack changed during preparation' }
+    foreach ($state in $ProbeStates) {
+        if ((Hash $state.path) -ne $state.sha256) { throw "Old probe changed before isolation: $($state.path)" }
+        $state.touched = $true
+        (Get-Item -LiteralPath $state.path).IsReadOnly = $false
+        Remove-Item -LiteralPath $state.path -Force
+        if (Test-Path -LiteralPath $state.path) { throw "Old probe remains active: $($state.path)" }
+    }
+    Write-Host "Temporarily isolated $($ProbeStates.Count) previous probe pack(s). Backups: $ProbeBackup"
     $Installed = $true
     (Get-Item $Workshop).IsReadOnly = $false
     Copy-Item $Patched $Workshop -Force
@@ -91,7 +111,7 @@ try {
         game_root=$GameRoot; workshop_scripts_pack=$Workshop
         workshop_scripts_original_sha256=$OriginalHash; workshop_scripts_patched_sha256=$PatchedHash
         attila_sha256=(Hash $Exe); empire_retail_sha256=(Hash (Join-Path $GameRoot 'empire.retail.dll'))
-        twdll_sha256=(Hash $Dll); payload=$Manifest.files
+        twdll_sha256=(Hash $Dll); payload=$Manifest.files; isolated_probe_count=$ProbeStates.Count
     }
     $provenance | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'manifest.json')
     Copy-Item $ModData (Join-Path $Evidence 'moddata.used.json')
@@ -147,6 +167,20 @@ try {
             } catch { $RestoreErrors += "$($state.path): $_" }
         }
     }
+    # Restore isolated packs even if installation failed part-way through.
+    foreach ($state in $ProbeStates) {
+        if (-not $state.touched) { continue }
+        try {
+            if (Test-Path -LiteralPath $state.path) {
+                if ((Hash $state.path) -ne $state.sha256) { throw 'Probe path changed externally; verified backup retained' }
+            } else {
+                Copy-Item -LiteralPath $state.backup -Destination $state.path
+            }
+            (Get-Item -LiteralPath $state.path).Attributes = $state.attributes
+            if ((Hash $state.path) -ne $state.sha256) { throw 'Probe restore hash mismatch' }
+        } catch { $RestoreErrors += "$($state.path): $_" }
+    }
+    $Result.isolated_probe_count = $ProbeStates.Count
     $Result.rollback_ok = $RestoreErrors.Count -eq 0
     $Result.run_error = $RunError
     $Result.restore_errors = $RestoreErrors

@@ -37,6 +37,19 @@ try {
                 $attributes[$name] = (Get-Item $p).Attributes
             }
         }
+        $probeNames = @('mk1212_twdll_sp_probe.pack','zzz_mk1212_twdll_sp_probe_v2.pack','000_mk1212_twdll_sp_probe_v4_movie.pack','mk1212_pr45_runtime_scripts.pack')
+        $probeHashes = @{}
+        if ($ExistingFiles) {
+            foreach ($name in $probeNames) {
+                $p = Join-Path (Join-Path $game 'data') $name
+                Set-Content $p "Old probe $name"
+                (Get-Item $p).IsReadOnly = $true
+                $probeHashes[$name] = Hash $p
+            }
+        }
+        $unrelated = Join-Path (Join-Path $game 'data') 'unrelated.pack'
+        Set-Content $unrelated 'Ordinary mod must remain untouched'
+        $unrelatedHash = Hash $unrelated
         $env:APPDATA = $appdata
         $beforeEvidence = @(Get-ChildItem $ProbeRoot -Directory -Filter 'evidence-*').Count
         & $Engine -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ProbeRoot 'RUN-MK1212-PR45-SP-TEST.ps1') -PrepareOnly
@@ -54,6 +67,15 @@ try {
                 if ((Hash $p) -ne $hashes[$name] -or (Get-Item $p).Attributes -ne $attributes[$name]) { throw "Original file/attributes not restored: $name" }
             } elseif (Test-Path $p) { throw "Unexpected file survived rollback: $name" }
         }
+        $expectedProbes = if ($ExistingFiles) { $probeNames.Count } else { 0 }
+        if ($provenance.isolated_probe_count -ne $expectedProbes -or $result.isolated_probe_count -ne $expectedProbes) { throw 'Old probes were not isolated before preparation completed' }
+        foreach ($name in $probeNames) {
+            $p = Join-Path (Join-Path $game 'data') $name
+            if ($ExistingFiles) {
+                if ((Hash $p) -ne $probeHashes[$name] -or -not (Get-Item $p).IsReadOnly) { throw "Old probe not restored: $name" }
+            } elseif (Test-Path $p) { throw "Unexpected probe created: $name" }
+        }
+        if ((Hash $unrelated) -ne $unrelatedHash) { throw 'Unrelated mod was modified' }
         Write-Host "Synthetic rollback PASS: engine=$Engine; pre-existing files=$ExistingFiles"
     }
     }

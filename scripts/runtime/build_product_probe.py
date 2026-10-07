@@ -123,7 +123,7 @@ def build(output: Path, dll: Path, rpfm: Path, root: Path = ROOT) -> Path:
         (stage / 'README-FIRST.txt').write_text(
             'MK1212 product SP probe\nExact source: ' + sha + '\n\n'
             'Close Attila and CA Launcher; keep Steam running.\n'
-            'Remove previous probe packs from Attila/data.\n'
+            'Previous MK1212 probe packs are backed up and isolated automatically.\n'
             'Run RUN-MK1212-PR45-SP-TEST.cmd, click Play, start/load SINGLE PLAYER,\n'
             'reach the campaign map, wait ten seconds, then exit normally.\n'
             'The active Workshop scripts pack is temporarily replaced and restored.\n'

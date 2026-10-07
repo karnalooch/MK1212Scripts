@@ -565,8 +565,8 @@ The repository now owns the product probe builder and launcher under `scripts/ru
   and successful rollback for PASS. Prior logs cannot satisfy a new run.
 
 The harness does not change launcher metadata or user scripts. Exit Attila and the CA
-Launcher before running; keep Steam running. Old probe packs in `data` must be removed
-before the harness accepts a new isolated run. Backups remain beside the harness.
+Launcher before running; keep Steam running. Old MK1212 probe packs in `data` are automatically backed up, verified and temporarily
+removed for the isolated run, then restored with their original hashes and attributes. Backups remain beside the harness.
 
 Build manually from a clean committed checkout with the exact-SHA Release DLL:
 
@@ -601,3 +601,14 @@ The Windows rollback fixture now uses three launcher entries (including unrelate
 active/inactive mods), forward-slash paths and both `powershell.exe` (5.1) and
 `pwsh.exe` (7), with existing/absent prior files in each engine. Each case must create
 fresh evidence naming its exact synthetic game root; old test evidence cannot pass it.
+
+### Automatic isolation of previous probe packs
+
+The launcher no longer stops when old MK1212 probe packs remain in `data`.
+It copies matching MK1212 probe packs and `mk1212_pr45_runtime_scripts.pack` into
+`backup-*/previous-probes/`, verifies hashes before removing originals, and records
+paths/hashes in `previous-probes.json`. All removals occur inside the rollback scope.
+Restoration runs even if installation fails part-way through, preserves attributes,
+and reports conflicts rather than overwriting externally changed files. Backups remain.
+The Windows fixture covers four stale packs (read-only), no stale packs, and an unrelated
+mod that must remain unchanged, in both Windows PowerShell 5.1 and PowerShell 7.
