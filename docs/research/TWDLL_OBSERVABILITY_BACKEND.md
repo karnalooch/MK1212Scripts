@@ -612,3 +612,24 @@ Restoration runs even if installation fails part-way through, preserves attribut
 and reports conflicts rather than overwriting externally changed files. Backups remain.
 The Windows fixture covers four stale packs (read-only), no stale packs, and an unrelated
 mod that must remain unchanged, in both Windows PowerShell 5.1 and PowerShell 7.
+
+### Workshop-preserving probe after campaign-load crash
+
+The owner reports a crash loading a **new campaign**, and unavailable Papal/menu
+controls during earlier probing. The prior trace reached all bootstrap requires
+but not Common_Initializer. Neither symptom establishes a native-DLL root cause.
+The 14-file overlay also replaced Workshop gameplay/UI modules, confounding the test.
+
+The launcher now extracts the installed Workshop bootstrap and preserves its body,
+wrapping Common_Initializer to run original gameplay initialization first. It adds
+only mkmp_debug and mkmp_runtime; optional diagnostics errors remain fail-soft.
+Existing copies of these modules or an already instrumented bootstrap are rejected
+before installation. All other extracted Lua files are hash-compared before installation.
+The original Workshop asset pack is never redistributed. overlay.json records original
+main identity, three actual applied hashes, preserved count and harness identity.
+The payload manifest still identifies the supplied native/module source; the generated
+bootstrap derives from the user's Workshop, not the repository gameplay version.
+
+Windows 5.1/7 synthetic fixtures seed a distinct Workshop bootstrap and unrelated
+frontend/library sentinel files. Real campaign load, Papal controls and DLL readiness
+remain NOT PROVEN until a new game evidence run; PR #45 must remain unmerged.

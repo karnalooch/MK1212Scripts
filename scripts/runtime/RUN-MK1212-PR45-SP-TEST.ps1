@@ -43,16 +43,88 @@ $Patched = Join-Path $Backup 'patched.pack'
 $Original = Join-Path $Backup 'original.pack'
 Copy-Item $Workshop $Original
 Copy-Item $Workshop $Patched
-# Complete require closure, not only the two changed PR45 files.
-& $Rpfm --game attila pack add --pack-path $Patched -F ($PatchRoot + ';')
-if ($LASTEXITCODE -ne 0) { throw 'RPFM failed before installation; game files are unchanged' }
+# Build an overlay from the user's Workshop bootstrap, never the repo gameplay modules.
+$Baseline = Join-Path $Backup 'workshop-lua'
+$Overlay = Join-Path $Backup 'minimal-overlay'
 $Verified = Join-Path $Backup 'verified-payload'
-New-Item -ItemType Directory -Path $Verified | Out-Null
-& $Rpfm --game attila pack extract --pack-path $Patched -F ("campaigns/main_attila/common;" + $Verified)
-if ($LASTEXITCODE -ne 0) { throw 'RPFM readback failed before installation' }
-foreach ($entry in $Manifest.files) {
-    if ((Hash (Join-Path $Verified $entry.path)) -ne $entry.sha256) { throw "Patched pack readback mismatch: $($entry.path)" }
+New-Item -ItemType Directory -Path $Baseline,$Overlay,$Verified | Out-Null
+foreach ($folder in @('campaigns','lua_scripts','script')) {
+    & $Rpfm --game attila pack extract --pack-path $Original -F ($folder + ';' + $Baseline)
+    if ($LASTEXITCODE -ne 0) { throw "Cannot extract original scripts: $folder; game unchanged" }
 }
+$MainRelative = 'campaigns/main_attila/common/main.lua'
+$MainPath = Join-Path $Baseline $MainRelative
+$Utf8 = New-Object System.Text.UTF8Encoding($false, $true)
+$Main = [IO.File]::ReadAllText($MainPath, $Utf8)
+if ([regex]::Matches($Main, 'function\s+Common_Initializer\s*\(\s*\)').Count -ne 1 -or
+    $Main -match 'MKMP_Runtime|MKMP_Debug|Probe_Trace') {
+    throw 'Unsupported or already instrumented Workshop bootstrap; game unchanged'
+}
+# Prefix/suffix leave every byte of the original decoded Lua body intact.
+$Prefix = @'
+local probe_lines = 0;
+local function Probe_Trace(message)
+    if probe_lines >= 128 then return; end
+    probe_lines = probe_lines + 1;
+    pcall(function()
+        if not io or not io.open then return; end
+        local f = io.open("PR45_RUNTIME_TRACE.txt", "ab");
+        if not f then return; end
+        local size = f:seek("end");
+        local line = "schema=1 source_sha=SOURCE_SHA "..string.sub(tostring(message),1,512).."\n";
+        if size and size + #line <= 65536 then f:write(line); end
+        f:close();
+    end);
+end
+Probe_Trace("bootstrap_enter");
+'@
+$Suffix = @'
+Probe_Trace("bootstrap_complete");
+local Probe_Original_Initializer = Common_Initializer;
+function Common_Initializer(...)
+    Probe_Trace("initializer_enter");
+    Probe_Original_Initializer(...);
+    Probe_Trace("gameplay_initializer_complete");
+    local ok, err = pcall(function()
+        require("common/mkmp_debug");
+        require("common/mkmp_runtime");
+        MKMP_Debug_Initialize();
+        Probe_Trace("native_initialize_begin");
+        MKMP_Runtime_Initialize();
+        local status = MKMP_Runtime_Status();
+        Probe_Trace("runtime_status available="..tostring(status.available).." reason="..tostring(status.reason));
+    end);
+    if not ok then Probe_Trace("diagnostics_failed error="..tostring(err)); end
+end
+'@
+$OverlayCommon = Join-Path $Overlay 'campaigns/main_attila/common'
+New-Item -ItemType Directory -Path $OverlayCommon -Force | Out-Null
+[IO.File]::WriteAllText((Join-Path $Overlay $MainRelative),
+    $Prefix.Replace('SOURCE_SHA', $ExpectedSourceSha) + "`n" + $Main + "`n" + $Suffix + "`n", $Utf8)
+$Allowed = @($MainRelative,'campaigns/main_attila/common/mkmp_debug.lua','campaigns/main_attila/common/mkmp_runtime.lua')
+foreach ($relative in $Allowed[1..2]) {
+    if (Test-Path (Join-Path $Baseline $relative)) { throw "Workshop already contains $relative; game unchanged" }
+    Copy-Item -LiteralPath (Join-Path $PatchRoot $relative) -Destination (Join-Path $Overlay $relative)
+}
+$Applied = @($Allowed | ForEach-Object { @{ path=$_; sha256=(Hash (Join-Path $Overlay $_)) } })
+& $Rpfm --game attila pack add --pack-path $Patched -F ($Overlay + ';')
+if ($LASTEXITCODE -ne 0) { throw 'RPFM failed before installation; game files unchanged' }
+foreach ($folder in @('campaigns','lua_scripts','script')) {
+    & $Rpfm --game attila pack extract --pack-path $Patched -F ($folder + ';' + $Verified)
+    if ($LASTEXITCODE -ne 0) { throw "RPFM readback failed: $folder" }
+}
+foreach ($entry in $Applied) {
+    if ((Hash (Join-Path $Verified $entry.path)) -ne $entry.sha256) { throw "Overlay readback mismatch: $($entry.path)" }
+}
+$Preserved = 0
+foreach ($file in Get-ChildItem $Baseline -Recurse -File -Filter '*.lua') {
+    $relative = $file.FullName.Substring($Baseline.Length + 1).Replace('\','/')
+    if ($relative -eq $MainRelative) { continue }
+    if ((Hash (Join-Path $Verified $relative)) -ne (Hash $file.FullName)) { throw "Unrelated Workshop Lua changed: $relative" }
+    $Preserved++
+}
+@{ schema=1; mode='workshop-preserving'; original_main_sha256=(Hash $MainPath); applied=$Applied; preserved_lua_count=$Preserved; harness_sha256=(Hash $MyInvocation.MyCommand.Path) } |
+    ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'overlay.json')
 $OriginalHash = Hash $Original
 $PatchedHash = Hash $Patched
 $NativeLog = Join-Path $GameRoot 'twdll.log'
@@ -111,7 +183,7 @@ try {
         game_root=$GameRoot; workshop_scripts_pack=$Workshop
         workshop_scripts_original_sha256=$OriginalHash; workshop_scripts_patched_sha256=$PatchedHash
         attila_sha256=(Hash $Exe); empire_retail_sha256=(Hash (Join-Path $GameRoot 'empire.retail.dll'))
-        twdll_sha256=(Hash $Dll); payload=$Manifest.files; isolated_probe_count=$ProbeStates.Count
+        twdll_sha256=(Hash $Dll); payload=$Applied; overlay_mode='workshop-preserving'; isolated_probe_count=$ProbeStates.Count
     }
     $provenance | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'manifest.json')
     Copy-Item $ModData (Join-Path $Evidence 'moddata.used.json')

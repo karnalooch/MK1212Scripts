@@ -16,6 +16,15 @@ try {
         New-Item -ItemType Directory -Force -Path (Split-Path $workshop),(Join-Path $game 'data'),(Split-Path $moddata) | Out-Null
         & $Rpfm --game attila pack create --pack-path $workshop
         if ($LASTEXITCODE -ne 0) { throw 'Synthetic pack creation failed' }
+        $seed = Join-Path $fixture 'seed'
+        foreach ($folder in @('campaigns/main_attila/common','lua_scripts','script')) {
+            New-Item -ItemType Directory -Force -Path (Join-Path $seed $folder) | Out-Null
+        }
+        Set-Content (Join-Path $seed 'campaigns/main_attila/common/main.lua') 'function Common_Initializer() end'
+        Set-Content (Join-Path $seed 'lua_scripts/frontend.lua') '-- frontend sentinel'
+        Set-Content (Join-Path $seed 'script/sentinel.lua') '-- library sentinel'
+        & $Rpfm --game attila pack add --pack-path $workshop -F ($seed + ';')
+        if ($LASTEXITCODE -ne 0) { throw 'Synthetic Workshop seed failed' }
         Set-Content (Join-Path $game 'Attila.exe') 'synthetic executable fingerprint; never launched'
         Set-Content (Join-Path $game 'empire.retail.dll') 'synthetic engine fingerprint'
         @(
