@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "source_baseline": "a55cd6fc66ff4b5d624bd3a80433987678b4adeb",
+  "multiplayer_effective_features": {
+    "challenges": false,
+    "ironman": false,
+    "lucky_nations": false
+  },
+  "rng_contracts": {
+    "heir_age": {
+      "minimum": 16,
+      "maximum": 30
+    },
+    "greek_fire_damage": {
+      "minimum": 10,
+      "maximum": 40
+    }
+  },
+  "save_limits": {
+    "max_entries": 20000,
+    "max_string_bytes": 1048576
+  },
+  "region_transfer": {
+    "max_pending": 64
+  },
+  "vassal_tracking": {
+    "max_pending_age_turns": 1
+  }
+}
