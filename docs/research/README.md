@@ -2,7 +2,7 @@
 
 This directory is the source and evidence model for engineering work that touches Total War: ATTILA scripting, debugging, multiplayer determinism, runtime instrumentation, or future simultaneous-turn feasibility.
 
-Issues: #3, #5, #7, #28  
+Issues: #3, #5, #7, #28, #44  
 Last reviewed: 2026-10-07
 
 ## Why this exists
@@ -139,3 +139,5 @@ The current preferred native observability candidate is **twdll**:
 - implementation audit: [TWDLL_RUNTIME_AUDIT.md](TWDLL_RUNTIME_AUDIT.md)
 
 twdll-derived values are classified as **exact-build runtime evidence** only when their semantics and lifecycle are verified. Merely obtaining a value from native memory does not make it multiplayer-safe.
+
+The canonical 2026-10-07 single-player Attila harness now supplies that exact-build evidence for the tested native SHA: 23/23 required Lua ABI entry points, 33/33 game signatures, 224/224 in-game assertions, and successful save/load reinitialization. Issue #44 is the product-integration gate that wires the same fail-closed adapter into the real MK1212 bootstrap before two-peer runtime proof begins.
