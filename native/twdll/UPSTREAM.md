@@ -26,7 +26,7 @@ The former `vendor/minhook` git submodule is replaced by a self-contained vendor
 
 ## Import policy
 
-The imported twdll source matches the pinned source snapshot byte-for-byte except for deliberate monorepo integration differences:
+At the migration boundary, the imported twdll source matched the pinned source snapshot byte-for-byte except for deliberate monorepo integration differences:
 
 - upstream `.github/workflows/*` files remain preserved below `native/twdll/.github/workflows/` as inert provenance; GitHub only activates workflows from repository-root `.github/workflows/`;
 - `native/twdll/.gitmodules` is intentionally removed;
@@ -49,7 +49,24 @@ The large test-save Git blobs are preserved exactly:
 - Attila: `17840d85fe5ca6300f2b251bdfe5a352e351d702`;
 - Rome II: `d60dc6e3503358e9ca3fc414d3f7fadd2a8752c7`.
 
-The detailed audit is recorded in `docs/research/TWDLL_MONOREPO_AUDIT.md`.
+The detailed migration audit is recorded in `docs/research/TWDLL_MONOREPO_AUDIT.md`.
+
+## Post-import MK1212 maintenance
+
+The byte-identical statement above describes the **migration baseline**, not the forever state of the maintained monorepo copy.
+
+Issue #40 performs the first MK1212-owned implementation audit and intentionally changes the active Attila source to harden:
+
+- signature-scan bounds and malformed-pattern handling;
+- Lua ABI fail-closed initialization;
+- loader-lock safety;
+- multi-Lua-state hook ownership;
+- transactional MinHook rollback;
+- selected Lua API edge cases and engine-state rollback;
+- bounded native diagnostics;
+- native scanner regression coverage in caller-local Windows CI.
+
+Those post-import changes are documented in `docs/research/TWDLL_RUNTIME_AUDIT.md`. Future provenance checks must compare against the migration baseline when proving import fidelity and against the current MK1212 commit when proving maintained runtime behavior. Do not describe the maintained tree as byte-identical to the historical imported fork after issue #40.
 
 ## Runtime build identity
 
