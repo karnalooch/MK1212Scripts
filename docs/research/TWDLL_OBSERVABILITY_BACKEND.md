@@ -10,6 +10,7 @@ Last reviewed: 2026-10-07
 - Canonical MK1212 native source: `native/twdll/`
 - Import/provenance record: `native/twdll/UPSTREAM.md`
 - Post-merge monorepo audit: `docs/research/TWDLL_MONOREPO_AUDIT.md`
+- Native runtime/code audit: `docs/research/TWDLL_RUNTIME_AUDIT.md`
 - Imported twdll baseline: `karnalooch/twdll@85c4db9836e3150df8ec5b38315de9940f8d624c`
 - Historical twdll fork/reference: https://github.com/karnalooch/twdll
 - Upstream twdll: https://github.com/bukowa/twdll
@@ -389,6 +390,21 @@ Repository CI now has a separate proof boundary:
 - verify the built image contains the `luaopen_twdll` export marker.
 
 These are repository/build proofs only. They do **not** prove that the current Attila executable can load or safely run the DLL.
+
+## Runtime safety contract after issue #40
+
+The source-level runtime audit in `TWDLL_RUNTIME_AUDIT.md` hardens the native boundary before the staged Attila proof:
+
+- the Attila Lua ABI is **all-or-nothing**: all 23 required signatures must resolve before module registration;
+- the 33 game signatures remain per-capability: unresolved functions are cleared and reported as degraded rather than guessed;
+- `DllMain` performs no logging, scanning, allocation-heavy initialization or hook installation;
+- partial MinHook installation rolls back locally rather than leaving a knowingly half-installed feature;
+- multiple Lua states share process-global hooks until the final registered state is collected;
+- `twdll.log` is bounded to 8 MiB, individual native messages to 4096 bytes and Lua log calls to 64 arguments;
+- diagnostics budget exhaustion is fail-soft and never cancels, retries or changes a gameplay mutation;
+- the host guard requires the actual executable basename `attila.exe` plus `empire.retail.dll`.
+
+This improves failure semantics but is still **REPO-OBSERVED** until an exact current Attila build loads and exercises the DLL.
 
 ## Validation plan
 

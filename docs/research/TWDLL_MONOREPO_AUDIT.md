@@ -14,6 +14,8 @@ The audit found **no content corruption** in the imported twdll snapshot or the 
 
 This document records repository evidence only. It does not claim current-build Attila runtime compatibility.
 
+A separate follow-up audit now reviews the **implementation itself** rather than import fidelity: [TWDLL_RUNTIME_AUDIT.md](TWDLL_RUNTIME_AUDIT.md), tracked by issue #40. The migration audit remains the provenance/integrity baseline; post-import MK1212 maintenance changes are intentionally evaluated in the runtime audit instead of being misrepresented as byte-identical upstream content.
+
 ## Pinned inputs
 
 | Component | Pinned source |

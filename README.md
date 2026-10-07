@@ -12,6 +12,7 @@ Uses the Rome 2 Total Realism Scripting Toolkit courtesy of the R2TR development
 - Canonical MK1212 native source: [native/twdll/](native/twdll/)
 - Native import/provenance: [native/twdll/UPSTREAM.md](native/twdll/UPSTREAM.md)
 - Native monorepo audit: [docs/research/TWDLL_MONOREPO_AUDIT.md](docs/research/TWDLL_MONOREPO_AUDIT.md)
+- Native runtime/code audit: [docs/research/TWDLL_RUNTIME_AUDIT.md](docs/research/TWDLL_RUNTIME_AUDIT.md)
 - Historical twdll fork/reference: https://github.com/karnalooch/twdll
 - Upstream twdll: https://github.com/bukowa/twdll
 - twdll API docs: https://bukowa.github.io/twdll/
