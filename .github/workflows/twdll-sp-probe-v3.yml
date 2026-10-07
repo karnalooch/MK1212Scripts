@@ -1,0 +1,249 @@
+name: Build Attila SP probe V3
+
+on:
+  push:
+    branches:
+      - artifact-sp-probe-v3
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout helper branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          path: helper
+
+      - name: Checkout exact twdll source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: 7c6f5b6d691313f128e9212e37c87c2292e79504
+          path: source
+
+      - name: Assert exact source SHA
+        shell: pwsh
+        run: |
+          Push-Location source
+          $actual = (git rev-parse HEAD).Trim()
+          Pop-Location
+          if ($actual -ne "7c6f5b6d691313f128e9212e37c87c2292e79504") { throw "Expected 7c6f5b6d691313f128e9212e37c87c2292e79504, got $actual" }
+
+      - name: Configure Attila x86 Release
+        shell: pwsh
+        run: cmake -S source/native/twdll -B build/twdll-attila -A Win32 -DTW_GAME=attila -DBUILD_TESTING=ON -DTWDLL_WARNINGS_AS_ERRORS=ON
+
+      - name: Build and test DLL
+        shell: pwsh
+        run: |
+          cmake --build build/twdll-attila --config Release --target twdll twdll_signature_scanner_tests twdll_log_tests twdll_security_tests --parallel 2
+          ctest --test-dir build/twdll-attila -C Release --output-on-failure
+
+      - name: Verify PE32 and exact build SHA
+        shell: pwsh
+        run: |
+          $dll = Resolve-Path "build/twdll-attila/Release/twdll.dll"
+          $bytes = [System.IO.File]::ReadAllBytes($dll)
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+          $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
+          if ($machine -ne 0x014c) { throw "Expected x86 DLL" }
+          $ascii = [System.Text.Encoding]::ASCII.GetString($bytes)
+          if (-not $ascii.Contains("luaopen_twdll")) { throw "luaopen_twdll missing" }
+          if (-not $ascii.Contains("7c6f5b6d691313f128e9212e37c87c2292e79504")) { throw "Exact SHA missing from DLL" }
+
+      - name: Prepare full campaign entrypoint probe
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "probe-src/campaigns/main_attila" | Out-Null
+          @'
+import pathlib
+
+src = pathlib.Path("source/campaigns/main_attila/scripting.lua")
+dst = pathlib.Path("probe-src/campaigns/main_attila/scripting.lua")
+text = src.read_text(encoding="utf-8")
+
+anchor = 'cm = campaign_manager:new(campaign_name);'
+if anchor not in text:
+    raise SystemExit("campaign manager anchor missing")
+
+boot = r'''
+-- MK1212 TWDLL SP PROBE V3: Lua execution marker.
+local MK1212_SP_PROBE_PATH = "MK1212_SP_PROBE_BOOT.txt"
+local MK1212_SP_PROBE_TWDLL = nil
+
+local function MK1212_SP_Probe_Write(message)
+    if not io or type(io.open) ~= "function" then return end
+    local ok, file = pcall(io.open, MK1212_SP_PROBE_PATH, "a")
+    if ok and file then
+        file:write(tostring(message) .. "\\n")
+        file:flush()
+        file:close()
+    end
+end
+
+MK1212_SP_Probe_Write("V3 BOOT_AFTER_CM")
+'''
+
+text = text.replace(anchor, anchor + boot, 1)
+
+tail = r'''
+-- MK1212 TWDLL SP PROBE V3: native load happens after MK1212 requires are complete.
+MK1212_SP_Probe_Write("V3 PRE_LOADLIB")
+
+local function MK1212_SP_Probe_Load()
+    if not package or type(package.loadlib) ~= "function" then
+        MK1212_SP_Probe_Write("V3 FAIL package.loadlib_unavailable")
+        return
+    end
+
+    local candidates = {
+        "twdll_attila.dll",
+        "./twdll_attila.dll",
+        "twdll.dll",
+        "./twdll.dll"
+    }
+
+    for i = 1, #candidates do
+        local path = candidates[i]
+        local ok_load, loader, load_err = pcall(package.loadlib, path, "luaopen_twdll")
+
+        if ok_load and type(loader) == "function" then
+            MK1212_SP_Probe_Write("V3 LOADLIB_OK path=" .. tostring(path))
+            local ok_open, module_or_error = pcall(loader)
+
+            if ok_open and type(module_or_error) == "table" then
+                MK1212_SP_PROBE_TWDLL = module_or_error
+                twdll = module_or_error
+                MK1212_SP_Probe_Write("V3 LUAOPEN_OK")
+
+                if module_or_error.core then
+                    if type(module_or_error.core.GameBuild) == "function" then
+                        local ok_game, value = pcall(module_or_error.core.GameBuild)
+                        MK1212_SP_Probe_Write("V3 GAME_BUILD ok=" .. tostring(ok_game) .. " value=" .. tostring(value))
+                    end
+
+                    if type(module_or_error.core.GetBuildSha) == "function" then
+                        local ok_sha, value = pcall(module_or_error.core.GetBuildSha)
+                        MK1212_SP_Probe_Write("V3 BUILD_SHA ok=" .. tostring(ok_sha) .. " value=" .. tostring(value))
+                    end
+
+                    if type(module_or_error.core.Log) == "function" then
+                        pcall(module_or_error.core.Log, "[SP-PROBE-V3] luaopen_twdll succeeded")
+                    end
+                end
+
+                return
+            end
+
+            MK1212_SP_Probe_Write("V3 LUAOPEN_FAIL err=" .. tostring(module_or_error))
+            return
+        end
+
+        MK1212_SP_Probe_Write(
+            "V3 LOADLIB_FAIL path=" .. tostring(path) ..
+            " ok=" .. tostring(ok_load) ..
+            " loader=" .. tostring(loader) ..
+            " err=" .. tostring(load_err)
+        )
+    end
+end
+
+MK1212_SP_Probe_Load()
+
+cm:register_first_tick_callback(
+    function()
+        MK1212_SP_Probe_Write("V3 FIRST_TICK")
+        if MK1212_SP_PROBE_TWDLL
+        and MK1212_SP_PROBE_TWDLL.world
+        and type(MK1212_SP_PROBE_TWDLL.world.GetFactionCount) == "function" then
+            local ok_count, value = pcall(MK1212_SP_PROBE_TWDLL.world.GetFactionCount)
+            MK1212_SP_Probe_Write("V3 FACTIONS ok=" .. tostring(ok_count) .. " value=" .. tostring(value))
+        end
+    end
+)
+'''
+
+dst.write_text(text + tail, encoding="utf-8")
+'@ | Set-Content -Encoding UTF8 "make_probe.py"
+          python make_probe.py
+
+      - name: Install prebuilt RPFM CLI 4.5.4
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/Frodo45127/rpfm/releases/download/v4.5.4/rpfm-v4.5.4-x86_64-pc-windows-msvc.zip" -OutFile "rpfm.zip"
+          Expand-Archive "rpfm.zip" -DestinationPath "rpfm" -Force
+          $cli = Get-ChildItem "rpfm" -Recurse -File | Where-Object { $_.Name -like "rpfm_cli*" } | Select-Object -First 1
+          if (-not $cli) { throw "rpfm_cli not found" }
+          "RPFM_CLI=$($cli.FullName)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build V3 pack
+        shell: pwsh
+        run: |
+          & "$env:RPFM_CLI" --game attila pack create --pack-path "zzz_mk1212_twdll_sp_probe_v3.pack"
+          if ($LASTEXITCODE -ne 0) { throw "pack create failed" }
+          & "$env:RPFM_CLI" --game attila pack add --pack-path "zzz_mk1212_twdll_sp_probe_v3.pack" -F "probe-src;"
+          if ($LASTEXITCODE -ne 0) { throw "pack add failed" }
+          if ((Get-Item "zzz_mk1212_twdll_sp_probe_v3.pack").Length -le 0) { throw "empty pack" }
+
+      - name: Assemble bundle
+        shell: pwsh
+        run: |
+          $root = "MK1212-twdll-SP-PROBE-V3-7c6f5b6d691313f128e9212e37c87c2292e79504"
+          New-Item -ItemType Directory -Force -Path "$root/DROP-IN" | Out-Null
+          Copy-Item "build/twdll-attila/Release/twdll.dll" "$root/DROP-IN/twdll_attila.dll"
+          Copy-Item "build/twdll-attila/Release/twdll.dll" "$root/DROP-IN/twdll.dll"
+          Copy-Item "zzz_mk1212_twdll_sp_probe_v3.pack" "$root/zzz_mk1212_twdll_sp_probe_v3.pack"
+
+          @(
+            "MK1212 TWDLL SP PROBE V3",
+            "========================",
+            "Exact native source SHA: 7c6f5b6d691313f128e9212e37c87c2292e79504",
+            "",
+            "1. Copy DROP-IN/twdll_attila.dll next to Attila.exe.",
+            "2. Copy zzz_mk1212_twdll_sp_probe_v3.pack to Attila/data.",
+            "3. In %APPDATA%\\The Creative Assembly\\Attila\\scripts\\user.script.txt add:",
+            "   mod `"zzz_mk1212_twdll_sp_probe_v3.pack`";",
+            "4. Keep it LAST among MK1212 mod lines.",
+            "5. Start MK1212 single player and reach the campaign map.",
+            "6. Search the Attila game directory for MK1212_SP_PROBE_BOOT.txt and twdll.log.",
+            "",
+            "Interpretation:",
+            "- no MK1212_SP_PROBE_BOOT.txt = this pack is not winning/being loaded",
+            "- BOOT exists + LOADLIB_FAIL = loader/path/dependency problem",
+            "- LOADLIB_OK + LUAOPEN_FAIL = ABI/signature init problem",
+            "- LUAOPEN_OK = native module loaded"
+          ) | Set-Content -Encoding UTF8 "$root/README-FIRST.txt"
+
+          @'
+$ErrorActionPreference = "Continue"
+$script = Join-Path $env:APPDATA "The Creative Assembly\Attila\scripts\user.script.txt"
+Write-Host "user.script.txt: $script"
+if (Test-Path $script) {
+    Write-Host "---- user.script.txt ----"
+    Get-Content $script
+    Write-Host "---- probe line ----"
+    Select-String -Path $script -Pattern "zzz_mk1212_twdll_sp_probe_v3.pack"
+} else {
+    Write-Warning "user.script.txt does not exist"
+}
+'@ | Set-Content -Encoding UTF8 "$root/VERIFY-USER-SCRIPT.ps1"
+
+          Get-ChildItem $root -Recurse -File | Get-FileHash -Algorithm SHA256 |
+            ForEach-Object {
+              $rel = $_.Path.Substring((Resolve-Path $root).Path.Length + 1)
+              "$($_.Hash.ToLower())  $rel"
+            } | Set-Content -Encoding ASCII "$root/SHA256SUMS.txt"
+
+          Compress-Archive -Path $root -DestinationPath "MK1212-twdll-SP-PROBE-V3-7c6f5b6d691313f128e9212e37c87c2292e79504.zip" -Force
+
+      - name: Upload V3
+        uses: actions/upload-artifact@v4
+        with:
+          name: MK1212-twdll-SP-PROBE-V3-7c6f5b6d691313f128e9212e37c87c2292e79504
+          path: MK1212-twdll-SP-PROBE-V3-7c6f5b6d691313f128e9212e37c87c2292e79504.zip
+          retention-days: 7
