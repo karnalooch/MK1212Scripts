@@ -5,6 +5,7 @@ This is the documentation router and authority map for this fork.
 ## Start here
 
 - [Attila research authority](research/README.md) — source hierarchy for Assembly Kit, scripting, multiplayer, runtime instrumentation and cross-title research.
+- [Upstream author handoff: multiplayer hardening](research/MULTIPLAYER_HARDENING_AUTHOR_HANDOFF.md) — detailed English report covering findings, merged fixes, remaining MP gates and final validation status.
 - [twdll observability backend](research/TWDLL_OBSERVABILITY_BACKEND.md) — native Lua↔C++↔Attila architecture, safety boundaries, fallback contract and MP fingerprint plan.
 - [Architecture](ARCHITECTURE.md) — repository layout, runtime boundaries and authoritative surfaces.
 - [Gumball adoption](GUMBALL_ADOPTION.md) — repository-platform baseline, current immutable platform pin and deferred items.
