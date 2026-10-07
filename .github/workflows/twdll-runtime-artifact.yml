@@ -61,6 +61,25 @@ jobs:
           if (-not $ascii.Contains("luaopen_twdll")) { throw "luaopen_twdll export marker missing" }
           if (-not $ascii.Contains("7c6f5b6d691313f128e9212e37c87c2292e79504")) { throw "Exact source SHA marker missing from DLL" }
 
+      - name: Download RPFM CLI
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/Frodo45127/rpfm/releases/download/v5.1.1/rpfm-v5.1.1-x86_64-pc-windows-msvc.zip" -OutFile "rpfm.zip"
+          Expand-Archive -Path "rpfm.zip" -DestinationPath "rpfm" -Force
+          $cli = Get-ChildItem -Path "rpfm" -Recurse -Filter "rpfm_cli.exe" | Select-Object -First 1
+          if (-not $cli) { throw "rpfm_cli.exe not found in RPFM release" }
+          "RPFM_CLI=$($cli.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build single-player runtime probe pack
+        shell: pwsh
+        run: |
+          & "$env:RPFM_CLI" --game attila pack create --pack-path "mk1212_twdll_sp_probe.pack"
+          if ($LASTEXITCODE -ne 0) { throw "RPFM pack create failed" }
+          & "$env:RPFM_CLI" --game attila pack add --pack-path "mk1212_twdll_sp_probe.pack" -F "packaging/artifact/sp-probe-pack;"
+          if ($LASTEXITCODE -ne 0) { throw "RPFM pack add failed" }
+          $pack = Get-Item "mk1212_twdll_sp_probe.pack"
+          if ($pack.Length -le 0) { throw "Probe pack is empty" }
+
       - name: Assemble runtime bundle
         shell: pwsh
         run: |
@@ -71,6 +90,7 @@ jobs:
           Copy-Item "build/twdll-attila/Release/twdll.dll" "$root/DROP-IN/twdll.dll"
           Copy-Item "build/twdll-attila/Release/twdll.dll" "$root/DROP-IN/twdll_attila.dll"
           Copy-Item "build/twdll-attila/Release/twdll.pdb" "$root/DROP-IN/twdll.pdb"
+          Copy-Item "mk1212_twdll_sp_probe.pack" "$root/mk1212_twdll_sp_probe.pack"
 
           Copy-Item -Recurse "source/native/twdll/tests/shared" "$root/TEST-SOURCES/shared"
           Copy-Item -Recurse "source/native/twdll/tests/attila" "$root/TEST-SOURCES/attila"
@@ -89,6 +109,13 @@ jobs:
             "  twdll.dll",
             "  twdll_attila.dll",
             "  twdll.pdb",
+            "",
+            "SINGLE-PLAYER PROBE:",
+            "1. Put mk1212_twdll_sp_probe.pack in Attila/data.",
+            "2. Add: mod `"mk1212_twdll_sp_probe.pack`"; to the active user.script.txt / enable the pack last.",
+            "3. Copy DROP-IN/twdll_attila.dll next to Attila.exe.",
+            "4. Start an MK1212 single-player campaign and enter the map.",
+            "5. Close the game normally and send twdll.log.",
             "",
             "FAST MANUAL LOAD TEST:",
             "1. Back up existing twdll.dll / twdll_attila.dll in the Total War Attila folder.",
