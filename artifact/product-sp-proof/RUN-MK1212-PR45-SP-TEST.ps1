@@ -85,31 +85,78 @@ if (!(Test-Path $Rpfm)) {
 }
 
 # The CA Launcher file is a JSON array with uuid/packfile/order/active.
-$mods = @(Get-Content $ModData -Raw | ConvertFrom-Json)
+# Windows PowerShell 5.1 may preserve the top-level JSON array as a nested
+# Object[] in pipeline contexts, so flatten it explicitly before filtering.
+$parsedModData = Get-Content $ModData -Raw | ConvertFrom-Json
+$mods = New-Object System.Collections.ArrayList
 
-$scriptCandidates = @(
-    $mods | Where-Object {
-        ($_.uuid -eq "1-1212scripts.pack") -or
-        ([string]$_.packfile).Replace("\", "/").ToLowerInvariant().EndsWith("/1-1212scripts.pack")
+if ($parsedModData -is [System.Array]) {
+    foreach ($entry in $parsedModData) {
+        if ($entry -is [System.Array]) {
+            foreach ($inner in $entry) {
+                [void]$mods.Add($inner)
+            }
+        } else {
+            [void]$mods.Add($entry)
+        }
     }
-)
+} else {
+    [void]$mods.Add($parsedModData)
+}
+
+$scriptCandidates = New-Object System.Collections.ArrayList
+
+foreach ($m in $mods) {
+    $uuid = [string]($m.uuid)
+    $packfile = [string]($m.packfile)
+    $normalizedPack = $packfile.Replace("\\", "/").ToLowerInvariant()
+
+    if (
+        $uuid -eq "1-1212scripts.pack" -or
+        $normalizedPack.EndsWith("/1-1212scripts.pack")
+    ) {
+        [void]$scriptCandidates.Add($m)
+    }
+}
 
 if ($scriptCandidates.Count -ne 1) {
-    $fieldNames = @()
-    if ($mods.Count -gt 0) {
-        $fieldNames = @($mods[0].PSObject.Properties.Name)
-    }
+    $sample = @(
+        $mods |
+            Select-Object -First 5 |
+            ForEach-Object {
+                "uuid=" + [string]($_.uuid) + "; packfile=" + [string]($_.packfile)
+            }
+    )
 
     throw (
         "Expected exactly one MK1212 scripts record, found " +
         $scriptCandidates.Count +
-        ". First-record fields: " +
-        ($fieldNames -join ",")
+        ". Parsed records=" +
+        $mods.Count +
+        ". Sample: " +
+        ($sample -join " || ")
     )
 }
 
 $scriptMod = $scriptCandidates[0]
+$uuidScalar = [string]($scriptMod.uuid)
+$orderScalar = [string]($scriptMod.order)
+$activeScalar = [string]($scriptMod.active)
 $WorkshopScripts = [string]($scriptMod.packfile)
+
+if (
+    $uuidScalar -ne "1-1212scripts.pack" -or
+    $WorkshopScripts -match "\\.pack\\s+" -or
+    $WorkshopScripts -match "\\s+[A-Za-z]:/"
+) {
+    throw (
+        "Launcher scripts record did not normalize to scalar fields. " +
+        "uuid=" + $uuidScalar +
+        "; order=" + $orderScalar +
+        "; active=" + $activeScalar +
+        "; packfile=" + $WorkshopScripts
+    )
+}
 
 if ([string]::IsNullOrWhiteSpace($WorkshopScripts)) {
     throw "MK1212 scripts record has an empty packfile field"
