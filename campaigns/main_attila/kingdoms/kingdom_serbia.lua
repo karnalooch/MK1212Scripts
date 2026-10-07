@@ -33,7 +33,7 @@ function Serbia_Check(context)
 			if faction:is_human() then
 				cm:trigger_incident(SERBIA_KEY, "mk_incident_story_serbia_kingdom");
 
-				if cm:is_multiplayer() == false then
+				if MKMP_FeatureEnabled("decisions") then
 					Add_Decision("found_an_empire", faction_name, false, false);
 				end
 			end
