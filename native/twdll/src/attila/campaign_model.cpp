@@ -51,6 +51,8 @@ void install_model_hook(uintptr_t base, size_t size) {
     mhs = MH_EnableHook(reinterpret_cast<void*>(addr));
     if (mhs != MH_OK) {
         Log("[twdll] CAMPAIGN_MODEL MH_EnableHook failed (%d)", mhs);
+        MH_RemoveHook(reinterpret_cast<void*>(addr));
+        orig_model_ctor = nullptr;
         return;
     }
     model_ctor_addr = addr;

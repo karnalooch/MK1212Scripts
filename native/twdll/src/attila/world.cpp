@@ -76,6 +76,9 @@ void install_world_hook(uintptr_t base, size_t size) {
     mhs = MH_EnableHook(reinterpret_cast<void*>(ctor_addr));
     if (mhs != MH_OK) {
         Log("[twdll] [%s] MH_EnableHook failed (%d)", label, mhs);
+        MH_RemoveHook(reinterpret_cast<void*>(ctor_addr));
+        world_ctor_addr = 0;
+        orig_world_ctor = nullptr;
         return;
     }
 

@@ -99,49 +99,58 @@ __declspec(naked) static void HookedBattleDtor() {
     }
 }
 
+static void uninstall_card_hook();
+
 static bool install_card_hook() {
-    bool card_ok = true;
-    bool bar_ok = true;
-
-    if (!update_card_info_hook_addr && g_update_card_info_addr) {
-        MH_STATUS mhs = MH_CreateHook(reinterpret_cast<void*>(g_update_card_info_addr),
-                                      reinterpret_cast<void*>(HookedUpdateInformationChanged),
-                                      reinterpret_cast<void**>(&orig_update_information_changed));
-        if (mhs == MH_OK) {
-            update_card_info_hook_addr = g_update_card_info_addr;
-            mhs = MH_EnableHook(reinterpret_cast<void*>(update_card_info_hook_addr));
-            if (mhs == MH_OK) {
-                Log("[twdll] [BATTLE] update_information_changed hook enabled via Lua API");
-            } else {
-                Log("[twdll] [BATTLE] MH_EnableHook (update_information_changed) failed (%d)", mhs);
-                card_ok = false;
-            }
-        } else {
-            Log("[twdll] [BATTLE] MH_CreateHook (update_information_changed) failed (%d)", mhs);
-            card_ok = false;
-        }
+    if (!g_update_card_info_addr || !g_battle_health_bar_on_update_pulse_addr) {
+        Log("[twdll] [BATTLE] SME health-bar signatures are incomplete");
+        return false;
     }
 
-    if (!battle_health_bar_hook_addr && g_battle_health_bar_on_update_pulse_addr) {
-        MH_STATUS mhs = MH_CreateHook(reinterpret_cast<void*>(g_battle_health_bar_on_update_pulse_addr),
-                                      reinterpret_cast<void*>(HookedBattleHealthBarOnUpdatePulse),
-                                      reinterpret_cast<void**>(&orig_battle_health_bar_on_update_pulse));
-        if (mhs == MH_OK) {
-            battle_health_bar_hook_addr = g_battle_health_bar_on_update_pulse_addr;
-            mhs = MH_EnableHook(reinterpret_cast<void*>(battle_health_bar_hook_addr));
-            if (mhs == MH_OK) {
-                Log("[twdll] [BATTLE] BattleHealthBar::OnUpdatePulse hook enabled via Lua API");
-            } else {
-                Log("[twdll] [BATTLE] MH_EnableHook (BattleHealthBar::OnUpdatePulse) failed (%d)", mhs);
-                bar_ok = false;
-            }
-        } else {
-            Log("[twdll] [BATTLE] MH_CreateHook (BattleHealthBar::OnUpdatePulse) failed (%d)", mhs);
-            bar_ok = false;
-        }
+    if (update_card_info_hook_addr && battle_health_bar_hook_addr) {
+        return true;
+    }
+    if (update_card_info_hook_addr || battle_health_bar_hook_addr) {
+        uninstall_card_hook();
     }
 
-    return card_ok && bar_ok;
+    MH_STATUS mhs = MH_CreateHook(reinterpret_cast<void*>(g_update_card_info_addr),
+                                  reinterpret_cast<void*>(HookedUpdateInformationChanged),
+                                  reinterpret_cast<void**>(&orig_update_information_changed));
+    if (mhs != MH_OK) {
+        Log("[twdll] [BATTLE] MH_CreateHook (update_information_changed) failed (%d)", mhs);
+        orig_update_information_changed = nullptr;
+        return false;
+    }
+    update_card_info_hook_addr = g_update_card_info_addr;
+
+    mhs = MH_EnableHook(reinterpret_cast<void*>(update_card_info_hook_addr));
+    if (mhs != MH_OK) {
+        Log("[twdll] [BATTLE] MH_EnableHook (update_information_changed) failed (%d)", mhs);
+        uninstall_card_hook();
+        return false;
+    }
+    Log("[twdll] [BATTLE] update_information_changed hook enabled via Lua API");
+
+    mhs = MH_CreateHook(reinterpret_cast<void*>(g_battle_health_bar_on_update_pulse_addr),
+                        reinterpret_cast<void*>(HookedBattleHealthBarOnUpdatePulse),
+                        reinterpret_cast<void**>(&orig_battle_health_bar_on_update_pulse));
+    if (mhs != MH_OK) {
+        Log("[twdll] [BATTLE] MH_CreateHook (BattleHealthBar::OnUpdatePulse) failed (%d)", mhs);
+        uninstall_card_hook();
+        return false;
+    }
+    battle_health_bar_hook_addr = g_battle_health_bar_on_update_pulse_addr;
+
+    mhs = MH_EnableHook(reinterpret_cast<void*>(battle_health_bar_hook_addr));
+    if (mhs != MH_OK) {
+        Log("[twdll] [BATTLE] MH_EnableHook (BattleHealthBar::OnUpdatePulse) failed (%d)", mhs);
+        uninstall_card_hook();
+        return false;
+    }
+    Log("[twdll] [BATTLE] BattleHealthBar::OnUpdatePulse hook enabled via Lua API");
+
+    return true;
 }
 
 static void uninstall_card_hook() {
@@ -164,50 +173,7 @@ static void uninstall_card_hook() {
 
 // EMPIREBATTLE::MANAGER ctor/dtor signatures resolve directly to the function
 // entry points, so the hooks install straight onto the resolved addresses.
-void install_battle_hook() {
-    const char* label = "BATTLE";
-
-    if (!g_battle_ctor_addr || !g_battle_dtor_addr) {
-        Log("[twdll] [%s] ctor/dtor signatures not resolved", label);
-        return;
-    }
-
-    MH_STATUS mhs = MH_CreateHook(reinterpret_cast<void*>(g_battle_ctor_addr),
-                                  reinterpret_cast<void*>(HookedBattleCtor),
-                                  reinterpret_cast<void**>(&orig_battle_ctor));
-    if (mhs == MH_OK) battle_ctor_addr = g_battle_ctor_addr;
-    if (mhs != MH_OK) {
-        Log("[twdll] [%s] MH_CreateHook (ctor) failed (%d)", label, mhs);
-        return;
-    }
-
-    mhs = MH_EnableHook(reinterpret_cast<void*>(battle_ctor_addr));
-    if (mhs != MH_OK) {
-        Log("[twdll] [%s] MH_EnableHook (ctor) failed (%d)", label, mhs);
-        return;
-    }
-
-    mhs = MH_CreateHook(reinterpret_cast<void*>(g_battle_dtor_addr),
-                        reinterpret_cast<void*>(HookedBattleDtor),
-                        reinterpret_cast<void**>(&orig_battle_dtor));
-    if (mhs == MH_OK) battle_dtor_addr = g_battle_dtor_addr;
-    if (mhs != MH_OK) {
-        Log("[twdll] [%s] MH_CreateHook (dtor) failed (%d)", label, mhs);
-        return;
-    }
-
-    mhs = MH_EnableHook(reinterpret_cast<void*>(battle_dtor_addr));
-    if (mhs != MH_OK) {
-        Log("[twdll] [%s] MH_EnableHook (dtor) failed (%d)", label, mhs);
-        return;
-    }
-
-    Log("[twdll] [%s] hooks installed OK", label);
-}
-
-void uninstall_battle_hook() {
-    uninstall_card_hook();
-
+static void remove_battle_lifecycle_hooks() {
     if (battle_ctor_addr) {
         MH_DisableHook(reinterpret_cast<void*>(battle_ctor_addr));
         MH_RemoveHook(reinterpret_cast<void*>(battle_ctor_addr));
@@ -218,9 +184,63 @@ void uninstall_battle_hook() {
         MH_RemoveHook(reinterpret_cast<void*>(battle_dtor_addr));
         battle_dtor_addr = 0;
     }
-    g_battle = nullptr;
     orig_battle_ctor = nullptr;
     orig_battle_dtor = nullptr;
+}
+
+void install_battle_hook() {
+    const char* label = "BATTLE";
+
+    if (!g_battle_ctor_addr || !g_battle_dtor_addr) {
+        Log("[twdll] [%s] ctor/dtor signatures not resolved", label);
+        return;
+    }
+
+    if (battle_ctor_addr || battle_dtor_addr) {
+        remove_battle_lifecycle_hooks();
+    }
+
+    MH_STATUS mhs = MH_CreateHook(reinterpret_cast<void*>(g_battle_ctor_addr),
+                                  reinterpret_cast<void*>(HookedBattleCtor),
+                                  reinterpret_cast<void**>(&orig_battle_ctor));
+    if (mhs != MH_OK) {
+        Log("[twdll] [%s] MH_CreateHook (ctor) failed (%d)", label, mhs);
+        orig_battle_ctor = nullptr;
+        return;
+    }
+    battle_ctor_addr = g_battle_ctor_addr;
+
+    mhs = MH_EnableHook(reinterpret_cast<void*>(battle_ctor_addr));
+    if (mhs != MH_OK) {
+        Log("[twdll] [%s] MH_EnableHook (ctor) failed (%d)", label, mhs);
+        remove_battle_lifecycle_hooks();
+        return;
+    }
+
+    mhs = MH_CreateHook(reinterpret_cast<void*>(g_battle_dtor_addr),
+                        reinterpret_cast<void*>(HookedBattleDtor),
+                        reinterpret_cast<void**>(&orig_battle_dtor));
+    if (mhs != MH_OK) {
+        Log("[twdll] [%s] MH_CreateHook (dtor) failed (%d)", label, mhs);
+        remove_battle_lifecycle_hooks();
+        return;
+    }
+    battle_dtor_addr = g_battle_dtor_addr;
+
+    mhs = MH_EnableHook(reinterpret_cast<void*>(battle_dtor_addr));
+    if (mhs != MH_OK) {
+        Log("[twdll] [%s] MH_EnableHook (dtor) failed (%d)", label, mhs);
+        remove_battle_lifecycle_hooks();
+        return;
+    }
+
+    Log("[twdll] [%s] hooks installed OK", label);
+}
+
+void uninstall_battle_hook() {
+    uninstall_card_hook();
+    remove_battle_lifecycle_hooks();
+    g_battle = nullptr;
 }
 
 /***

@@ -8,6 +8,7 @@ typedef int (__thiscall *fn_make_occupation_decision)(
     unsigned int* allowed_decisions_mask
 );
 static fn_make_occupation_decision orig_make_occupation_decision = nullptr;
+static uintptr_t occupation_hook_addr = 0;
 
 static const char* OCCUPATION_DECISION_NAMES[12] = {
     "LOOT",
@@ -130,19 +131,24 @@ void install_cai_occupation_hook(uintptr_t base, size_t size) {
         return;
     }
 
-    mhs = MH_EnableHook(reinterpret_cast<void*>(g_make_occupation_decision_addr));
+    occupation_hook_addr = g_make_occupation_decision_addr;
+    mhs = MH_EnableHook(reinterpret_cast<void*>(occupation_hook_addr));
     if (mhs != MH_OK) {
         Log("[twdll] [CAI_OCCUPATION] MH_EnableHook failed (%d)", mhs);
+        MH_RemoveHook(reinterpret_cast<void*>(occupation_hook_addr));
+        occupation_hook_addr = 0;
+        orig_make_occupation_decision = nullptr;
         return;
     }
 
-    Log("[twdll][CAI:OCCUPATION] Hook installed at 0x%08X (make_occupation_decision)", static_cast<unsigned int>(g_make_occupation_decision_addr));
+    Log("[twdll][CAI:OCCUPATION] Hook installed at 0x%08X (make_occupation_decision)", static_cast<unsigned int>(occupation_hook_addr));
 }
 
 void uninstall_cai_occupation_hook() {
-    if (g_make_occupation_decision_addr) {
-        MH_DisableHook(reinterpret_cast<void*>(g_make_occupation_decision_addr));
-        MH_RemoveHook(reinterpret_cast<void*>(g_make_occupation_decision_addr));
+    if (occupation_hook_addr) {
+        MH_DisableHook(reinterpret_cast<void*>(occupation_hook_addr));
+        MH_RemoveHook(reinterpret_cast<void*>(occupation_hook_addr));
+        occupation_hook_addr = 0;
     }
     orig_make_occupation_decision = nullptr;
 }
