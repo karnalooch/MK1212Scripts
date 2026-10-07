@@ -61,22 +61,14 @@ jobs:
           if (-not $ascii.Contains("luaopen_twdll")) { throw "luaopen_twdll marker missing" }
           if (-not $ascii.Contains("7c6f5b6d691313f128e9212e37c87c2292e79504")) { throw "Embedded exact source SHA missing" }
 
-      - name: Download RPFM
+      - name: Install RPFM CLI 4.5.4
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://github.com/Frodo45127/rpfm/releases/download/v5.1.1/rpfm-v5.1.1-x86_64-pc-windows-msvc.zip" -OutFile "rpfm.zip"
-          Expand-Archive -Path "rpfm.zip" -DestinationPath "rpfm" -Force
-          $cli = Get-ChildItem -Path "rpfm" -Recurse -File |
-            Where-Object { $_.Name -like "rpfm_cli*" } |
-            Select-Object -First 1
-          if (-not $cli) {
-            Get-ChildItem -Path "rpfm" -Recurse -File |
-              Select-Object -First 200 FullName, Length |
-              Format-Table -AutoSize
-            throw "RPFM CLI binary not found"
-          }
-          Write-Host "Using RPFM CLI: $($cli.FullName)"
-          "RPFM_CLI=$($cli.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          cargo install rpfm_cli --version 4.5.4 --locked
+          if ($LASTEXITCODE -ne 0) { throw "cargo install rpfm_cli failed" }
+          $cli = Join-Path $env:USERPROFILE ".cargo/bin/rpfm_cli.exe"
+          if (!(Test-Path $cli)) { throw "Installed rpfm_cli.exe not found at $cli" }
+          "RPFM_CLI=$cli" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build single-player runtime probe pack
         shell: pwsh
