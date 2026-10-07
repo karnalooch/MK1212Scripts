@@ -82,6 +82,18 @@ target_compile_options(twdll PRIVATE /Zi /utf-8 /W4)
 target_link_options(twdll PRIVATE /DEBUG)
 target_compile_definitions(twdll PRIVATE _CRT_SECURE_NO_WARNINGS)
 
+# ── Native unit tests ─────────────────────────────────────────────────────────
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(twdll_signature_scanner_tests
+        tests/unit/signature_scanner_tests.cpp
+        src/common/signature_scanner.cpp
+    )
+    target_include_directories(twdll_signature_scanner_tests PRIVATE src)
+    target_compile_options(twdll_signature_scanner_tests PRIVATE /W4 /utf-8)
+    add_test(NAME twdll_signature_scanner COMMAND twdll_signature_scanner_tests)
+endif()
+
 # ── Game preprocessor define ──────────────────────────────────────────────────
 if(TW_GAME STREQUAL "attila")
     target_compile_definitions(twdll PRIVATE TW_ATTILA)
