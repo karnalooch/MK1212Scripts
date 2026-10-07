@@ -24,6 +24,9 @@ $result = [ordered]@{
     source_sha = $ExpectedSourceSha
     native_ready = $false
     debug_ready = $false
+    runtime_module_loaded = $false
+    common_initializer_entered = $false
+    absolute_runtime_ready = $false
     workshop_pack_preserved_during_launch = $false
     run_error = $null
 }
@@ -188,7 +191,7 @@ if (!(Test-Path $Exe)) {
     throw "Attila.exe not found: $Exe"
 }
 
-Write-Host "=== MK1212 PR45 PRODUCT SP PROOF V2 ===" -ForegroundColor Cyan
+Write-Host "=== MK1212 PR45 PRODUCT SP PROOF V4 ===" -ForegroundColor Cyan
 Write-Host "Game root: $GameRoot"
 Write-Host "Active Workshop scripts pack: $WorkshopScripts"
 Write-Host "Launcher order: $($scriptMod.order); active: $($scriptMod.active)"
@@ -219,9 +222,74 @@ try {
         Remove-Item (Join-Path $Data $name) -Force -ErrorAction SilentlyContinue
     }
 
-    # Clone the exact active Workshop scripts pack and replace only PR45 integration files.
+    # Clone the exact active Workshop scripts pack and inject absolute proof traces
+    # into the two PR45 Lua files before replacing them. This makes evidence
+    # independent of Attila's process working directory.
+    $RuntimePatch = Join-Path $Working "runtime-patch"
+    Copy-Item (Join-Path $Payload "patch-src") $RuntimePatch -Recurse -Force
+
+    $tracePath = (Join-Path $Evidence "PR45_RUNTIME_TRACE.txt").Replace("\", "/")
+
+    $mainPath = Join-Path $RuntimePatch "campaigns\main_attila\common\main.lua"
+    $mainText = Get-Content $mainPath -Raw
+    $mainPattern = 'function Common_Initializer\(\)\r?\n'
+    $mainInjection = @"
+function Common_Initializer()
+	pcall(function()
+		local proof = io.open([[$tracePath]], "a");
+		if proof then
+			proof:write("COMMON_INITIALIZER_ENTER\\n");
+			proof:flush();
+			proof:close();
+		end
+	end);
+"@
+    $mainText = [regex]::Replace($mainText, $mainPattern, [System.Text.RegularExpressions.MatchEvaluator]{ param($m) $mainInjection }, 1)
+    if (-not $mainText.Contains("COMMON_INITIALIZER_ENTER")) {
+        throw "Failed to inject absolute Common_Initializer proof marker"
+    }
+    [System.IO.File]::WriteAllText($mainPath, $mainText, (New-Object System.Text.UTF8Encoding($false)))
+
+    $runtimePath = Join-Path $RuntimePatch "campaigns\main_attila\common\mkmp_runtime.lua"
+    $runtimeText = Get-Content $runtimePath -Raw
+    $candidateMarker = 'local MKMP_RUNTIME_LOAD_CANDIDATES = {'
+    $candidateStart = $runtimeText.IndexOf($candidateMarker)
+    if ($candidateStart -lt 0) { throw "Runtime candidate marker not found" }
+    $candidateEnd = $runtimeText.IndexOf('};', $candidateStart)
+    if ($candidateEnd -lt 0) { throw "Runtime candidate block terminator not found" }
+    $candidateEnd += 2
+
+    $proofHelper = @"
+
+local function MKMP_Runtime_Absolute_Proof(message)
+	pcall(function()
+		local proof = io.open([[$tracePath]], "a");
+		if proof then
+			proof:write(tostring(message));
+			proof:write("\\n");
+			proof:flush();
+			proof:close();
+		end
+	end);
+end
+
+MKMP_Runtime_Absolute_Proof("RUNTIME_MODULE_LOADED");
+"@
+    $runtimeText = $runtimeText.Insert($candidateEnd, $proofHelper)
+
+    $logPattern = 'local function MKMP_Runtime_Log_Internal\(message\)\r?\n'
+    $logInjection = @"
+local function MKMP_Runtime_Log_Internal(message)
+	MKMP_Runtime_Absolute_Proof("RUNTIME:"..tostring(message));
+"@
+    $runtimeText = [regex]::Replace($runtimeText, $logPattern, [System.Text.RegularExpressions.MatchEvaluator]{ param($m) $logInjection }, 1)
+
+    if (-not $runtimeText.Contains("RUNTIME_MODULE_LOADED")) { throw "Failed to inject runtime module proof marker" }
+    if (-not $runtimeText.Contains('MKMP_Runtime_Absolute_Proof("RUNTIME:"')) { throw "Failed to inject runtime log proof marker" }
+    [System.IO.File]::WriteAllText($runtimePath, $runtimeText, (New-Object System.Text.UTF8Encoding($false)))
+
     Copy-Item $WorkshopScripts $PatchedPack -Force
-    & $Rpfm --game attila pack add --pack-path $PatchedPack -F ((Join-Path $Payload "patch-src") + ";")
+    & $Rpfm --game attila pack add --pack-path $PatchedPack -F ($RuntimePatch + ";")
     if ($LASTEXITCODE -ne 0) {
         throw "RPFM failed to patch the cloned MK1212 scripts pack"
     }
@@ -232,6 +300,12 @@ try {
     }
     if (-not $patchedBytes.Contains("MKMP_Runtime_Initialize")) {
         throw "Patched Workshop clone does not contain the PR45 bootstrap marker"
+    }
+    if (-not $patchedBytes.Contains("RUNTIME_MODULE_LOADED")) {
+        throw "Patched Workshop clone does not contain the absolute runtime proof marker"
+    }
+    if (-not $patchedBytes.Contains("COMMON_INITIALIZER_ENTER")) {
+        throw "Patched Workshop clone does not contain the absolute common initializer proof marker"
     }
 
     $OriginalWorkshopSha = (Get-FileHash $WorkshopScripts -Algorithm SHA256).Hash.ToLower()
@@ -354,6 +428,15 @@ try {
                 $dbg.Contains("twdll_sha=" + $ExpectedSourceSha)
         }
 
+        $traceFile = Join-Path $Evidence "PR45_RUNTIME_TRACE.txt"
+        if (Test-Path $traceFile) {
+            $trace = Get-Content $traceFile -Raw
+            $result.runtime_module_loaded = $trace.Contains("RUNTIME_MODULE_LOADED")
+            $result.common_initializer_entered = $trace.Contains("COMMON_INITIALIZER_ENTER")
+            $result.absolute_runtime_ready =
+                $trace.Contains("RUNTIME:ready game=Attila twdll_sha=" + $ExpectedSourceSha)
+        }
+
         $result.run_error = $runError
         $result | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $Evidence "result.json")
     } catch {
@@ -368,13 +451,14 @@ try {
 
         Write-Host ""
         if (
-            $result.native_ready -and
-            $result.debug_ready -and
+            $result.absolute_runtime_ready -and
+            $result.runtime_module_loaded -and
+            $result.common_initializer_entered -and
             $result.workshop_pack_preserved_during_launch
         ) {
             Write-Host "PRODUCT RUNTIME RESULT: PASS" -ForegroundColor Green
         } else {
-            Write-Host "PRODUCT RUNTIME RESULT: NOT PROVEN - inspect evidence" -ForegroundColor Red
+            Write-Host "PRODUCT RUNTIME RESULT: NOT PROVEN - inspect PR45_RUNTIME_TRACE.txt" -ForegroundColor Red
         }
 
         if ($runError) {
