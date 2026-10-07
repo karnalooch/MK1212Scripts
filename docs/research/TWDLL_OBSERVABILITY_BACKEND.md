@@ -633,3 +633,42 @@ bootstrap derives from the user's Workshop, not the repository gameplay version.
 Windows 5.1/7 synthetic fixtures seed a distinct Workshop bootstrap and unrelated
 frontend/library sentinel files. Real campaign load, Papal controls and DLL readiness
 remain NOT PROVEN until a new game evidence run; PR #45 must remain unmerged.
+
+### Product SP acceptance evidence — 2026-10-08
+
+Evidence: [MK1212-PR45-SP-EVIDENCE-20261008-002134-869.zip](evidence/MK1212-PR45-SP-EVIDENCE-20261008-002134-869.zip).
+ZIP SHA-256: `708a897f56287bef57f9cb810055764343ea9613562daa79f116bb6ef65e9f3a`.
+The uploaded archive is preserved byte-for-byte, including its original local paths and mod list.
+
+Identity: Lua/native payload `ae020ecb4ba30eebffa48ec731d7f603974dfd9d`;
+Workshop-preserving harness from `1b0e7a3a9020f2f2c5c39e1ebb2f691f5bf998a9`,
+SHA-256 `a41a049ba7d5b720691425c337e45136d10d4f47e3819c371c8caecda0f7870b`.
+This is a mixed-provenance probe, NOT whole-repository exact-HEAD gameplay proof.
+The installed Workshop supplies gameplay; only its main bootstrap is wrapped and
+mkmp_debug/mkmp_runtime added. 153 other Lua files were hash-preserved.
+
+**RUNTIME-PROVEN within the harness scope:** bootstrap and original gameplay
+initializer complete; DLL ready; 23/23 Lua ABI entries and 33/33 game signatures
+resolved in both observed Lua-state cycles; hooks removed between cycles;
+patched pack preserved; rollback successful, no run/restore errors; result.pass=true.
+
+**Owner-confirmed manual SP acceptance (00:31 CEST):** all requested checklist
+steps passed: Papal panel and available tabs, other available MK1212 panels,
+diplomacy, army/unit details and movement, construction/recruitment, AI turn,
+save/load with retained army position and construction/recruitment state,
+Papal panel after loading, and another end turn. These interactions are reported
+by the owner; the current diagnostic logs do not individually instrument them.
+
+The earlier 00:07 evidence was clarified by the owner: one new SP campaign,
+then save and load, not two new campaigns. Two Lua initialization cycles alone
+do not establish two campaigns. The lobby screenshot shows the existing
+multiplayer disclaimer; it is not multiplayer execution evidence.
+
+**Remaining:** battle to campaign return, product no-DLL fail-soft run, native
+world/faction observation, and separate two-peer multiplayer proof. factions=nil
+means no faction-count value was obtained by the optional initialization-time
+query. It does not mean zero factions; the adapter does not repeat that query
+on end turn. Root cause is unproven. Do not infer world-state readiness from DLL
+identity readiness or lift MP feature gates based on this SP result.
+
+PR #45 remains unmerged; this evidence does not authorize merge.
