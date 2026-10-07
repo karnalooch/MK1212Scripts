@@ -25,6 +25,18 @@ LAST_SACKED_SETTLEMENT = "";
 
 function MK1212_Random_Int(minimum, maximum, token)
 	if minimum == nil or maximum == nil or minimum > maximum then
+		if MKMP_Debug_Log then
+			MKMP_Debug_Log(
+				"contract_error",
+				{
+					contract = "rng_bounds",
+					token = token,
+					minimum = minimum,
+					maximum = maximum
+				}
+			);
+		end
+
 		error("MK1212_Random_Int invalid bounds for "..tostring(token)..": "..tostring(minimum)..".."..tostring(maximum));
 	end
 
@@ -33,7 +45,32 @@ function MK1212_Random_Int(minimum, maximum, token)
 	local result = cm:random_number(maximum, minimum);
 
 	if result < minimum or result > maximum then
+		if MKMP_Debug_Log then
+			MKMP_Debug_Log(
+				"contract_error",
+				{
+					contract = "rng_result",
+					token = token,
+					minimum = minimum,
+					maximum = maximum,
+					result = result
+				}
+			);
+		end
+
 		error("MK1212_Random_Int out-of-range result for "..tostring(token)..": "..tostring(result));
+	end
+
+	if MKMP_Debug_Log then
+		MKMP_Debug_Log(
+			"rng",
+			{
+				token = token,
+				minimum = minimum,
+				maximum = maximum,
+				result = result
+			}
+		);
 	end
 
 	if dev and dev.log then
@@ -138,6 +175,16 @@ end
 
 function FactionTurnStart_Global(context)
 	FACTION_TURN = context:faction():name();
+
+	if MKMP_Debug_Barrier then
+		MKMP_Debug_Barrier(
+			"faction_turn_start",
+			{
+				faction = FACTION_TURN,
+				human = context:faction():is_human()
+			}
+		);
+	end
 	SACKED_SETTLEMENTS = {}; -- Array is reset every faction turn.
 
 	-- Crash fix: execute deferred AI region transfers from a bounded queue.
@@ -173,6 +220,16 @@ function FactionTurnStart_Global(context)
 end
 
 function FactionTurnEnd_Global(context)
+	if MKMP_Debug_Barrier then
+		MKMP_Debug_Barrier(
+			"faction_turn_end",
+			{
+				faction = context:faction():name(),
+				human = context:faction():is_human()
+			}
+		);
+	end
+
 	Religion_Check(context:faction());
 
 	-- Separatist rebels take attrition, so we need to make sure they don't.
@@ -587,11 +644,35 @@ function Queue_Region_Transfer(region_name, faction_name)
 		local queued = REGIONS_TO_TRANSFER[i];
 
 		if queued.region == region_name and queued.faction == faction_name then
+			if MKMP_Debug_Log then
+				MKMP_Debug_Log(
+					"region_transfer_duplicate",
+					{
+						region = region_name,
+						faction = faction_name,
+						pending = #REGIONS_TO_TRANSFER
+					}
+				);
+			end
+
 			return true;
 		end
 	end
 
 	if #REGIONS_TO_TRANSFER >= MAX_PENDING_REGION_TRANSFERS then
+		if MKMP_Debug_Log then
+			MKMP_Debug_Log(
+				"contract_error",
+				{
+					contract = "region_transfer_queue",
+					region = region_name,
+					faction = faction_name,
+					pending = #REGIONS_TO_TRANSFER,
+					maximum = MAX_PENDING_REGION_TRANSFERS
+				}
+			);
+		end
+
 		error(
 			"MK1212 region transfer queue full: max="..
 			tostring(MAX_PENDING_REGION_TRANSFERS)
@@ -605,6 +686,17 @@ function Queue_Region_Transfer(region_name, faction_name)
 			faction = faction_name
 		}
 	);
+
+	if MKMP_Debug_Log then
+		MKMP_Debug_Log(
+			"region_transfer_queued",
+			{
+				region = region_name,
+				faction = faction_name,
+				pending = #REGIONS_TO_TRANSFER
+			}
+		);
+	end
 
 	return true;
 end
@@ -648,6 +740,17 @@ function Transfer_Region_To_Faction(region_name, faction_name)
 
 	-- Transfering regions can crash if it happens on an AI faction's turn for some reason.
 	if owning_faction:is_human() or owning_faction:name() ~= FACTION_TURN then
+		if MKMP_Debug_Log then
+			MKMP_Debug_Log(
+				"region_transfer_apply",
+				{
+					region = region_name,
+					from_faction = owning_faction:name(),
+					to_faction = faction_name
+				}
+			);
+		end
+
 		if region:has_governor() then
 			local governor = region:governor():command_queue_index();
 
@@ -841,6 +944,18 @@ function MK1212_SaveCommitString(context, savename, savestring, entry_count)
 	-- with existing saves while making future migrations explicit.
 	cm:save_value(savename.."__schema", MK1212_SAVE_SCHEMA_VERSION, context);
 	cm:save_value(savename, savestring, context);
+
+	if MKMP_Debug_Log then
+		MKMP_Debug_Log(
+			"save_write",
+			{
+				name = savename,
+				schema = MK1212_SAVE_SCHEMA_VERSION,
+				entries = entries,
+				bytes = string.len(savestring)
+			}
+		);
+	end
 end
 
 
