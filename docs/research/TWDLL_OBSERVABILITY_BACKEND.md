@@ -586,5 +586,5 @@ the failing require and preserves the exception; absent DLL/trace I/O do not sto
 initializers. MP simulation 38/38 and native source contracts 11/11 PASS. These are repository
 proofs with mocked engine/dependency services, not Attila runtime proof.
 
-**Remaining gate:** Windows CI syntax/native/artifact build and a fresh real MK1212 SP run,
+**Remaining gate:** Windows CI syntax/native/artifact build and synthetic rollback checks and a fresh real MK1212 SP run,
 then separate save/load and no-DLL product proof. Two-peer multiplayer remains unproven.

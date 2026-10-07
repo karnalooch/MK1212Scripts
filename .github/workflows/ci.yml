@@ -194,6 +194,14 @@ jobs:
           python scripts/runtime/build_product_probe.py --dll build/twdll-attila/Release/twdll.dll --rpfm $cli[0].FullName --output build/product-probe
           if ($LASTEXITCODE -ne 0) { throw 'Product probe build failed' }
 
+      - name: Test SP harness rollback on synthetic files
+        shell: pwsh
+        run: |
+          $zip = @(Get-ChildItem build/product-probe -Filter '*.zip')
+          if ($zip.Count -ne 1) { throw 'Expected one probe ZIP' }
+          Expand-Archive $zip[0].FullName build/rollback-probe
+          ./scripts/ci/test_product_probe_rollback.ps1 -ProbeRoot (Resolve-Path build/rollback-probe)
+
       - name: Upload exact-head product SP probe
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

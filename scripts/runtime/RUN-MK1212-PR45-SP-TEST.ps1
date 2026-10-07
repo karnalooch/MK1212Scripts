@@ -1,4 +1,4 @@
-param([int]$LaunchTimeoutSeconds = 600)
+param([int]$LaunchTimeoutSeconds = 600, [switch]$PrepareOnly)
 $ErrorActionPreference = 'Stop'
 $Here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Manifest = Get-Content (Join-Path $Here 'payload-manifest.json') -Raw | ConvertFrom-Json
@@ -94,6 +94,7 @@ try {
     $provenance | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'manifest.json')
     Copy-Item $ModData (Join-Path $Evidence 'moddata.used.json')
     Write-Host 'Start/load SINGLE PLAYER, reach the campaign map, wait 10 seconds, then exit normally.' -ForegroundColor Yellow
+    if ($PrepareOnly) { throw 'Preparation-only rollback test' }
     Start-Process 'steam://rungameid/325610'
     $deadline = (Get-Date).AddSeconds($LaunchTimeoutSeconds)
     $proc = $null
