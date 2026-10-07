@@ -37,7 +37,7 @@ function Add_Kingdom_Byzantium_Listeners()
 		);
 	end
 
-	if cm:is_multiplayer() == false then
+	if MKMP_FeatureEnabled("decisions") then
 		Register_Decision(
 			"restore_byzantine_empire", 
 			function() 	
@@ -89,7 +89,7 @@ function Constantinople_Check(faction_name)
 	if region:owning_faction():name() == faction_name then
 		Constantinople_Taken(faction_name);
 	else
-		if cm:is_multiplayer() == false and cm:model():world():faction_by_key(faction_name):is_human() == true then
+		if MKMP_FeatureEnabled("decisions") and cm:model():world():faction_by_key(faction_name):is_human() == true then
 			Disable_Decision("restore_byzantine_empire");
 		end
 	end
@@ -103,14 +103,14 @@ function Constantinople_Check_Occupied(context)
 			Constantinople_Taken(faction_name);
 		end
 	else
-		if context:character():region():name() == "att_reg_thracia_constantinopolis" and cm:is_multiplayer() == false and context:character():faction():is_human() == true then
+		if context:character():region():name() == "att_reg_thracia_constantinopolis" and MKMP_FeatureEnabled("decisions") and context:character():faction():is_human() == true then
 			Disable_Decision("restore_byzantine_empire");
 		end
 	end
 end
 
 function Constantinople_Taken(faction_name)
-	if cm:is_multiplayer() == true or cm:model():world():faction_by_key(faction_name):is_human() == false then
+	if cm:model():world():faction_by_key(faction_name):is_human() == false or not MKMP_FeatureEnabled("decisions") then
 		Byzantine_Empire_Restored(faction_name);
 	elseif (not mkHRE or (mkHRE and HasValue(mkHRE.factions, faction_name) ~= true)) then
 		Enable_Decision("restore_byzantine_empire");
@@ -124,7 +124,7 @@ function Byzantine_Empire_Restored(faction_name)
 
 	Add_Byzantium_Reconquest_Listeners(); -- Moves to byzantium/byzantium_reconquest.lua
 
-	if cm:is_multiplayer() == false then
+	if MKMP_FeatureEnabled("decisions") then
 		Remove_Decision("restore_byzantine_empire");
 
 		if cm:model():world():faction_by_key(faction_name):is_human() then
