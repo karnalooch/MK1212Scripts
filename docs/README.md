@@ -8,6 +8,7 @@ This is the documentation router and authority map for this fork.
 - [Upstream author handoff: multiplayer hardening](research/MULTIPLAYER_HARDENING_AUTHOR_HANDOFF.md) — detailed English report covering findings, merged fixes, remaining MP gates and final validation status.
 - [twdll observability backend](research/TWDLL_OBSERVABILITY_BACKEND.md) — native Lua↔C++↔Attila architecture, safety boundaries, fallback contract and MP fingerprint plan.
 - [Dual-peer MP simulation harness](research/MP_DUAL_PEER_SIMULATION.md) — CI-only fake HOST/CLIENT determinism, persistence fuzzing, source contracts and fault injection.
+- [MP file debug logging](research/MP_DEBUG_LOGGING.md) — bounded `MK1212_mp_debug.log`, structured event schema and HOST/CLIENT comparator.
 - [Architecture](ARCHITECTURE.md) — repository layout, runtime boundaries and authoritative surfaces.
 - [Gumball adoption](GUMBALL_ADOPTION.md) — repository-platform baseline, current immutable platform pin and deferred items.
 - [Diagram style](DIAGRAM_STYLE.md) — required Blueprint-style diagram conventions.
