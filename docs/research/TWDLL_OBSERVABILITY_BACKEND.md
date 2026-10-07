@@ -6,11 +6,14 @@ Last reviewed: 2026-10-07
 
 ## Links and provenance
 
-- MK1212 fork: https://github.com/karnalooch/MK1212Scripts
-- Our twdll fork: https://github.com/karnalooch/twdll
+- MK1212 repository: https://github.com/karnalooch/MK1212Scripts
+- Canonical MK1212 native source: `native/twdll/`
+- Import/provenance record: `native/twdll/UPSTREAM.md`
+- Imported twdll baseline: `karnalooch/twdll@85c4db9836e3150df8ec5b38315de9940f8d624c`
+- Historical twdll fork/reference: https://github.com/karnalooch/twdll
 - Upstream twdll: https://github.com/bukowa/twdll
+- Vendored MinHook baseline: `TsudaKageyu/minhook@d94c64d32ea37bc4f5ee47d580709f70c6fb6080`
 - twdll API documentation: https://bukowa.github.io/twdll/
-- Evaluated twdll fork baseline: `85c4db9836e3150df8ec5b38315de9940f8d624c`
 
 The current twdll project explicitly targets Total War: ATTILA and exposes native C++ functionality to the game's Lua VM through a loadable module.
 
@@ -369,7 +372,7 @@ For MK1212 this integration does not authorize:
 - arbitrary native mutation;
 - gameplay changes driven by unproven local runtime state.
 
-Our fork is for controlled experimentation and maintenance. Upstream provenance must remain visible.
+`native/twdll/` is the MK1212 maintenance surface for controlled experimentation. The old `karnalooch/twdll` repository remains untouched as historical/upstream reference, and upstream provenance must remain visible.
 
 ## Validation plan
 

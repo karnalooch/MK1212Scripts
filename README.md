@@ -9,7 +9,9 @@ Uses the Rome 2 Total Realism Scripting Toolkit courtesy of the R2TR development
 ## Project links
 
 - MK1212Scripts fork: https://github.com/karnalooch/MK1212Scripts
-- Our twdll fork: https://github.com/karnalooch/twdll
+- Canonical MK1212 native source: [native/twdll/](native/twdll/)
+- Native import/provenance: [native/twdll/UPSTREAM.md](native/twdll/UPSTREAM.md)
+- Historical twdll fork/reference: https://github.com/karnalooch/twdll
 - Upstream twdll: https://github.com/bukowa/twdll
 - twdll API docs: https://bukowa.github.io/twdll/
 - ATTILA Assembly Kit: https://wiki.totalwar.com/w/Assembly_Kit_(TWA).html
@@ -62,7 +64,7 @@ Native/runtime data is initially for **read-only telemetry and diagnostics**. Ra
 
 ## Why twdll matters
 
-Upstream twdll already demonstrates that Attila Lua can load a custom native module:
+The vendored `native/twdll/` source (imported from the evaluated twdll baseline) demonstrates that Attila Lua can load a custom native module:
 
 ```lua
 local twdll = package.loadlib("twdll_attila.dll", "luaopen_twdll")()

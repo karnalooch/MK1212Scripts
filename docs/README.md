@@ -7,6 +7,7 @@ This is the documentation router and authority map for this fork.
 - [Attila research authority](research/README.md) — source hierarchy for Assembly Kit, scripting, multiplayer, runtime instrumentation and cross-title research.
 - [Upstream author handoff: multiplayer hardening](research/MULTIPLAYER_HARDENING_AUTHOR_HANDOFF.md) — detailed English report covering findings, merged fixes, remaining MP gates and final validation status.
 - [twdll observability backend](research/TWDLL_OBSERVABILITY_BACKEND.md) — native Lua↔C++↔Attila architecture, safety boundaries, fallback contract and MP fingerprint plan.
+- [`native/twdll/`](../native/twdll/) — canonical MK1212 native source; provenance is pinned in [`native/twdll/UPSTREAM.md`](../native/twdll/UPSTREAM.md).
 - [Dual-peer MP simulation harness](research/MP_DUAL_PEER_SIMULATION.md) — CI-only fake HOST/CLIENT determinism, persistence fuzzing, source contracts and fault injection.
 - [MP file debug logging](research/MP_DEBUG_LOGGING.md) — bounded `MK1212_mp_debug.log`, structured event schema and HOST/CLIENT comparator.
 - [Architecture](ARCHITECTURE.md) — repository layout, runtime boundaries and authoritative surfaces.
@@ -22,7 +23,7 @@ This is the documentation router and authority map for this fork.
 | --- | --- |
 | Game/mod behavior | Lua/TSV/content under `campaigns/`, `lua_scripts/`, `script/`, `db/`, `text/`, `ui/` |
 | Attila scripting/debug/runtime research | `docs/research/README.md` and its linked research documents |
-| Native runtime observability / twdll | `docs/research/TWDLL_OBSERVABILITY_BACKEND.md` |
+| Native runtime observability / twdll | `native/twdll/` + `docs/research/TWDLL_OBSERVABILITY_BACKEND.md` |
 | Agent workflow | `AGENTS.md` |
 | Gumball adoption | `gumball.yaml` + `docs/GUMBALL_ADOPTION.md` |
 | Repository lifecycle / labels / CI cost | `.gumball/repository-os.json` |
@@ -51,7 +52,8 @@ Do not create a second document for a subject already owned by one of these surf
 ```mermaid
 flowchart LR
     LUA["MK1212 Lua"] --> ADAPTER["MKMP runtime adapter"]
-    ADAPTER --> DLL["twdll_attila.dll"]
+    ADAPTER --> SOURCE["native/twdll/"]
+    SOURCE --> DLL["twdll_attila.dll"]
     DLL --> ENGINE["ATTILA runtime"]
     ENGINE --> DLL
     DLL --> ADAPTER
