@@ -74,6 +74,9 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
         run: python scripts/ci/check_mp_safety_diff.py --base "${BASE_SHA}"
 
+      - name: Run deterministic MP dual-peer simulation
+        run: python -m unittest discover -s scripts/ci -p "test_mp_*.py" -v
+
   aggregate:
     name: Aggregate CI gate
     needs:
