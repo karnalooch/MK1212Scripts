@@ -133,6 +133,61 @@ class MultiplayerSourceContractTests(unittest.TestCase):
         self.assertNotIn('battle = info.battle', source)
         self.assertNotIn('manager = info.manager', source)
 
+
+    def test_full_experimental_profile_is_bound_to_production_initializers(self) -> None:
+        features = read("campaigns/main_attila/common/mkmp_features.lua")
+        mechanics = read("campaigns/main_attila/mechanics/main.lua")
+        common = read("campaigns/main_attila/common/main.lua")
+        pope = read("campaigns/main_attila/mechanics/pope/mechanics_pope.lua")
+        story = read("campaigns/main_attila/story/main.lua")
+        frontend = read("lua_scripts/frontend_mp_campaign.lua")
+
+        self.assertIn('MKMP_FEATURE_PROFILE = "full_experimental_v1";', features)
+
+        expected = {
+            "annex_vassals": "experimental_local_ui",
+            "buffer_states": "experimental_local_ui",
+            "decisions": "experimental_local_ui",
+            "hre": "experimental_local_ui",
+            "population": "experimental_local_ui",
+            "region_trading": "experimental_local_ui",
+            "occupation_decisions": "experimental_local_ui",
+            "crusades": "experimental_local_ui",
+            "pope_ui": "experimental_local_ui",
+            "hre_story": "shared_model",
+            "sicily_story": "experimental_choice_event",
+        }
+        for feature, mode in expected.items():
+            self.assertRegex(
+                features,
+                rf'\["{feature}"\]\s*=\s*\{{enabled\s*=\s*true,\s*mode\s*=\s*"{mode}"\}}',
+            )
+
+        for feature in (
+            "annex_vassals",
+            "buffer_states",
+            "decisions",
+            "hre",
+            "population",
+            "region_trading",
+        ):
+            self.assertIn(f'MKMP_FeatureEnabled("{feature}")', mechanics)
+
+        self.assertIn('MKMP_FeatureEnabled("occupation_decisions")', common)
+        self.assertIn('MKMP_FeatureEnabled("crusades")', pope)
+        self.assertIn('MKMP_FeatureEnabled("pope_ui")', pope)
+        self.assertIn('MKMP_FeatureEnabled("hre_story")', story)
+        self.assertIn('MKMP_FeatureEnabled("sicily_story")', story)
+        self.assertIn("Experimental Full Multiplayer Script Profile", frontend)
+
+    def test_peer_local_modifiers_remain_blocked_in_full_profile(self) -> None:
+        features = read("campaigns/main_attila/common/mkmp_features.lua")
+        for feature in ("challenges", "ironman", "lucky_nations"):
+            self.assertRegex(
+                features,
+                rf'\["{feature}"\]\s*=\s*\{{enabled\s*=\s*false,\s*mode\s*=\s*"blocked_local_config"\}}',
+            )
+
     def test_old_networking_experiment_remains_disabled(self) -> None:
         source = read("campaigns/main_attila/mk1212_start.lua")
         self.assertIn("--Add_MK1212_Networking_Listeners();", source)
