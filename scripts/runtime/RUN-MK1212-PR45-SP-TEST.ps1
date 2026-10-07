@@ -44,6 +44,13 @@ Copy-Item $Workshop $Patched
 # Complete require closure, not only the two changed PR45 files.
 & $Rpfm --game attila pack add --pack-path $Patched -F ($PatchRoot + ';')
 if ($LASTEXITCODE -ne 0) { throw 'RPFM failed before installation; game files are unchanged' }
+$Verified = Join-Path $Backup 'verified-payload'
+New-Item -ItemType Directory -Path $Verified | Out-Null
+& $Rpfm --game attila pack extract --pack-path $Patched -F ("campaigns/main_attila/common;" + $Verified)
+if ($LASTEXITCODE -ne 0) { throw 'RPFM readback failed before installation' }
+foreach ($entry in $Manifest.files) {
+    if ((Hash (Join-Path $Verified $entry.path)) -ne $entry.sha256) { throw "Patched pack readback mismatch: $($entry.path)" }
+}
 $OriginalHash = Hash $Original
 $PatchedHash = Hash $Patched
 $NativeLog = Join-Path $GameRoot 'twdll.log'

@@ -182,9 +182,9 @@ jobs:
       - name: Build complete exact-head product SP probe
         shell: pwsh
         run: |
-          $url = 'https://github.com/Frodo45127/rpfm/releases/download/v5.1.1/rpfm-v5.1.1-x86_64-pc-windows-msvc.zip'
+          $url = 'https://github.com/Frodo45127/rpfm/releases/download/v4.6.3/rpfm-v4.6.3-x86_64-pc-windows-msvc.zip'
           Invoke-WebRequest $url -OutFile build/rpfm.zip
-          $expected = '3dea798c4feff7630956590786e4e429eb3fc8a322756e6d41742709a139a8bf'
+          $expected = 'a3f9a5ac7704b7703f460a722608a4baf28544b174daeddd4ca85f5e4d6b3e3a'
           if ((Get-FileHash build/rpfm.zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) {
             throw 'Pinned RPFM release hash mismatch'
           }

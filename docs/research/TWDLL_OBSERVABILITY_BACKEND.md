@@ -554,7 +554,8 @@ The repository now owns the product probe builder and launcher under `scripts/ru
   per Lua state, a 64 KiB file budget and 512 message characters;
 - require committed source, tracked payload files and a native DLL embedding the same SHA;
 - publish a SHA-pinned CI artifact with payload/binary hash manifest;
-- clone and patch the active Workshop pack before touching installed files;
+- prove a real RPFM create/add/extract round-trip in CI and verify all patched file hashes
+  again by extracting the Workshop clone before touching installed files;
 - temporarily replace that same active Workshop pack, preserving launcher identity/load order;
 - retain original backups, put all installed-file mutations and launch waiting inside
   `try/finally`, capture evidence before restoration and verify the original pack hash;
@@ -573,7 +574,7 @@ Build manually from a clean committed checkout with the exact-SHA Release DLL:
 python scripts/runtime/build_product_probe.py --dll build/twdll-attila/Release/twdll.dll --rpfm <path-to-rpfm_cli.exe> --output <outside-checkout-output>
 ```
 
-CI uses RPFM v5.1.1 with the official release archive SHA-256 pinned in `ci.yml`.
+CI uses RPFM v4.6.3 with the official release archive SHA-256 pinned in `ci.yml`.
 Unzip the generated probe, run `RUN-MK1212-PR45-SP-TEST.cmd`, reach the single-player
 campaign map, wait ten seconds and exit normally. Inspect `result.json` and
 `PR45_RUNTIME_TRACE.txt` in the returned evidence ZIP before proposing another experiment.

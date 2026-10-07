@@ -103,6 +103,32 @@ def build(output: Path, dll: Path, rpfm: Path, root: Path = ROOT) -> Path:
         shutil.copy2(rpfm, stage / 'tools/rpfm_cli.exe')
         for name in ('RUN-MK1212-PR45-SP-TEST.ps1', 'RUN-MK1212-PR45-SP-TEST.cmd'):
             shutil.copy2(root / 'scripts/runtime' / name, stage / name)
+        # Prove CLI operation and exact payload bytes through a real PFH round-trip.
+        proof_pack = stage / 'packaging-proof.pack'
+        verified = stage / 'verified'
+        verified.mkdir()
+        subprocess.check_call([str(rpfm), '--game', 'attila', 'pack', 'create', '--pack-path', str(proof_pack)])
+        subprocess.check_call([str(rpfm), '--game', 'attila', 'pack', 'add', '--pack-path', str(proof_pack), '-F', str(stage / 'payload/patch-src') + ';'])
+        subprocess.check_call([str(rpfm), '--game', 'attila', 'pack', 'extract', '--pack-path', str(proof_pack), '-F', '/;' + str(verified)])
+        for record in records:
+            readback = verified / record['path']
+            if not readback.is_file() or hashlib.sha256(readback.read_bytes()).hexdigest() != record['sha256']:
+                raise ValueError(f"Pack round-trip mismatch: {record['path']}")
+        proof_pack.unlink()
+        shutil.rmtree(verified)
+        license_path = rpfm.parent / 'LICENSE'
+        if not license_path.is_file():
+            raise ValueError('RPFM release license is missing')
+        shutil.copy2(license_path, stage / 'tools/RPFM-LICENSE.txt')
+        (stage / 'README-FIRST.txt').write_text(
+            'MK1212 product SP probe\nExact source: ' + sha + '\n\n'
+            'Close Attila and CA Launcher; keep Steam running.\n'
+            'Remove previous probe packs from Attila/data.\n'
+            'Run RUN-MK1212-PR45-SP-TEST.cmd, click Play, start/load SINGLE PLAYER,\n'
+            'reach the campaign map, wait ten seconds, then exit normally.\n'
+            'The active Workshop scripts pack is temporarily replaced and restored.\n'
+            'Backups and fresh evidence stay beside this harness.\n'
+            'Return MK1212-PR45-SP-EVIDENCE-*.zip. Check result.json and PR45_RUNTIME_TRACE.txt.\n')
         manifest = {'schema': 1, 'source_sha': sha, 'files': records,
                     'dll_sha256': hashlib.sha256(dll.read_bytes()).hexdigest(),
                     'rpfm_sha256': hashlib.sha256(rpfm.read_bytes()).hexdigest()}
