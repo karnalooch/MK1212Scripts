@@ -14,19 +14,50 @@ extern const char* GAME_NAME;
 /// @usage
 /// twdll.core.Log("Campaign initialized. Turn:", 1, "Faction:", faction:name())
 static int script_Log(lua_State* L) {
+    static constexpr size_t kMaxScriptLogChars = 4096;
+    static constexpr int kMaxScriptLogArgs = 64;
+
     std::string full_msg;
-    for (int i = 1; l_type(L, i) != LUA_TNONE; ++i) {
-        if (i > 1) full_msg += "\t";
+    full_msg.reserve(kMaxScriptLogChars);
+    bool truncated = false;
+
+    auto append_bounded = [&](const char* data, size_t len) {
+        if (!data || len == 0 || full_msg.size() >= kMaxScriptLogChars) {
+            if (len > 0) truncated = true;
+            return;
+        }
+        const size_t remaining = kMaxScriptLogChars - full_msg.size();
+        const size_t count = (len < remaining) ? len : remaining;
+        full_msg.append(data, count);
+        if (count < len) truncated = true;
+    };
+
+    int i = 1;
+    for (; i <= kMaxScriptLogArgs && l_type(L, i) != LUA_TNONE; ++i) {
+        if (i > 1) append_bounded("\t", 1);
         l_getfield(L, LUA_GLOBALSINDEX, "tostring");
         l_pushvalue(L, i);
         if (l_pcall(L, 1, 1, 0) == 0) {
-            if (const char* s = l_checklstring(L, -1, nullptr))
-                full_msg += s;
+            size_t len = 0;
+            if (const char* s = l_checklstring(L, -1, &len)) {
+                append_bounded(s, len);
+            }
             l_pop(L, 1);
         } else {
             l_pop(L, 1);
         }
     }
+    if (l_type(L, i) != LUA_TNONE) truncated = true;
+
+    if (truncated) {
+        static constexpr char marker[] = " [truncated]";
+        constexpr size_t marker_len = sizeof(marker) - 1;
+        if (full_msg.size() + marker_len > kMaxScriptLogChars) {
+            full_msg.resize(kMaxScriptLogChars - marker_len);
+        }
+        full_msg.append(marker, marker_len);
+    }
+
     Log("%s", full_msg.c_str());
     return 0;
 }
