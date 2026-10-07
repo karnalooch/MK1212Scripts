@@ -29,7 +29,7 @@ function Add_Kingdom_Ilkhanate_Listeners()
 		);
 	end
 
-	if cm:is_multiplayer() == false then
+	if MKMP_FeatureEnabled("decisions") then
 		Register_Decision(
 			"form_empire_ilkhanate", 
 			function() 	
@@ -85,7 +85,7 @@ function Ilkhanate_Regions_Check(context)
 	ILKHANATE_REGIONS_OWNED = has_regions;
 
 	if has_regions == true then
-		if cm:is_multiplayer() == true or context:faction():is_human() == false then
+		if context:faction():is_human() == false or not MKMP_FeatureEnabled("decisions") then
 			Ilkhanate_Formed(faction_name);
 		elseif (not mkHRE or (mkHRE and HasValue(mkHRE.factions, faction_name) ~= true)) then
 			Enable_Decision("form_empire_ilkhanate");
@@ -98,7 +98,7 @@ function Ilkhanate_Formed(faction_name)
 	ILKHANATE_FACTION = faction_name;
 	Rename_Faction(faction_name, faction_name.."_lvl"..tostring(FACTIONS_DFN_LEVEL[faction_name]));
 
-	if cm:is_multiplayer() == false then
+	if MKMP_FeatureEnabled("decisions") then
 		Remove_Decision("form_empire_ilkhanate");
 	end
 
