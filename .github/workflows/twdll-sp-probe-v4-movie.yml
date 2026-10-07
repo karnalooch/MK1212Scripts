@@ -1,0 +1,131 @@
+name: Build Attila SP probe V4 MOVIE
+
+on:
+  push:
+    branches:
+      - artifact-sp-probe-v4-movie
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact twdll source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: 7c6f5b6d691313f128e9212e37c87c2292e79504
+          path: source
+
+      - name: Assert exact source SHA
+        shell: pwsh
+        run: |
+          Push-Location source
+          $actual = (git rev-parse HEAD).Trim()
+          Pop-Location
+          if ($actual -ne "7c6f5b6d691313f128e9212e37c87c2292e79504") { throw "Expected 7c6f5b6d691313f128e9212e37c87c2292e79504, got $actual" }
+
+      - name: Configure build
+        shell: pwsh
+        run: cmake -S source/native/twdll -B build/twdll-attila -A Win32 -DTW_GAME=attila -DBUILD_TESTING=ON -DTWDLL_WARNINGS_AS_ERRORS=ON
+
+      - name: Build and test DLL
+        shell: pwsh
+        run: |
+          cmake --build build/twdll-attila --config Release --target twdll twdll_signature_scanner_tests twdll_log_tests twdll_security_tests --parallel 2
+          ctest --test-dir build/twdll-attila -C Release --output-on-failure
+
+      - name: Verify PE32 and exact SHA
+        shell: pwsh
+        run: |
+          $dll = Resolve-Path "build/twdll-attila/Release/twdll.dll"
+          $bytes = [System.IO.File]::ReadAllBytes($dll)
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+          $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
+          if ($machine -ne 0x014c) { throw "Expected x86 DLL" }
+          $ascii = [System.Text.Encoding]::ASCII.GetString($bytes)
+          if (-not $ascii.Contains("luaopen_twdll")) { throw "luaopen_twdll missing" }
+          if (-not $ascii.Contains("7c6f5b6d691313f128e9212e37c87c2292e79504")) { throw "Exact SHA missing from DLL" }
+
+      - name: Write V4 campaign scripting entrypoint
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "probe-src/campaigns/main_attila" | Out-Null
+          $b64 = "LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KLS0KLS0JQ0FNUEFJR04gU0NSSVBUCi0tCi0tCUZpcnN0IGZpbGUgdGhhdCBnZXRzIGxvYWRlZCBieSBhIHNjcmlwdGVkIGNhbXBhaWduLgotLQlUaGlzIHNob3VsZG4ndCBuZWVkIHRvIGJlIGNoYW5nZWQgYnkgcGVyLWNhbXBhaWduLCBleGNlcHQgZm9yIHRoZQotLQlyZXF1aXJlIGFuZCBjYWxsYmFjayBjb21tYW5kcyBhdCB0aGUgYm90dG9tIG9mIHRoZSBmaWxlCi0tCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgotLSBjaGFuZ2UgdGhpcyB0byBmYWxzZSB0byBub3QgbG9hZCB0aGUgc2NyaXB0CmxvY2FsIGxvYWRfc2NyaXB0ID0gdHJ1ZTsKCmlmIG5vdCBsb2FkX3NjcmlwdCB0aGVuCglvdXQudGluZygiKioqIFdBUk5JTkc6IE5vdCBsb2FkaW5nIHNjcmlwdCBmb3IgY2FtcGFpZ24gIiAuLiBjYW1wYWlnbl9zdGFydF9maWxlIC4uICIgYXMgbG9hZF9zY3JpcHQgdmFyaWFibGUgaXMgc2V0IHRvIGZhbHNlISBFZGl0IGx1YSBmaWxlIGF0ICIgLi4gZGVidWcuZ2V0aW5mbygxKS5zb3VyY2UgLi4gIiB0byBjaGFuZ2UgdGhpcyBiYWNrICoqKiIpOwoJcmV0dXJuOwplbmQ7CgotLSBmb3JjZSByZWxvYWRpbmcgb2YgdGhlIGx1YSBzY3JpcHQgbGlicmFyeQpwYWNrYWdlLmxvYWRlZFsibHVhX3NjcmlwdHMuQ2FtcGFpZ25fU2NyaXB0X0hlYWRlciJdID0gbmlsOwpyZXF1aXJlICJsdWFfc2NyaXB0cy5DYW1wYWlnbl9TY3JpcHRfSGVhZGVyIjsKCmRldiA9IHJlcXVpcmUoImx1YV9zY3JpcHRzLmRldiIpOwpzdnIgPSBTY3JpcHRlZFZhbHVlUmVnaXN0cnk6bmV4KCk7CnV0aWwgPSByZXF1aXJlKCJsdWFfc2NyaXB0cy51dGlsIik7CgotLSBuYW1lIG9mIHRoZSBjYW1wYWlnbiwgc291cmNlZCBmcm9tIHRoZSBuYW1lIG9mIHRoZSBjb250YWluaW5nIGZvbGRlcgpjYW1wYWlnbl9uYW1lID0gZ2V0X2ZvbGRlcl9uYW1lX2FuZF9zaG9ydGZvcm0oKTsKCi0tIG5hbWUgb2YgdGhlIGxvY2FsIGZhY3Rpb24sIHRvIGJlIGZpbGxlZCBpbiBsYXRlcgpsb2NhbF9mYWN0aW9uID0gIiI7CgotLSBpbmNsdWRlIHBhdGggdG8gb3RoZXIgc2NyaXB0cyBhc3NvY2lhdGVkIHdpdGggdGhpcyBjYW1wYWlnbgpwYWNrYWdlLnBhdGggPSBwYWNrYWdlLnBhdGggLi4gIjtkYXRhL2NhbXBhaWducy8iIC4uIGNhbXBhaWduX25hbWUgLi4gIi8/Lmx1YSI7CnBhY2thZ2UucGF0aCA9IHBhY2thZ2UucGF0aCAuLiAiO2RhdGEvY2FtcGFpZ25zLyIgLi4gY2FtcGFpZ25fbmFtZSAuLiAiL2ZhY3Rpb25zLz8ubHVhIjsKCi0tIGNyZWF0ZSBjYW1wYWlnbiBtYW5hZ2VyCmNtID0gY2FtcGFpZ25fbWFuYWdlcjpuZXcoY2FtcGFpZ25fbmFtZSk7Ci0tIE1LMTIxMiBUV0RMTCBTUCBQUk9CRSBWMwpsb2NhbCBNSzEyMTJfU1BfUFJPQkVfUEFUSCA9ICJNSzEyMTJfU1BfUFJPQkVfQk9PVC50eHQiCmxvY2FsIE1LMTIxMl9TUF9QUk9CRV9UV0RMTCA9IG5pbAoKbG9jYWwgZnVuY3Rpb24gTUsxMjEyX1NQX1Byb2JlX1dyaXRlKG1lc3NhZ2UpCiAgICBpZiBub3QgaW8gb3IgdHlwZShpby5vcGVuKSB+PSAiZnVuY3Rpb24iIHRoZW4gcmV0dXJuIGVuZAogICAgbG9jYWwgb2ssIGZpbGUgPSBwY2FsbChpby5vcGVuLCBNSzEyMTJfU1BfUFJPQkVfUEFUSCwgImEiKQogICAgaWYgb2sgYW5kIGZpbGUgdGhlbgogICAgICAgIGZpbGU6d3JpdGUodG9zdHJpbmcobWVzc2FnZSkgLi4gIlxuIikKICAgICAgICBmaWxlOmZsdXNoKCkKICAgICAgICBmaWxlOmNsb3NlKCkKICAgIGVuZAplbmQKCk1LMTIxMl9TUF9Qcm9iZV9Xcml0ZSgiVjMgQk9PVF9BRlRFUl9DTSIpCgoKLS0gcmVxdWlyZSBhIGZpbGUgaW4gdGhlIGZhY3Rpb25zIHN1YmZvbGRlciB0aGF0IG1hdGNoZXMgdGhlIG5hbWUgb2Ygb3VyIGxvY2FsIGZhY3Rpb24KY206cmVnaXN0ZXJfdWlfY3JlYXRlZF9jYWxsYmFjaygKCWZ1bmN0aW9uKCkKCQlsb2NhbF9mYWN0aW9uID0gY206Z2V0X2xvY2FsX2ZhY3Rpb24oKTsKCQlpZiBub3Qgc3RyaW5nLmZpbmQobG9jYWxfZmFjdGlvbiwgIm1rX2ZhY3QiKSB0aGVuIGNtOnNodXRkb3duKCkgZW5kOwoJCWlmIG5vdCAobG9jYWxfZmFjdGlvbiA9PSAiIikgdGhlbgoJCQlpbmNfdGFiKCk7CgkJCV9HLnNjcmlwdF9lbnYgPSBnZXRmZW52KDEpOwoJCQkKCQkJLS0gZmFjdGlvbiBzY3JpcHRzIGxvYWRlZCBoZXJlCgkJCWlmIGxvYWRfZmFjdGlvbl9zY3JpcHQobG9jYWxfZmFjdGlvbikgYW5kIGxvYWRfZmFjdGlvbl9zY3JpcHQobG9jYWxfZmFjdGlvbiAuLiAiX2ludHJvIikgdGhlbgoJCQkJZGVjX3RhYigpOwoJCQllbHNlCgkJCQlkZWNfdGFiKCk7CgkJCWVuZDsKCQllbmQKCWVuZAopOwoKCi0tIHRyeSBhbmQgbG9hZCBhIGZhY3Rpb24gc2NyaXB0CmZ1bmN0aW9uIGxvYWRfZmFjdGlvbl9zY3JpcHQoc2NyaXB0bmFtZSkKCWxvY2FsIHN1Y2Nlc3MsIGVycl9jb2RlID0gcGNhbGwoZnVuY3Rpb24oKSByZXF1aXJlKHNjcmlwdG5hbWUpIGVuZCk7CgkJCQoJaWYgc3VjY2VzcyB0aGVuCgkJb3V0cHV0KHNjcmlwdG5hbWUgLi4gIi5sdWEgbG9hZGVkIik7CgllbHNlCgkJc2NyaXB0X2Vycm9yKCJFUlJPUjogVHJpZWQgdG8gbG9hZCBmYWN0aW9uIHNjcmlwdCAiIC4uIHNjcmlwdG5hbWUgLi4gIiB3aXRob3V0IHN1Y2Nlc3MgLSBlaXRoZXIgdGhlIHNjcmlwdCBpcyBub3QgcHJlc2VudCBvciBpdCBpcyBub3QgdmFsaWQuIFNlZSBlcnJvciBiZWxvdyIpOwoJCW91dHB1dCgiKioqKioqKioqKioqKiIpOwoJCW91dHB1dCgiUmV0dXJuZWQgbHVhIGVycm9yIGlzOiIpOwoJCW91dHB1dChlcnJfY29kZSk7CgkJb3V0cHV0KCIqKioqKioqKioqKioqIik7CgllbmQ7CgkKCXJldHVybiBzdWNjZXNzOwplbmQ7CgoKCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KLS0JZnVuY3Rpb24gdG8gY2FsbCB3aGVuIHRoZSBmaXJzdCB0aWNrIG9jY3VycwotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgpjbTpyZWdpc3Rlcl9maXJzdF90aWNrX2NhbGxiYWNrKAoJZnVuY3Rpb24oKQoJCWlmIGlzX2Z1bmN0aW9uKHN0YXJ0X2dhbWVfZm9yX2ZhY3Rpb24pIHRoZW4KCQkJc3RhcnRfZ2FtZV9mb3JfZmFjdGlvbih0cnVlKTsJCS0tIHNldCB0byBmYWxzZSB0byBub3Qgc2hvdyBjdXRzY2VuZQoJCWVsc2UKCQkJc2NyaXB0X2Vycm9yKCJzdGFydF9nYW1lX2Zvcl9mYWN0aW9uKCkgZnVuY3Rpb24gaXMgYmVpbmcgY2FsbGVkIGJ1dCBoYXNuJ3QgYmVlbiBsb2FkZWQgLSB0aGUgc2NyaXB0IGhhcyBnb25lIHdyb25nIHNvbWV4aGVyZSBlbHNlLCBpbnZlc3RpZ2F0ZSEiKTsKCQllbmQ7CgkJCgkJc3RhcnRfZ2FtZV9hbGxfZmFjdGlvbnMoKTsKCWVuZAopOwoKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQotLQlhZGRpdGlvbmFsIHNjcmlwdCBmaWxlcyB0byBsb2FkCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCnJlcXVpcmUoIm1rMTIxMl9zdGFydCIpOwpyZXF1aXJlKCJjb21tb24vbWFpbiIpOwpyZXF1aXJlKCJhdHRfdHJhaXRzIik7CgpyZXF1aXJlKCJtazEyMTJfY2hhbmdlX2NhcGl0YWwiKTsKcmVxdWlyZSgibWsxMjEyX2Rpc2NvcmQiKTsKcmVxdWlyZSgibWsxMjEyX3Nsb3RzIik7CgpyZXF1aXJlKCJieXphbnRpdW0vbWFpbiIpOwpyZXF1aXJlKCJraW5nZG9tcy9tYWluIik7CnJlcXVpcmUoImx1Y2t5bmF0aW9ucy9tYWluIik7CnJlcXVpcmUoIm1lY2hhbmljcy9tYWluIik7CnJlcXVpcmUoIm1vbmdvbHMvbWFpbiIpOwpyZXF1aXJlKCJuaWNrbmFtZXMvbWFpbiIpOwpyZXF1aXJlKCJzdGFydGluZ2JhdHRsZXMvbWFpbiIpOwpyZXF1aXJlKCJzdG9yeS9tYWluIik7CnJlcXVpcmUoInRpbXVyaWRzL21haW4iKTsKCnJlcXVpcmUoImNoYWxsZW5nZXMvbWFpbiIpOwpyZXF1aXJlKCJpcm9ubWFuL21haW4iKTsKCi0tIFRlbXBvcmFyeQpyZXF1aXJlKCJwcmV0ZW5kZXJfY3Jhc2hfc3RvcGdhcCIpOwoKLS0gQ0lWSUwgV0FSIEZJWApyZXF1aXJlKCJjaXZpbF93YXJfZml4Iik7Ci0tIE1LMTIxMiBUV0RMTCBTUCBQUk9CRSBWMzogbmF0aXZlIGxvYWQgYWZ0ZXIgbm9ybWFsIE1LMTIxMiByZXF1aXJlcy4KTUsxMjEyX1NQX1Byb2JlX1dyaXRlKCJWMyBQUkVfTE9BRExJQiIpCgpsb2NhbCBmdW5jdGlvbiBNSzEyMTJfU1BfUHJvYmVfTG9hZCgpCiAgICBpZiBub3QgcGFja2FnZSBvciB0eXBlKHBhY2thZ2UubG9hZGxpYikgfj0gImZ1bmN0aW9uIiB0aGVuCiAgICAgICAgTUsxMjEyX1NQX1Byb2JlX1dyaXRlKCJWMyBGQUlMIHBhY2thZ2UubG9hZGxpYl91bmF2YWlsYWJsZSIpCiAgICAgICAgcmV0dXJuCiAgICBlbmQKCiAgICBsb2NhbCBjYW5kaWRhdGVzID0geyJ0d2RsbF9hdHRpbGEuZGxsIiwgIi4vdHdkbGxfYXR0aWxhLmRsbCIsICJ0d2RsbC5kbGwiLCAiLi90d2RsbC5kbGwifQoKICAgIGZvciBpID0gMSwgI2NhbmRpZGF0ZXMgZG8KICAgICAgICBsb2NhbCBwYXRoID0gY2FuZGlkYXRlc1tpXQogICAgICAgIGxvY2FsIG9rX2xvYWQsIGxvYWRlciwgbG9hZF9lcnIgPSBwY2FsbChwYWNrYWdlLmxvYWRsaWIsIHBhdGgsICJsdWFvcGVuX3R3ZGxsIikKCiAgICAgICAgaWYgb2tfbG9hZCBhbmQgdHlwZShsb2FkZXIpID09ICJmdW5jdGlvbiIgdGhlbgogICAgICAgICAgICBNSzEyMTJfU1BfUHJvYmVfV4JpdGUoIlYzIExPQURMSUJfT0sgcGF0aD0iIC4uIHRvc3RyaW5nKHBhdGgpKQogICAgICAgICAgICBsb2NhbCBva19vcGVuLCBtb2R1bGVfb3JfZXJyb3IgPSBwY2FsbChsb2FkZXIpCgogICAgICAgICAgICBpZiBva19vcGVuIGFuZCB0eXBlKG1vZHVsZV9vcl9lcnJvcikgPT0gInRhYmxlIiB0aGVuCiAgICAgICAgICAgICAgICBNSzEyMTJfU1BfUFJPQkVfVFdETEwgPSBtb2R1bGVfb3JfZXJyb3IKICAgICAgICAgICAgICAgIHR3ZGxsID0gbW9kdWxlX29yX2Vycm9yCiAgICAgICAgICAgICAgICBNSzEyMTJfU1BfUHJvYmVfV4JpdGUoIlYzIExVQU9QRU5fT0siKQoKICAgICAgICAgICAgICAgIGlmIG1vZHVsZV9vcl9lcnJvci5jb3JlIHRoZW4KICAgICAgICAgICAgICAgICAgICBpZiB0eXBlKG1vZHVsZV9vcl9lcnJvci5jb3JlLkdhbWVCdWlsZCkgPT0gImZ1bmN0aW9uIiB0aGVuCiAgICAgICAgICAgICAgICAgICAgICAgIGxvY2FsIG9rX2dhbWUsIHZhbHVlID0gcGNhbGwobW9kdWxlX29yX2Vycm9yLmNvcmUuR2FtZUJ1aWxkKQogICAgICAgICAgICAgICAgICAgICAgICBNSzEyMTJfU1BfUHJvYmVfV4JpdGUoIlYzIEdBTUVfQlVJTEQgb2s9IiAuLiB0b3N0cmluZyhva19nYW1lKSAuLiAiIHZhbHVlPSIgLi4gdG9zdHJpbmcodmFsdWUpKQogICAgICAgICAgICAgICAgICAgIGVuZAoKICAgICAgICAgICAgICAgICAgICBpZiB0eXBlKG1vZHVsZV9vcl9lcnJvci5jb3JlLkdldEJ1aWxkU2hhKSA9PSAiZnVuY3Rpb24iIHRoZW4KICAgICAgICAgICAgICAgICAgICAgICAgbG9jYWwgb2tfc2hhLCB2YWx1ZSA9IHBjYWxsKG1vZHVsZV9vcl9lcnJvci5jb3JlLkdldEJ1aWxkU2hhKQogICAgICAgICAgICAgICAgICAgICAgICBNSzEyMTJfU1BfUHJvYmVfV4JpdGUoIlYzIEJVSUxEX1NIQSBvaz0iIC4uIHRvc3RyaW5nKG9rX3NoYSkgLi4gIiB2YWx1ZT0iIC4uIHRvc3RyaW5nKHZhbHVlKSkKICAgICAgICAgICAgICAgICAgICBlbmQKCiAgICAgICAgICAgICAgICAgICAgaWYgdHlwZShtb2R1bGVfb3JfZXJyb3IuY29yZS5Mb2cpID09ICJmdW5jdGlvbiIgdGhlbgogICAgICAgICAgICAgICAgICAgICAgICBwY2FsbChtb2R1bGVfb3JfZXJyb3IuY29yZS5Mb2csICJbU1AtUFJPQkUtVjNdIGx1YW9wZW5fdHdkbGwgc3VjY2VlZGVkIikKICAgICAgICAgICAgICAgICAgICBlbmQKICAgICAgICAgICAgICAgIGVuZAoKICAgICAgICAgICAgICAgIHJldHVybgogICAgICAgICAgICBlbmQKCiAgICAgICAgICAgIE1LMTIxMl9TUF9Qcm9iZV9Xcml0ZSgiVjMgTFVBT1BFTl9GQUlMIGVycj0iIC4uIHRvc3RyaW5nKG1vZHVsZV9vcl9lcnJvcikpCiAgICAgICAgICAgIHJldHVybgogICAgICAgIGVuZAoKICAgICAgICBNSzEyMTJfU1BfUHJvYmVfV4JpdGUoCiAgICAgICAgICAgICJWMyBMT0FETElCX0ZBSUwgcGF0aD0iIC4uIHRvc3RyaW5nKHBhdGgpIC4uCiAgICAgICAgICAgICIgb2s9IiAuLiB0b3N0cmluZyhva19sb2FkKSAuLgogICAgICAgICAgICAiIGxvYWRlcj0iIC4uIHRvc3RyaW5nKGxvYWRlcikgLi4KICAgICAgICAgICAgIiBlcnI9IiAuLiB0b3N0cmluZyhsb2FkX2VycikKICAgICAgICApCiAgICBlbmQKZW5kCgpNSzEyMTJfU1BfUHJvYmVfTG9hZCgpCgpjbTpyZWdpc3Rlcl9maXJzdF90aWNrX2NhbGxiYWNrKAogICAgZnVuY3Rpb24oKQogICAgICAgIE1LMTIxMl9TUF9Qcm9iZV9Xcml0ZSgiVjMgRklSU1RfVElDSyIpCiAgICAgICAgaWYgTUsxMjEyX1NQX1BST0JFX1RXRExMCiAgICAgICAgYW5kIE1LMTIxMl9TUF9QUk9CRV9UV0RMTC53b3JsZAogICAgICAgIGFuZCB0eXBlKE1LMTIxMl9TUF9QUk9CRV9UV0RMTC53b3JsZC5HZXRGYWN0aW9uQ291bnQpID09ICJmdW5jdGlvbiIgdGhlbgogICAgICAgICAgICBsb2NhbCBva19jb3VudCwgdmFsdWUgPSBwY2FsbChNSzEyMTJfU1BfUFJPQkVfVFdETEwud29ybGQuR2V0RmFjdGlvbkNvdW50KQogICAgICAgICAgICBNSzEyMTJfU1BfUHJvYmVfV4JpdGUoIlYzIEZBQ1RJT05TIG9rPSIgLi4gdG9zdHJpbmcob2tfY291bnQpIC4uICIgdmFsdWU9IiAuLiB0b3N0cmluZyh2YWx1ZSkpCiAgICAgICAgZW5kCiAgICBlbmQKKQo="
+          [System.IO.File]::WriteAllBytes("probe-src/campaigns/main_attila/scripting.lua", [Convert]::FromBase64String($b64))
+
+      - name: Install prebuilt RPFM CLI 4.5.4
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/Frodo45127/rpfm/releases/download/v4.5.4/rpfm-v4.5.4-x86_64-pc-windows-msvc.zip" -OutFile "rpfm.zip"
+          Expand-Archive "rpfm.zip" -DestinationPath "rpfm" -Force
+          $cli = Get-ChildItem "rpfm" -Recurse -File | Where-Object { $_.Name -like "rpfm_cli*" } | Select-Object -First 1
+          if (-not $cli) { throw "rpfm_cli not found" }
+          "RPFM_CLI=$($cli.FullName)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build V4 pack
+        shell: pwsh
+        run: |
+          & "$env:RPFM_CLI" --game attila pack create --pack-path "000_mk1212_twdll_sp_probe_v4_movie.pack"
+          if ($LASTEXITCODE -ne 0) { throw "pack create failed" }
+          & "$env:RPFM_CLI" --game attila pack add --pack-path "000_mk1212_twdll_sp_probe_v4_movie.pack" -F "probe-src;"
+          if ($LASTEXITCODE -ne 0) { throw "pack add failed" }
+          if ((Get-Item "000_mk1212_twdll_sp_probe_v4_movie.pack").Length -le 0) { throw "empty pack" }
+
+      - name: Convert probe pack to MOVIE type
+        shell: pwsh
+        run: |
+          $pack = Resolve-Path "000_mk1212_twdll_sp_probe_v4_movie.pack"
+          $bytes = [System.IO.File]::ReadAllBytes($pack)
+          if ($bytes.Length -lt 8) { throw "Pack is too small" }
+          $before = [BitConverter]::ToInt32($bytes, 4)
+          Write-Host "PFH pack type before: $before"
+          if ($before -ne 3) { throw "Expected RPFM-created Mod pack type 3, got $before" }
+          [Array]::Copy([BitConverter]::GetBytes([int]4), 0, $bytes, 4, 4)
+          [System.IO.File]::WriteAllBytes($pack, $bytes)
+          $verify = [BitConverter]::ToInt32([System.IO.File]::ReadAllBytes($pack), 4)
+          Write-Host "PFH pack type after: $verify"
+          if ($verify -ne 4) { throw "Failed to convert pack to Movie type" }
+
+      - name: Assemble bundle
+        shell: pwsh
+        run: |
+          $root = "MK1212-twdll-SP-PROBE-V4-MOVIE-7c6f5b6d691313f128e9212e37c87c2292e79504"
+          New-Item -ItemType Directory -Force -Path "$root/DROP-IN" | Out-Null
+          Copy-Item "build/twdll-attila/Release/twdll.dll" "$root/DROP-IN/twdll_attila.dll"
+          Copy-Item "build/twdll-attila/Release/twdll.dll" "$root/DROP-IN/twdll.dll"
+          Copy-Item "000_mk1212_twdll_sp_probe_v4_movie.pack" "$root/000_mk1212_twdll_sp_probe_v4_movie.pack"
+
+          $readme = @(
+            "MK1212 TWDLL SP PROBE V4 MOVIE",
+            "========================",
+            "Exact native source SHA: 7c6f5b6d691313f128e9212e37c87c2292e79504",
+            "",
+            "1. Copy DROP-IN/twdll_attila.dll next to Attila.exe.",
+            "2. Copy 000_mk1212_twdll_sp_probe_v4_movie.pack to Attila/data.",
+            "3. DO NOT activate it in the CA Mod Manager and DO NOT add it to user.script.txt.",
+            "   It is a MOVIE pack and Attila auto-loads it after normal MOD packs.",
+            "4. Start MK1212 single player and reach the campaign map.",
+            "5. Search for MK1212_SP_PROBE_BOOT.txt and twdll.log.",
+            "6. Remove 000_mk1212_twdll_sp_probe_v4_movie.pack after the test."
+          )
+          $readme | Set-Content -Encoding UTF8 "$root/README-FIRST.txt"
+
+          Get-ChildItem $root -Recurse -File | Get-FileHash -Algorithm SHA256 |
+            ForEach-Object {
+              $rel = $_.Path.Substring((Resolve-Path $root).Path.Length + 1)
+              "$($_.Hash.ToLower())  $rel"
+            } | Set-Content -Encoding ASCII "$root/SHA256SUMS.txt"
+
+          Compress-Archive -Path $root -DestinationPath "MK1212-twdll-SP-PROBE-V4-MOVIE-7c6f5b6d691313f128e9212e37c87c2292e79504.zip" -Force
+
+      - name: Upload V4
+        uses: actions/upload-artifact@v4
+        with:
+          name: MK1212-twdll-SP-PROBE-V4-MOVIE-7c6f5b6d691313f128e9212e37c87c2292e79504
+          path: MK1212-twdll-SP-PROBE-V4-MOVIE-7c6f5b6d691313f128e9212e37c87c2292e79504.zip
+          retention-days: 7
+          if-no-files-found: error
