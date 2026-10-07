@@ -38,7 +38,7 @@ function Add_Pope_Favour_Listeners()
 		Activate_Papal_Favour_System();
 	end
 
-	if cm:is_multiplayer() == false then
+	if MKMP_FeatureEnabled("decisions") then
 		Register_Decision(
 			"ask_pope_for_money", 
 			function() 	
@@ -88,7 +88,7 @@ function Add_Pope_Favour_Listeners()
 					cm:apply_effect_bundle("mk_bundle_pope_favour_5", current_faction:name(), 0);
 					FACTION_POPE_FAVOUR[current_faction:name()] = 5;
 
-					if current_faction:is_human() and cm:is_multiplayer() == false then
+					if current_faction:is_human() and MKMP_FeatureEnabled("decisions") then
 						Add_Decision("ask_pope_for_money", current_faction:name(), false, false);
 					end
 				else
@@ -230,7 +230,7 @@ function Reactivate_Papal_Favour_System()
 				cm:apply_effect_bundle("mk_bundle_pope_favour_5", current_faction:name(), 0);
 				FACTION_POPE_FAVOUR[current_faction:name()] = 5;
 
-				if current_faction:is_human() and cm:is_multiplayer() == false then
+				if current_faction:is_human() and MKMP_FeatureEnabled("decisions") then
 					Add_Decision("ask_pope_for_money", current_faction:name(), false, false);
 				end
 			end
@@ -277,7 +277,7 @@ function Deactivate_Papal_Favour_System()
 			Remove_Excommunication_Manual(current_faction:name());
 		end
 
-		if current_faction:is_human() and cm:is_multiplayer() == false then
+		if current_faction:is_human() and MKMP_FeatureEnabled("decisions") then
 			Remove_Decision("ask_pope_for_money");
 		end
 
@@ -357,7 +357,7 @@ function FactionTurnStart_Check_Catholic_Nations(context)
 
 		Remove_Excommunication_Manual(faction_name);
 
-		if context:faction():is_human() and cm:is_multiplayer() == false then
+		if context:faction():is_human() and MKMP_FeatureEnabled("decisions") then
 			Remove_Decision("ask_pope_for_money");
 		end
 	end
@@ -574,7 +574,7 @@ function FactionReligionConverted_Pope(context)
 			Remove_Excommunication_Manual(faction_name);
 
 			if faction:is_human() then 
-				if cm:is_multiplayer() == false then
+				if MKMP_FeatureEnabled("decisions") then
 					Remove_Decision("ask_pope_for_money");
 				end
 
@@ -680,7 +680,7 @@ function Update_Pope_Favour(faction)
 
 	Check_Excommunication_Low_Favour(faction);
 
-	if faction:is_human() and cm:is_multiplayer() == false then
+	if faction:is_human() and MKMP_FeatureEnabled("decisions") then
 		if pope_favour > 7 then
 			Enable_Decision("ask_pope_for_money");
 		else
@@ -696,12 +696,12 @@ function Check_Excommunication_Low_Favour(faction)
 		cm:apply_effect_bundle("mk_bundle_pope_excommunication", faction_name, 0);
 		FACTION_EXCOMMUNICATED[faction_name] = true;
 
-		if faction:is_human() and cm:is_multiplayer() == false then
+		if faction:is_human() and MKMP_FeatureEnabled("decisions") then
 			Remove_Decision("ask_pope_for_money");
 		end
 
 		if IRONMAN_ENABLED then
-			if faction:is_human() and cm:is_multiplayer() == false then
+			if faction:is_human() and MKMP_FeatureEnabled("decisions") then
 				Unlock_Achievement("achievement_its_only_human_to_sin");
 			end
 		end
@@ -759,13 +759,13 @@ function Force_Excommunication(faction_name, silent)
 		cm:apply_effect_bundle("mk_bundle_pope_favour_0", faction_name, 0);
 		cm:apply_effect_bundle("mk_bundle_pope_excommunication", faction_name, 0);
 
-		if faction:is_human() and cm:is_multiplayer() == false then
+		if faction:is_human() and MKMP_FeatureEnabled("decisions") then
 			Remove_Decision("ask_pope_for_money");
 		end
 
 		if not silent then
 			if IRONMAN_ENABLED then
-				if faction:is_human() and cm:is_multiplayer() == false then
+				if faction:is_human() and MKMP_FeatureEnabled("decisions") then
 					Unlock_Achievement("achievement_its_only_human_to_sin");
 				end
 			end
@@ -818,7 +818,7 @@ function Remove_Excommunication(context)
 		if context:character():faction():state_religion() == "att_rel_chr_catholic" then
 			FACTION_POPE_FAVOUR[context:character():faction():name()] = 2;
 
-			if context:character():faction():is_human() and cm:is_multiplayer() == false then
+			if context:character():faction():is_human() and MKMP_FeatureEnabled("decisions") then
 				Add_Decision("ask_pope_for_money", context:character():faction():name(), false, false);
 			end
 
@@ -862,7 +862,7 @@ function Remove_Excommunication_Manual(faction_name)
 	if faction:state_religion() == "att_rel_chr_catholic" and PAPAL_FAVOUR_SYSTEM_ACTIVE == true then
 		FACTION_POPE_FAVOUR[faction_name] = 2;
 
-		if faction:is_human() and cm:is_multiplayer() == false then
+		if faction:is_human() and MKMP_FeatureEnabled("decisions") then
 			Add_Decision("ask_pope_for_money", faction_name, false, false);
 		end
 
