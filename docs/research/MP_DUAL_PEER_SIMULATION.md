@@ -262,6 +262,28 @@ No game files, Steam login, Attila installation, GPU, DLL or second machine are 
 
 A simulator failure fails the caller-local static job and therefore propagates to the fail-closed Aggregate CI gate.
 
+## Full-profile matriculation
+
+The experimental full profile adds one high-level integration exam:
+
+`scripts/ci/test_mp_matura.py`
+
+It intentionally repeats multiple lower-level contracts in one end-to-end repository proof:
+
+- production feature registry and initializer wiring;
+- blocked local modifiers;
+- 200 randomized fake HOST/CLIENT pairs;
+- RNG fail-closed injection;
+- 500 save canonicalization cases;
+- vassal event reordering and ambiguity;
+- a full-capacity deferred region-transfer round trip;
+- native adapter failure/pointer filtering;
+- first-divergence diagnostics.
+
+The test prints an explicit `MK1212 MP MATRICULATION: PASS` line only after all sections complete.
+
+This does not upgrade the evidence state to RUNTIME-PROVEN; it is the repository-level graduation gate before issue #15.
+
 ## What this proves
 
 A green harness supports the claim:
