@@ -10,6 +10,11 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Fixed `twdll.tweakers.SetInt(name, val)` returning `true` when setting non-existent tweaker names, properly returning `false` on unresolved names matching `SetFloat` and `SetBool`.
+- Fixed `FACTION_SCRIPT_INTERFACE:SetFactionLeader(..., true)` so the heir-coming-of-age boolean reaches the engine as a boolean instead of being coerced through the integer path.
+- Fixed `REGION_SCRIPT_INTERFACE:SetPopulationSurplus` and `SetGrowthPoints` so negative Lua values clamp to 0 instead of wrapping to a large unsigned value.
+- Fixed `twdll.world.LoadGame` so it returns `false` when the engine load-game signature is unavailable instead of reporting a dispatch that never happened.
+- Fixed campaign-variable rollback so the campaign model and database copies restore their own captured runtime values, and `TWEAKER_SCRIPT_INTERFACE:SetRawValue` preserves the raw 32-bit float bit pattern when synchronizing campaign variables.
+- Fixed `TWEAKER_SCRIPT_INTERFACE:SetValue` so unsupported Lua value types fail closed instead of reporting success without a valid mutation.
 
 ## [0.10.0] - 2026-08-23
 

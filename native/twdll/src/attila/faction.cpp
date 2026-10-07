@@ -296,7 +296,7 @@ static int SetFactionLeader(lua_State* L) {
     auto* faction  = twdll::tw_unwrap<TW_Faction>(L, 1);
     auto* new_char = twdll::tw_unwrap<TW_Character>(L, 2);
     auto* old_char = twdll::tw_unwrap<TW_Character>(L, 3);  // may be null
-    const bool  heir_coming_of_age = (l_type(L, 4) == LUA_TBOOLEAN) && (l_tointeger(L, 4) != 0);
+    const bool heir_coming_of_age = (l_type(L, 4) == LUA_TBOOLEAN) && l_tobool(L, 4);
 
     if (!faction || !new_char) {
         Log("[twdll] SetFactionLeader: null faction or new_character");

@@ -62,6 +62,7 @@ end
 #include <string>
 #include <vector>
 #include <cmath>
+#include <cstring>
 
 namespace {
 
@@ -74,7 +75,15 @@ static const std::unordered_map<std::string, int> g_campaign_var_indices = {
 
 // Snapshot maps to ensure automatic state rollback on Lua teardown
 static std::unordered_map<twdll::TW_ITweaker*, uint32_t> g_tweaker_snapshots;
-static std::unordered_map<int, float> g_campaign_var_snapshots;
+
+struct CampaignVarSnapshot {
+    bool  has_model = false;
+    float model_value = 0.0f;
+    bool  has_databases = false;
+    float databases_value = 0.0f;
+};
+
+static std::unordered_map<int, CampaignVarSnapshot> g_campaign_var_snapshots;
 
 static void snapshot_tweaker_if_needed(twdll::TW_ITweaker* tweaker) {
     if (g_tweaker_snapshots.find(tweaker) == g_tweaker_snapshots.end()) {
@@ -104,17 +113,23 @@ static int get_campaign_var_index_by_name(const char* name) {
 
 static void sync_campaign_var_to_engine(int var_idx, float val) {
     if (var_idx < 0 || var_idx >= 714) return;
+
+    auto& snapshot = g_campaign_var_snapshots[var_idx];
+
     if (g_campaign_model) {
         auto* cm = static_cast<twdll::TW_CampaignModel*>(g_campaign_model);
-        if (g_campaign_var_snapshots.find(var_idx) == g_campaign_var_snapshots.end()) {
-            g_campaign_var_snapshots[var_idx] = cm->m_campaign_variables[var_idx];
+        if (!snapshot.has_model) {
+            snapshot.model_value = cm->m_campaign_variables[var_idx];
+            snapshot.has_model = true;
         }
         cm->m_campaign_variables[var_idx] = val;
     }
+
     auto* dbs = twdll::TW_Databases::get();
     if (dbs) {
-        if (g_campaign_var_snapshots.find(var_idx) == g_campaign_var_snapshots.end()) {
-            g_campaign_var_snapshots[var_idx] = dbs->m_campaign_variables[var_idx];
+        if (!snapshot.has_databases) {
+            snapshot.databases_value = dbs->m_campaign_variables[var_idx];
+            snapshot.has_databases = true;
         }
         dbs->m_campaign_variables[var_idx] = val;
     }
@@ -157,17 +172,18 @@ void uninstall_tweakers() {
     }
 
     if (!g_campaign_var_snapshots.empty()) {
-        Log("[twdll] Restoring %zu campaign variables to vanilla defaults...", g_campaign_var_snapshots.size());
-        if (g_campaign_model) {
-            auto* cm = static_cast<twdll::TW_CampaignModel*>(g_campaign_model);
-            for (auto& pair : g_campaign_var_snapshots) {
-                cm->m_campaign_variables[pair.first] = pair.second;
-            }
-        }
+        Log("[twdll] Restoring %zu campaign variables to their original runtime values...", g_campaign_var_snapshots.size());
+        auto* cm = g_campaign_model ? static_cast<twdll::TW_CampaignModel*>(g_campaign_model) : nullptr;
         auto* dbs = twdll::TW_Databases::get();
-        if (dbs) {
-            for (auto& pair : g_campaign_var_snapshots) {
-                dbs->m_campaign_variables[pair.first] = pair.second;
+
+        for (auto& pair : g_campaign_var_snapshots) {
+            const int var_idx = pair.first;
+            const CampaignVarSnapshot& snapshot = pair.second;
+            if (cm && snapshot.has_model) {
+                cm->m_campaign_variables[var_idx] = snapshot.model_value;
+            }
+            if (dbs && snapshot.has_databases) {
+                dbs->m_campaign_variables[var_idx] = snapshot.databases_value;
             }
         }
         g_campaign_var_snapshots.clear();
@@ -395,7 +411,10 @@ static int Tweaker_SetRawValue(lua_State* L) {
     t->set_raw_value(val);
     int var_idx = get_campaign_var_index(t);
     if (var_idx >= 0) {
-        sync_campaign_var_to_engine(var_idx, static_cast<float>(val));
+        float raw_float = 0.0f;
+        static_assert(sizeof(raw_float) == sizeof(val), "campaign raw value must stay 32-bit");
+        std::memcpy(&raw_float, &val, sizeof(raw_float));
+        sync_campaign_var_to_engine(var_idx, raw_float);
     }
     l_pushboolean(L, 1);
     return 1;
@@ -432,15 +451,22 @@ Sets the polymorphic value of the tweaker with auto-detected type.
 static int Tweaker_SetValue(lua_State* L) {
     auto* t = twdll::tw_unwrap<twdll::TW_ITweaker>(L, 1);
     if (!t) { l_pushboolean(L, 0); return 1; }
+
+    const int value_type = l_type(L, 2);
+    if (value_type != LUA_TBOOLEAN && value_type != LUA_TNUMBER) {
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
     snapshot_tweaker_if_needed(t);
     int var_idx = get_campaign_var_index(t);
-    if (l_type(L, 2) == LUA_TBOOLEAN) {
+    if (value_type == LUA_TBOOLEAN) {
         bool b = l_tobool(L, 2);
         t->value<uint8_t>() = b ? 1 : 0;
         if (var_idx >= 0) {
             sync_campaign_var_to_engine(var_idx, b ? 1.0f : 0.0f);
         }
-    } else if (l_type(L, 2) == LUA_TNUMBER) {
+    } else {
         double d = l_tonumber(L, 2);
         if (var_idx >= 0) {
             t->value<float>() = static_cast<float>(d);

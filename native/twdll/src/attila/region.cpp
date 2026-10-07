@@ -50,7 +50,7 @@ static int GetPopulationSurplus(lua_State* L) {
 
 /***
 Sets the province development population surplus points (used to unlock new building slots).
-Persisted in savegames and immediately reflected in province development UI.
+Values below 0 are clamped to 0. Persisted in savegames and immediately reflected in province development UI.
 @function SetPopulationSurplus
 @tparam integer value new population surplus value (>= 0)
 @usage
@@ -60,8 +60,10 @@ region:SetPopulationSurplus(5)
 static int SetPopulationSurplus(lua_State* L) {
     auto* fpm = get_fpm(L);
     if (!fpm) return 0;
+    lua_Integer value = l_tointeger(L, 2);
+    if (value < 0) value = 0;
     fpm->m_province_development.m_development_points =
-        static_cast<unsigned int>(l_tointeger(L, 2));
+        static_cast<unsigned int>(value);
     return 0;
 }
 
@@ -81,6 +83,7 @@ static int GetGrowthPoints(lua_State* L) {
 
 /***
 Sets the accumulated province growth points progressing towards the next population surplus point.
+Values below 0 are clamped to 0.
 @function SetGrowthPoints
 @tparam integer value new growth points value
 @usage
@@ -89,8 +92,10 @@ region:SetGrowthPoints(500)
 static int SetGrowthPoints(lua_State* L) {
     auto* fpm = get_fpm(L);
     if (!fpm) return 0;
+    lua_Integer value = l_tointeger(L, 2);
+    if (value < 0) value = 0;
     fpm->m_province_development.m_accumulated_growth =
-        static_cast<unsigned int>(l_tointeger(L, 2));
+        static_cast<unsigned int>(value);
     return 0;
 }
 

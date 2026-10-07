@@ -554,6 +554,8 @@ local function run_twdll_tests()
             t:assert_eq(dp_orig, 5, "PopulationSurplus initial is 5")
             region:SetPopulationSurplus(10)
             t:assert_eq(region:GetPopulationSurplus(), 10, "SetPopulationSurplus(10)")
+            region:SetPopulationSurplus(-1)
+            t:assert_eq(region:GetPopulationSurplus(), 0, "SetPopulationSurplus clamps negative input")
             region:SetPopulationSurplus(dp_orig)
 
             -- Growth points: game-start value is 0
@@ -561,6 +563,8 @@ local function run_twdll_tests()
             t:assert_eq(sp_orig, 0, "GrowthPoints initial is 0")
             region:SetGrowthPoints(20)
             t:assert_eq(region:GetGrowthPoints(), 20, "SetGrowthPoints(20)")
+            region:SetGrowthPoints(-1)
+            t:assert_eq(region:GetGrowthPoints(), 0, "SetGrowthPoints clamps negative input")
             region:SetGrowthPoints(sp_orig)
 
             local addr = region:GetMemoryAddress()

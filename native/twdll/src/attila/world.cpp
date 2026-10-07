@@ -400,6 +400,11 @@ Requests the engine to load a saved game from disk at the end of the current tic
 twdll.world.LoadGame("tests.save")
 */
 static int LoadGame(lua_State* L) {
+    if (!g_load_game) {
+        Log("[twdll] LoadGame: load_game signature not resolved");
+        l_pushboolean(L, 0);
+        return 1;
+    }
     if (!g_campaign_model) {
         Log("[twdll] LoadGame: campaign model not available");
         l_pushboolean(L, 0);
@@ -425,9 +430,7 @@ static int LoadGame(lua_State* L) {
         wname.c_str()
     };
     auto* env = static_cast<twdll::TW_CampaignEnv*>(cm->m_campaign_env);
-    if (g_load_game) {
-        g_load_game(env, &unistr, 0);
-    }
+    g_load_game(env, &unistr, 0);
     Log("[twdll] LoadGame('%s'): scheduled load", name);
     l_pushboolean(L, 1);
     return 1;
