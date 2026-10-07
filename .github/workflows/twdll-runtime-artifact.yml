@@ -66,8 +66,109 @@ jobs:
         run: |
           Invoke-WebRequest -Uri "https://github.com/Frodo45127/rpfm/releases/download/v5.1.1/rpfm-v5.1.1-x86_64-pc-windows-msvc.zip" -OutFile "rpfm.zip"
           Expand-Archive -Path "rpfm.zip" -DestinationPath "rpfm" -Force
-          $cli = Get-ChildItem -Path "rpfm" -Recurse -Filter "rpfm_cli.exe" | Select-Object -First 1
-          if (-not $cli) { throw "rpfm_cli.exe not found in RPFM release" }
+          $cli = Get-ChildItem -Path "rpfm" -Recurse -File | Where-Object { $_.Name -match '^rpfm_cli(?:\.exe)?
+          "RPFM_CLI=$($cli.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build single-player runtime probe pack
+        shell: pwsh
+        run: |
+          & "$env:RPFM_CLI" --game attila pack create --pack-path "mk1212_twdll_sp_probe.pack"
+          if ($LASTEXITCODE -ne 0) { throw "RPFM pack create failed" }
+          & "$env:RPFM_CLI" --game attila pack add --pack-path "mk1212_twdll_sp_probe.pack" -F "packaging/artifact/sp-probe-pack;"
+          if ($LASTEXITCODE -ne 0) { throw "RPFM pack add failed" }
+          $pack = Get-Item "mk1212_twdll_sp_probe.pack"
+          if ($pack.Length -le 0) { throw "Probe pack is empty" }
+
+      - name: Assemble runtime bundle
+        shell: pwsh
+        run: |
+          $root = "MK1212-twdll-Attila-7c6f5b6d691313f128e9212e37c87c2292e79504"
+          New-Item -ItemType Directory -Force -Path "$root/DROP-IN" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$root/TEST-SOURCES" | Out-Null
+
+          Copy-Item "build/twdll-attila/Release/twdll.dll" "$root/DROP-IN/twdll.dll"
+          Copy-Item "build/twdll-attila/Release/twdll.dll" "$root/DROP-IN/twdll_attila.dll"
+          Copy-Item "build/twdll-attila/Release/twdll.pdb" "$root/DROP-IN/twdll.pdb"
+          Copy-Item "mk1212_twdll_sp_probe.pack" "$root/mk1212_twdll_sp_probe.pack"
+
+          Copy-Item -Recurse "source/native/twdll/tests/shared" "$root/TEST-SOURCES/shared"
+          Copy-Item -Recurse "source/native/twdll/tests/attila" "$root/TEST-SOURCES/attila"
+          Copy-Item "source/native/twdll/tools/twdll.ps1" "$root/TEST-SOURCES/twdll.ps1"
+          Copy-Item "source/native/twdll/tools/paths.ps1.example" "$root/TEST-SOURCES/paths.ps1.example"
+          Copy-Item "source/native/twdll/tests/multiplayer_setup_guide.md" "$root/TEST-SOURCES/multiplayer_setup_guide.md"
+
+          $readme = @(
+            "MK1212 / twdll ATTILA RUNTIME TEST BUNDLE",
+            "=========================================",
+            "Exact source SHA: 7c6f5b6d691313f128e9212e37c87c2292e79504",
+            "PR: #43",
+            "Source CI proof: Gumball CI #49 / run 37631243466",
+            "",
+            "DROP-IN:",
+            "  twdll.dll",
+            "  twdll_attila.dll",
+            "  twdll.pdb",
+            "",
+            "SINGLE-PLAYER PROBE:",
+            "1. Put mk1212_twdll_sp_probe.pack in Attila/data.",
+            "2. Add: mod `"mk1212_twdll_sp_probe.pack`"; to the active user.script.txt / enable the pack last.",
+            "3. Copy DROP-IN/twdll_attila.dll next to Attila.exe.",
+            "4. Start an MK1212 single-player campaign and enter the map.",
+            "5. Close the game normally and send twdll.log.",
+            "",
+            "FAST MANUAL LOAD TEST:",
+            "1. Back up existing twdll.dll / twdll_attila.dll in the Total War Attila folder.",
+            "2. Copy both DLL files from DROP-IN next to Attila.exe.",
+            "3. Start Attila with your MK1212 test setup.",
+            "4. After campaign load, inspect twdll.log next to Attila.exe.",
+            "5. Expected native identity: 7c6f5b6d691313f128e9212e37c87c2292e79504",
+            "6. Preserve twdll.log after the run; do not edit it.",
+            "",
+            "FULL TWDLL TEST:",
+            "Canonical repo workflow: native/twdll/tools/twdll.ps1 test attila.",
+            "TEST-SOURCES contains exact test inputs. Full pack building still requires",
+            "repository tooling, rpfm_cli, and configured tools/paths.ps1.",
+            "",
+            "IMPORTANT:",
+            "Green native CI is not Attila runtime proof. This bundle exists specifically",
+            "to collect missing real-game evidence: DLL load, signature resolution,",
+            "save/load lifecycle and clean teardown."
+          )
+          $readme | Set-Content -Encoding UTF8 "$root/README-FIRST.txt"
+
+          $manifest = [ordered]@{
+            source_sha = "7c6f5b6d691313f128e9212e37c87c2292e79504"
+            source_pr = 43
+            source_ci_run = 37631243466
+            target_game = "Total War: ATTILA"
+            architecture = "x86"
+            configuration = "Release"
+            compiler_policy = "/W4 /WX"
+            runtime_proof = "NOT_RUN"
+          }
+          $manifest | ConvertTo-Json | Set-Content -Encoding UTF8 "$root/MANIFEST.json"
+
+          Get-ChildItem -Path "$root" -Recurse -File |
+            Get-FileHash -Algorithm SHA256 |
+            ForEach-Object {
+              $relative = $_.Path.Substring((Resolve-Path $root).Path.Length + 1)
+              "$($_.Hash.ToLower())  $relative"
+            } | Set-Content -Encoding ASCII "$root/SHA256SUMS.txt"
+
+          Compress-Archive -Path "$root" -DestinationPath "MK1212-twdll-Attila-7c6f5b6d691313f128e9212e37c87c2292e79504.zip" -Force
+
+      - name: Upload runtime bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: MK1212-twdll-Attila-7c6f5b6d691313f128e9212e37c87c2292e79504
+          path: MK1212-twdll-Attila-7c6f5b6d691313f128e9212e37c87c2292e79504.zip
+          retention-days: 7
+          if-no-files-found: error
+ } | Select-Object -First 1
+          if (-not $cli) {
+            Get-ChildItem -Path "rpfm" -Recurse -File | Select-Object -First 100 FullName, Length | Format-Table -AutoSize
+            throw "rpfm_cli binary not found in RPFM release"
+          }
           "RPFM_CLI=$($cli.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build single-player runtime probe pack
