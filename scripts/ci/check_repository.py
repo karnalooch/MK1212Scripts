@@ -24,6 +24,11 @@ REQUIRED_FILES = (
     "tools/authority-policy.json",
     ".github/workflows/ci.yml",
     "scripts/ci/check_mp_safety_diff.py",
+    "scripts/ci/mp_simulation.py",
+    "scripts/ci/mp_contracts.json",
+    "scripts/ci/test_mp_dual_peer.py",
+    "scripts/ci/test_mp_source_contracts.py",
+    "docs/research/MP_DUAL_PEER_SIMULATION.md",
 )
 TEXT_SUFFIXES = {".lua", ".tsv", ".md", ".yml", ".yaml", ".json", ".py"}
 CONFLICT_MARKER_RE = re.compile(rb"(?m)^\\s*(?:<{7}(?:\\s|$)|={7}(?:\\s|$)|>{7}(?:\\s|$))")
