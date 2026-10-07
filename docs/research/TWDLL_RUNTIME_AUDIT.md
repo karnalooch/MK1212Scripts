@@ -1,7 +1,8 @@
 # twdll runtime/code audit
 
-Status: **REPO-OBSERVED**; source fixes implemented; CI/runtime proof tracked by issue #40  
+Status: **REPO-OBSERVED + repository/native CI PASS**; Attila runtime proof pending  
 Audit issue: #40  
+Audit PR: #41  
 Audit date: 2026-10-07  
 Audited baseline: `MK1212Scripts@5b7627f7702966ce904d6c094389191c7c318ddc`  
 Scope: active Attila path in `native/twdll/`; Rome 2 remains frozen
@@ -200,13 +201,36 @@ The root Windows CI lane now explicitly configures `BUILD_TESTING=ON`, builds th
 
 The in-game Lua test source also contains regression checks for negative region input clamping. Those real-game tests are **not** GitHub Actions proof and must still be run in Attila.
 
+## Repository/native CI proof
+
+PR #41 first completed the full caller-local proof on exact functional head
+`14504540262b24fb9019c63e5bec1d715010b946` in **Gumball CI run #42 / run ID 37627081586**.
+
+That exact-head run proved:
+
+- exact checked-out revision assertion: **PASS**;
+- repository static contract: **PASS**;
+- deterministic MP dual-peer repository simulation: **PASS**;
+- governance: **PASS**;
+- repository policy / Git LFS policy: **PASS**;
+- Trivy filesystem scan: **PASS**;
+- Attila Visual Studio Win32 configure/build/link: **PASS**;
+- `twdll_signature_scanner_tests` build: **PASS**;
+- native scanner CTest execution: **PASS**;
+- PE machine contract `IMAGE_FILE_MACHINE_I386 (0x014c)`: **PASS**;
+- `luaopen_twdll` export-marker contract: **PASS**;
+- caller-local Aggregate CI gate: **PASS**.
+
+The follow-up commit that records this evidence is documentation-only and must itself retain a green exact-head gate before merge.
+
 ## Proof labels
 
-At the time this report was authored:
+At this stage:
 
 - source/code review: **REPO-OBSERVED**;
-- native x86 compiler/link proof for the new branch: **PENDING CI**;
-- scanner regression suite: **PENDING CI**;
+- exact functional-head native x86 compiler/link proof: **PASS**;
+- exact functional-head scanner regression suite: **PASS**;
+- repository policy/governance/Trivy/Aggregate proof: **PASS**;
 - current Attila load proof: **NOT RUN**;
 - save/load runtime proof: **NOT RUN**;
 - two-peer passive proof: **NOT RUN**;
