@@ -57,6 +57,19 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Assert exact checked-out revision
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          if [[ "${actual}" != "${EXPECTED_SHA}" ]]; then
+            echo "Expected exact caller-local revision ${EXPECTED_SHA}, got ${actual}" >&2
+            exit 1
+          fi
 
       - name: Set up Python 3.14
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -88,6 +101,17 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Assert exact checked-out revision
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: pwsh
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $env:EXPECTED_SHA) {
+            throw "Expected exact caller-local revision $env:EXPECTED_SHA, got $actual"
+          }
 
       - name: Configure Attila x86 build
         shell: pwsh
@@ -96,6 +120,36 @@ jobs:
       - name: Build twdll target
         shell: pwsh
         run: cmake --build build/twdll-attila --config Release --target twdll --parallel 2
+
+      - name: Verify Attila DLL PE contract
+        shell: pwsh
+        run: |
+          $dll = Resolve-Path "build/twdll-attila/Release/twdll.dll"
+          $bytes = [System.IO.File]::ReadAllBytes($dll)
+          if ($bytes.Length -lt 64) {
+            throw "Built twdll.dll is too small to be a valid PE image."
+          }
+
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+          if ($peOffset -lt 0 -or ($peOffset + 6) -gt $bytes.Length) {
+            throw "Built twdll.dll has an invalid PE header offset."
+          }
+          if ($bytes[$peOffset] -ne 0x50 -or $bytes[$peOffset + 1] -ne 0x45 -or
+              $bytes[$peOffset + 2] -ne 0x00 -or $bytes[$peOffset + 3] -ne 0x00) {
+            throw "Built twdll.dll is missing the PE signature."
+          }
+
+          $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
+          if ($machine -ne 0x014c) {
+            throw ("Expected PE32/x86 IMAGE_FILE_MACHINE_I386 (0x014c), got 0x{0:x4}." -f $machine)
+          }
+
+          $ascii = [System.Text.Encoding]::ASCII.GetString($bytes)
+          if (-not $ascii.Contains("luaopen_twdll")) {
+            throw "Built twdll.dll does not contain the luaopen_twdll export marker."
+          }
+
+          Write-Host ("Native artifact contract PASS: {0}; machine=0x{1:x4}; luaopen_twdll present" -f $dll, $machine)
 
   aggregate:
     name: Aggregate CI gate
