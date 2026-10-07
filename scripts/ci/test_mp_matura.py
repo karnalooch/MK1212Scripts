@@ -38,6 +38,7 @@ class MultiplayerMatriculationTest(unittest.TestCase):
             "population": "experimental_local_ui",
             "region_trading": "experimental_local_ui",
             "occupation_decisions": "experimental_local_ui",
+            "religion_conversion_ui": "experimental_local_ui",
             "crusades": "experimental_local_ui",
             "pope_ui": "experimental_local_ui",
             "hre_story": "shared_model",
@@ -53,6 +54,7 @@ class MultiplayerMatriculationTest(unittest.TestCase):
             "ironman": "blocked_local_config",
             "lucky_nations": "blocked_local_config",
             "legacy_networking": "blocked_stale",
+            "change_capital": "blocked_external_mutator",
         }
         for name, expected_mode in blocked.items():
             with self.subTest(section="blocked_matrix", feature=name):
@@ -65,6 +67,10 @@ class MultiplayerMatriculationTest(unittest.TestCase):
         common_source = read("campaigns/main_attila/common/main.lua")
         pope_source = read("campaigns/main_attila/mechanics/pope/mechanics_pope.lua")
         story_source = read("campaigns/main_attila/story/main.lua")
+        global_ui_source = read("campaigns/main_attila/common/ui/mk1212_global_ui.lua")
+        dfn_source = read("campaigns/main_attila/mechanics/mechanics_dynamic_faction_names.lua")
+        byz_reconquest_source = read("campaigns/main_attila/byzantium/byzantium_reconquest.lua")
+        pope_favour_source = read("campaigns/main_attila/mechanics/pope/mechanics_pope_favour.lua")
         start_source = read("campaigns/main_attila/mk1212_start.lua")
         frontend_source = read("lua_scripts/frontend_mp_campaign.lua")
         runtime_source = read("campaigns/main_attila/common/mkmp_runtime.lua")
@@ -107,6 +113,11 @@ class MultiplayerMatriculationTest(unittest.TestCase):
         self.assertIn('MKMP_FeatureEnabled("pope_ui")', pope_source)
         self.assertIn('MKMP_FeatureEnabled("hre_story")', story_source)
         self.assertIn('MKMP_FeatureEnabled("sicily_story")', story_source)
+        self.assertIn('MKMP_FeatureEnabled("religion_conversion_ui")', global_ui_source)
+        self.assertIn('MKMP_FeatureEnabled("decisions")', dfn_source)
+        self.assertIn('MKMP_FeatureEnabled("decisions")', byz_reconquest_source)
+        self.assertIn('MKMP_FeatureEnabled("decisions")', pope_favour_source)
+        self.assertIn('MKMP_FeatureEnabled("change_capital")', start_source)
 
         self.assertIn(
             "Experimental Full Multiplayer Script Profile",
