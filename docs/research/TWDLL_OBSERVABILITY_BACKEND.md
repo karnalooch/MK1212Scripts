@@ -406,6 +406,8 @@ The source-level runtime audit in `TWDLL_RUNTIME_AUDIT.md` hardens the native bo
 
 This improves failure semantics but is still **REPO-OBSERVED** until an exact current Attila build loads and exercises the DLL.
 
+Issue #42 / PR #43 adds a heavier native proof around that boundary: Release+Debug x86 builds under `/W4 /WX`, deterministic scanner fuzzing, logger concurrency/exact-byte-budget tests, host-guard tests and source-contract checks for the audit fixes. That stress proof found and fixed a Windows text-mode newline expansion bug in the logger budget.
+
 ## Validation plan
 
 ### Stage 1 — load proof
