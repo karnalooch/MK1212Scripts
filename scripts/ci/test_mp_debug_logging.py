@@ -132,7 +132,9 @@ class MPDebugLoggingTests(unittest.TestCase):
 
         self.assertIn('require("common/mkmp_debug");', main)
         self.assertIn("MKMP_Debug_Initialize();", main)
-        self.assertIn('MKMP_Debug_Log(\n\t\t\t"runtime"', runtime)
+        self.assertIn("pcall(", runtime)
+        self.assertIn("MKMP_Debug_Log,", runtime)
+        self.assertIn('"runtime"', runtime)
         self.assertIn('"rng"', common)
         self.assertIn('"faction_turn_start"', common)
         self.assertIn('"faction_turn_end"', common)
