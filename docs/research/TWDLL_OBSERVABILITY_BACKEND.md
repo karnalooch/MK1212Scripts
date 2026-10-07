@@ -530,3 +530,60 @@ Still intentionally unproven:
 - whether merely loading twdll on both peers changes multiplayer engine behavior.
 
 The remaining multiplayer items require real host/client Attila sessions and stay tracked separately from repository simulation.
+
+## Product probe packaging correction — 2026-10-07 (#44 / PR #45)
+
+**REPO-OBSERVED:** the archived product-SP artifact at `13ba7dc5965c43b252de88f7fd4cefe75f1f82b1`
+contained only `common/main.lua` and `common/mkmp_runtime.lua` in its patch payload.
+The former also requires `common/mkmp_debug.lua`. Depending on the Workshop version,
+that omitted dependency can abort Lua bootstrap before any native marker.
+This is a **HYPOTHESIS** for the failed launch, not a runtime-proven root cause.
+
+Evidence `MK1212-PR45-SP-EVIDENCE-20261007-222514.zip` records preserved patched
+Workshop content and `native_ready=false`, `debug_ready=false`; it contains no native,
+MP-debug or bootstrap trace log. It proves neither runtime readiness nor the failure location.
+The earlier native 224/224 proof remains specific to its separate canonical harness.
+
+The repository now owns the product probe builder and launcher under `scripts/runtime/`:
+
+- compute the full static `common/main` require closure (currently 14 Lua files,
+  including SP-only occupation decisions and nested UI lists); reject missing dependencies;
+- instrument only the test copy of `main.lua`, before the first require, recording
+  module begin/success/failure, initializer entry and runtime identity;
+- keep the original require exception semantics and bound trace output to 128 records
+  per Lua state, a 64 KiB file budget and 512 message characters;
+- require committed source, tracked payload files and a native DLL embedding the same SHA;
+- publish a SHA-pinned CI artifact with payload/binary hash manifest;
+- clone and patch the active Workshop pack before touching installed files;
+- temporarily replace that same active Workshop pack, preserving launcher identity/load order;
+- retain original backups, put all installed-file mutations and launch waiting inside
+  `try/finally`, capture evidence before restoration and verify the original pack hash;
+- preserve an externally updated Workshop pack and report restoration failure rather
+  than silently overwriting concurrent changes;
+- require bootstrap/initializer markers, exact-SHA native/debug readiness, pack preservation
+  and successful rollback for PASS. Prior logs cannot satisfy a new run.
+
+The harness does not change launcher metadata or user scripts. Exit Attila and the CA
+Launcher before running; keep Steam running. Old probe packs in `data` must be removed
+before the harness accepts a new isolated run. Backups remain beside the harness.
+
+Build manually from a clean committed checkout with the exact-SHA Release DLL:
+
+```powershell
+python scripts/runtime/build_product_probe.py --dll build/twdll-attila/Release/twdll.dll --rpfm <path-to-rpfm_cli.exe> --output <outside-checkout-output>
+```
+
+CI uses RPFM v5.1.1 with the official release archive SHA-256 pinned in `ci.yml`.
+Unzip the generated probe, run `RUN-MK1212-PR45-SP-TEST.cmd`, reach the single-player
+campaign map, wait ten seconds and exit normally. Inspect `result.json` and
+`PR45_RUNTIME_TRACE.txt` in the returned evidence ZIP before proposing another experiment.
+
+**Local validation:** four packaging tests PASS; all 14 closure files compile under Lua
+5.1; actual instrumented bootstrap plus production runtime adapter PASS with native-ready,
+missing-DLL, missing-debug-module and trace-I/O-failure mocks. The missing-debug case records
+the failing require and preserves the exception; absent DLL/trace I/O do not stop gameplay
+initializers. MP simulation 38/38 and native source contracts 11/11 PASS. These are repository
+proofs with mocked engine/dependency services, not Attila runtime proof.
+
+**Remaining gate:** Windows CI syntax/native/artifact build and a fresh real MK1212 SP run,
+then separate save/load and no-DLL product proof. Two-peer multiplayer remains unproven.
