@@ -131,6 +131,14 @@
       "legacy_networking": {
         "enabled": false,
         "mode": "blocked_stale"
+      },
+      "religion_conversion_ui": {
+        "enabled": true,
+        "mode": "experimental_local_ui"
+      },
+      "change_capital": {
+        "enabled": false,
+        "mode": "blocked_external_mutator"
       }
     }
   },
