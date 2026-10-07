@@ -50,6 +50,7 @@ Canonical research docs:
 - `docs/research/ATTILA_CRASH_OOM_RESOURCE_HAZARDS.md`
 - `docs/research/SCRIPT_SAFETY_GUARDRAILS.md`
 - `docs/research/TWDLL_OBSERVABILITY_BACKEND.md`
+- `docs/research/MP_DUAL_PEER_SIMULATION.md`
 
 ## Native runtime observability
 
@@ -91,6 +92,8 @@ Mandatory rules:
 - Do not claim a desync/OOS fix from single-player or single-client evidence.
 - Exact-SHA multiplayer evidence must record game build, mod list/load order, host/client roles, triggering event/turn and both-peer results.
 - Existing synchronization hazards are technical debt to audit deliberately; do not silently broaden a change into a mass rewrite.
+- Any change to MP-sensitive RNG, feature gating, vassal/diplomacy correlation, persistence, deferred operations or native-observability boundaries MUST update or extend the dual-peer simulation/source contracts when behavior changes.
+- A green dual-peer simulator is repository-level proof only. It MUST NOT be reported as RUNTIME-PROVEN Attila multiplayer evidence.
 
 ## Output data integrity — treat it like money in the bank
 
@@ -160,6 +163,7 @@ For repository-policy changes run:
 - `python scripts/gumball.py doctor`
 - `python scripts/ci/check_repository.py`
 - `python scripts/ci/check_mp_safety_diff.py --base <base-sha>` when runtime Lua changes are involved
+- `python -m unittest discover -s scripts/ci -p "test_mp_*.py" -v` for multiplayer safety contracts
 
 Then use the GitHub Actions results for repository policy, governance, security and the caller-local Aggregate CI gate.
 
