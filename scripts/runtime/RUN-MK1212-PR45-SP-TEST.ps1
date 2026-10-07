@@ -6,14 +6,16 @@ if ($Manifest.schema -ne 1 -or $Manifest.source_sha -notmatch '^[0-9a-f]{40}$') 
 $ExpectedSourceSha = $Manifest.source_sha
 if (Get-Process -Name Attila -ErrorAction SilentlyContinue) { throw 'Exit Attila before starting the probe' }
 $ModData = Join-Path $env:APPDATA 'The Creative Assembly\Launcher\20190104-moddata.dat'
-$mods = @(Get-Content $ModData -Raw | ConvertFrom-Json)
-$matches = @($mods | Where-Object { $_.uuid -eq '1-1212scripts.pack' })
-if ($matches.Count -ne 1 -or -not $matches[0].active) { throw 'Exactly one active Workshop scripts pack is required' }
-$Workshop = [string]$matches[0].packfile
+# Assign the JSON array directly: PowerShell 5.1 emits it as one pipeline object.
+$mods = Get-Content -LiteralPath $ModData -Raw | ConvertFrom-Json
+$scriptMods = @($mods | Where-Object { $_.uuid -eq '1-1212scripts.pack' })
+if ($scriptMods.Count -ne 1 -or -not $scriptMods[0].active) { throw 'Exactly one active Workshop scripts pack is required' }
+$Workshop = [string]$scriptMods[0].packfile
 $normalized = $Workshop.Replace('/', '\')
 $token = '\steamapps\workshop\content\325610\'
 $idx = $normalized.ToLowerInvariant().IndexOf($token)
-if ($idx -lt 0 -or !(Test-Path $Workshop)) { throw 'Cannot locate Workshop scripts pack' }
+if ($idx -lt 0) { throw "Unrecognized Workshop scripts path: $Workshop" }
+if (!(Test-Path -LiteralPath $Workshop -PathType Leaf)) { throw "Workshop scripts file does not exist: $Workshop" }
 $GameRoot = Join-Path ($normalized.Substring(0, $idx + '\steamapps'.Length)) 'common\Total War Attila'
 $Exe = Join-Path $GameRoot 'Attila.exe'
 if (!(Test-Path $Exe)) { throw 'Attila.exe not found' }

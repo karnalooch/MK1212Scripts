@@ -588,3 +588,16 @@ proofs with mocked engine/dependency services, not Attila runtime proof.
 
 **Remaining gate:** Windows CI syntax/native/artifact build and synthetic rollback checks and a fresh real MK1212 SP run,
 then separate save/load and no-DLL product proof. Two-peer multiplayer remains unproven.
+
+### Windows PowerShell 5.1 launcher-array regression
+
+The 23:18 user output showed that filtering the launcher JSON retained every mod.
+In Windows PowerShell 5.1, wrapping `Get-Content | ConvertFrom-Json` in `@(...)`
+can retain the decoded JSON array as a single nested pipeline object. Array member
+access made the UUID predicate truthy for that whole object and concatenated all
+`packfile` paths into one invalid path. This failed before any installed-file mutation.
+Assign the decoded JSON directly, then enumerate it through the UUID filter.
+The Windows rollback fixture now uses three launcher entries (including unrelated
+active/inactive mods), forward-slash paths and both `powershell.exe` (5.1) and
+`pwsh.exe` (7), with existing/absent prior files in each engine. Each case must create
+fresh evidence naming its exact synthetic game root; old test evidence cannot pass it.
