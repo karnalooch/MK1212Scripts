@@ -33,6 +33,14 @@ REQUIRED_FILES = (
     "campaigns/main_attila/common/mkmp_debug.lua",
     "docs/research/MP_DUAL_PEER_SIMULATION.md",
     "docs/research/MP_DEBUG_LOGGING.md",
+    "native/twdll/AGENTS.md",
+    "native/twdll/CMakeLists.txt",
+    "native/twdll/LICENSE",
+    "native/twdll/UPSTREAM.md",
+    "native/twdll/src/main.cpp",
+    "native/twdll/tests/attila/tests.save",
+    "native/twdll/vendor/minhook/CMakeLists.txt",
+    "native/twdll/vendor/minhook/LICENSE.txt",
 )
 TEXT_SUFFIXES = {".lua", ".tsv", ".md", ".yml", ".yaml", ".json", ".py"}
 CONFLICT_MARKER_RE = re.compile(rb"(?m)^\\s*(?:<{7}(?:\\s|$)|={7}(?:\\s|$)|>{7}(?:\\s|$))")
@@ -50,6 +58,20 @@ for relative in REQUIRED_DIRS:
 for relative in REQUIRED_FILES:
     if not (ROOT / relative).is_file():
         fail(f"missing repository contract: {relative}")
+
+twdll_provenance = (ROOT / "native/twdll/UPSTREAM.md").read_text(encoding="utf-8")
+for expected in (
+    "karnalooch/twdll",
+    "bukowa/twdll",
+    "85c4db9836e3150df8ec5b38315de9940f8d624c",
+    "TsudaKageyu/minhook",
+    "d94c64d32ea37bc4f5ee47d580709f70c6fb6080",
+):
+    if expected not in twdll_provenance:
+        fail(f"native twdll provenance missing: {expected}")
+
+if (ROOT / "native/twdll/.gitmodules").exists():
+    fail("native/twdll must vendor MinHook; nested .gitmodules is not allowed")
 
 lua_files = sorted(ROOT.rglob("*.lua"))
 tsv_files = sorted(ROOT.rglob("*.tsv"))
