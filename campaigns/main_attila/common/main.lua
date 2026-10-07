@@ -9,6 +9,7 @@
 
 require("common/mk1212_common");
 require("common/mk1212_common_lists");
+require("common/mkmp_features");
 
 require("common/mk1212_campaign_cutscenes");
 require("common/mk1212_localisation_lists");
@@ -18,13 +19,11 @@ require("common/mkmp_runtime");
 
 require("common/ui/mk1212_global_ui");
 require("common/ui/mk1212_unit_information");
-
-if not cm:is_multiplayer() then
-	require("common/ui/mk1212_occupation_decisions");
-end
+require("common/ui/mk1212_occupation_decisions");
 
 function Common_Initializer()
 	if cm:is_multiplayer() then
+		MKMP_Log_Feature_Profile();
 		MKMP_Runtime_Initialize();
 	end
 
@@ -36,7 +35,7 @@ function Common_Initializer()
 	Add_MK1212_Unit_Information_Listeners();
 	Add_MK1212_Vassal_Tracking_Listeners();
 
-	if not cm:is_multiplayer() then
+	if MKMP_FeatureEnabled("occupation_decisions") then
 		Add_MK1212_Occupation_Decision_Listeners();
 	end
 end
