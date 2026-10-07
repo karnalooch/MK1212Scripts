@@ -13,12 +13,6 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout helper branch
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-          path: helper
-
       - name: Checkout exact twdll source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -34,7 +28,7 @@ jobs:
           Pop-Location
           if ($actual -ne "7c6f5b6d691313f128e9212e37c87c2292e79504") { throw "Expected 7c6f5b6d691313f128e9212e37c87c2292e79504, got $actual" }
 
-      - name: Configure Attila x86 Release
+      - name: Configure build
         shell: pwsh
         run: cmake -S source/native/twdll -B build/twdll-attila -A Win32 -DTW_GAME=attila -DBUILD_TESTING=ON -DTWDLL_WARNINGS_AS_ERRORS=ON
 
@@ -44,7 +38,7 @@ jobs:
           cmake --build build/twdll-attila --config Release --target twdll twdll_signature_scanner_tests twdll_log_tests twdll_security_tests --parallel 2
           ctest --test-dir build/twdll-attila -C Release --output-on-failure
 
-      - name: Verify PE32 and exact build SHA
+      - name: Verify PE32 and exact SHA
         shell: pwsh
         run: |
           $dll = Resolve-Path "build/twdll-attila/Release/twdll.dll"
@@ -56,121 +50,12 @@ jobs:
           if (-not $ascii.Contains("luaopen_twdll")) { throw "luaopen_twdll missing" }
           if (-not $ascii.Contains("7c6f5b6d691313f128e9212e37c87c2292e79504")) { throw "Exact SHA missing from DLL" }
 
-      - name: Prepare full campaign entrypoint probe
+      - name: Write V3 campaign scripting entrypoint
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "probe-src/campaigns/main_attila" | Out-Null
-          @'
-import pathlib
-
-src = pathlib.Path("source/campaigns/main_attila/scripting.lua")
-dst = pathlib.Path("probe-src/campaigns/main_attila/scripting.lua")
-text = src.read_text(encoding="utf-8")
-
-anchor = 'cm = campaign_manager:new(campaign_name);'
-if anchor not in text:
-    raise SystemExit("campaign manager anchor missing")
-
-boot = r'''
--- MK1212 TWDLL SP PROBE V3: Lua execution marker.
-local MK1212_SP_PROBE_PATH = "MK1212_SP_PROBE_BOOT.txt"
-local MK1212_SP_PROBE_TWDLL = nil
-
-local function MK1212_SP_Probe_Write(message)
-    if not io or type(io.open) ~= "function" then return end
-    local ok, file = pcall(io.open, MK1212_SP_PROBE_PATH, "a")
-    if ok and file then
-        file:write(tostring(message) .. "\\n")
-        file:flush()
-        file:close()
-    end
-end
-
-MK1212_SP_Probe_Write("V3 BOOT_AFTER_CM")
-'''
-
-text = text.replace(anchor, anchor + boot, 1)
-
-tail = r'''
--- MK1212 TWDLL SP PROBE V3: native load happens after MK1212 requires are complete.
-MK1212_SP_Probe_Write("V3 PRE_LOADLIB")
-
-local function MK1212_SP_Probe_Load()
-    if not package or type(package.loadlib) ~= "function" then
-        MK1212_SP_Probe_Write("V3 FAIL package.loadlib_unavailable")
-        return
-    end
-
-    local candidates = {
-        "twdll_attila.dll",
-        "./twdll_attila.dll",
-        "twdll.dll",
-        "./twdll.dll"
-    }
-
-    for i = 1, #candidates do
-        local path = candidates[i]
-        local ok_load, loader, load_err = pcall(package.loadlib, path, "luaopen_twdll")
-
-        if ok_load and type(loader) == "function" then
-            MK1212_SP_Probe_Write("V3 LOADLIB_OK path=" .. tostring(path))
-            local ok_open, module_or_error = pcall(loader)
-
-            if ok_open and type(module_or_error) == "table" then
-                MK1212_SP_PROBE_TWDLL = module_or_error
-                twdll = module_or_error
-                MK1212_SP_Probe_Write("V3 LUAOPEN_OK")
-
-                if module_or_error.core then
-                    if type(module_or_error.core.GameBuild) == "function" then
-                        local ok_game, value = pcall(module_or_error.core.GameBuild)
-                        MK1212_SP_Probe_Write("V3 GAME_BUILD ok=" .. tostring(ok_game) .. " value=" .. tostring(value))
-                    end
-
-                    if type(module_or_error.core.GetBuildSha) == "function" then
-                        local ok_sha, value = pcall(module_or_error.core.GetBuildSha)
-                        MK1212_SP_Probe_Write("V3 BUILD_SHA ok=" .. tostring(ok_sha) .. " value=" .. tostring(value))
-                    end
-
-                    if type(module_or_error.core.Log) == "function" then
-                        pcall(module_or_error.core.Log, "[SP-PROBE-V3] luaopen_twdll succeeded")
-                    end
-                end
-
-                return
-            end
-
-            MK1212_SP_Probe_Write("V3 LUAOPEN_FAIL err=" .. tostring(module_or_error))
-            return
-        end
-
-        MK1212_SP_Probe_Write(
-            "V3 LOADLIB_FAIL path=" .. tostring(path) ..
-            " ok=" .. tostring(ok_load) ..
-            " loader=" .. tostring(loader) ..
-            " err=" .. tostring(load_err)
-        )
-    end
-end
-
-MK1212_SP_Probe_Load()
-
-cm:register_first_tick_callback(
-    function()
-        MK1212_SP_Probe_Write("V3 FIRST_TICK")
-        if MK1212_SP_PROBE_TWDLL
-        and MK1212_SP_PROBE_TWDLL.world
-        and type(MK1212_SP_PROBE_TWDLL.world.GetFactionCount) == "function" then
-            local ok_count, value = pcall(MK1212_SP_PROBE_TWDLL.world.GetFactionCount)
-            MK1212_SP_Probe_Write("V3 FACTIONS ok=" .. tostring(ok_count) .. " value=" .. tostring(value))
-        end
-    end
-)
-'''
-
-dst.write_text(text + tail, encoding="utf-8")
-'@ | Set-Content -Encoding UTF8 "make_probe.py"
-          python make_probe.py
+          $b64 = "LS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KLS0KLS0JQ0FNUEFJR04gU0NSSVBUCi0tCi0tCUZpcnN0IGZpbGUgdGhhdCBnZXRzIGxvYWRlZCBieSBhIHNjcmlwdGVkIGNhbXBhaWduLgotLQlUaGlzIHNob3VsZG4ndCBuZWVkIHRvIGJlIGNoYW5nZWQgYnkgcGVyLWNhbXBhaWduLCBleGNlcHQgZm9yIHRoZQotLQlyZXF1aXJlIGFuZCBjYWxsYmFjayBjb21tYW5kcyBhdCB0aGUgYm90dG9tIG9mIHRoZSBmaWxlCi0tCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgotLSBjaGFuZ2UgdGhpcyB0byBmYWxzZSB0byBub3QgbG9hZCB0aGUgc2NyaXB0CmxvY2FsIGxvYWRfc2NyaXB0ID0gdHJ1ZTsKCmlmIG5vdCBsb2FkX3NjcmlwdCB0aGVuCglvdXQudGluZygiKioqIFdBUk5JTkc6IE5vdCBsb2FkaW5nIHNjcmlwdCBmb3IgY2FtcGFpZ24gIiAuLiBjYW1wYWlnbl9zdGFydF9maWxlIC4uICIgYXMgbG9hZF9zY3JpcHQgdmFyaWFibGUgaXMgc2V0IHRvIGZhbHNlISBFZGl0IGx1YSBmaWxlIGF0ICIgLi4gZGVidWcuZ2V0aW5mbygxKS5zb3VyY2UgLi4gIiB0byBjaGFuZ2UgdGhpcyBiYWNrICoqKiIpOwoJcmV0dXJuOwplbmQ7CgotLSBmb3JjZSByZWxvYWRpbmcgb2YgdGhlIGx1YSBzY3JpcHQgbGlicmFyeQpwYWNrYWdlLmxvYWRlZFsibHVhX3NjcmlwdHMuQ2FtcGFpZ25fU2NyaXB0X0hlYWRlciJdID0gbmlsOwpyZXF1aXJlICJsdWFfc2NyaXB0cy5DYW1wYWlnbl9TY3JpcHRfSGVhZGVyIjsKCmRldiA9IHJlcXVpcmUoImx1YV9zY3JpcHRzLmRldiIpOwpzdnIgPSBTY3JpcHRlZFZhbHVlUmVnaXN0cnk6bmV3KCk7CnV0aWwgPSByZXF1aXJlKCJsdWFfc2NyaXB0cy51dGlsIik7CgotLSBuYW1lIG9mIHRoZSBjYW1wYWlnbiwgc291cmNlZCBmcm9tIHRoZSBuYW1lIG9mIHRoZSBjb250YWluaW5nIGZvbGRlcgpjYW1wYWlnbl9uYW1lID0gZ2V0X2ZvbGRlcl9uYW1lX2FuZF9zaG9ydGZvcm0oKTsKCi0tIG5hbWUgb2YgdGhlIGxvY2FsIGZhY3Rpb24sIHRvIGJlIGZpbGxlZCBpbiBsYXRlcgpsb2NhbF9mYWN0aW9uID0gIiI7CgotLSBpbmNsdWRlIHBhdGggdG8gb3RoZXIgc2NyaXB0cyBhc3NvY2lhdGVkIHdpdGggdGhpcyBjYW1wYWlnbgpwYWNrYWdlLnBhdGggPSBwYWNrYWdlLnBhdGggLi4gIjtkYXRhL2NhbXBhaWducy8iIC4uIGNhbXBhaWduX25hbWUgLi4gIi8/Lmx1YSI7CnBhY2thZ2UucGF0aCA9IHBhY2thZ2UucGF0aCAuLiAiO2RhdGEvY2FtcGFpZ25zLyIgLi4gY2FtcGFpZ25fbmFtZSAuLiAiL2ZhY3Rpb25zLz8ubHVhIjsKCi0tIGNyZWF0ZSBjYW1wYWlnbiBtYW5hZ2VyCmNtID0gY2FtcGFpZ25fbWFuYWdlcjpuZXcoY2FtcGFpZ25fbmFtZSk7Ci0tIE1LMTIxMiBUV0RMTCBTUCBQUk9CRSBWMwpsb2NhbCBNSzEyMTJfU1BfUFJPQkVfUEFUSCA9ICJNSzEyMTJfU1BfUFJPQkVfQk9PVC50eHQiCmxvY2FsIE1LMTIxMl9TUF9QUk9CRV9UV0RMTCA9IG5pbAoKbG9jYWwgZnVuY3Rpb24gTUsxMjEyX1NQX1Byb2JlX1dyaXRlKG1lc3NhZ2UpCiAgICBpZiBub3QgaW8gb3IgdHlwZShpby5vcGVuKSB+PSAiZnVuY3Rpb24iIHRoZW4gcmV0dXJuIGVuZAogICAgbG9jYWwgb2ssIGZpbGUgPSBwY2FsbChpby5vcGVuLCBNSzEyMTJfU1BfUFJPQkVfUEFUSCwgImEiKQogICAgaWYgb2sgYW5kIGZpbGUgdGhlbgogICAgICAgIGZpbGU6d3JpdGUodG9zdHJpbmcobWVzc2FnZSkgLi4gIlxuIikKICAgICAgICBmaWxlOmZsdXNoKCkKICAgICAgICBmaWxlOmNsb3NlKCkKICAgIGVuZAplbmQKCk1LMTIxMl9TUF9Qcm9iZV9Xcml0ZSgiVjMgQk9PVF9BRlRFUl9DTSIpCgoKLS0gcmVxdWlyZSBhIGZpbGUgaW4gdGhlIGZhY3Rpb25zIHN1YmZvbGRlciB0aGF0IG1hdGNoZXMgdGhlIG5hbWUgb2Ygb3VyIGxvY2FsIGZhY3Rpb24KY206cmVnaXN0ZXJfdWlfY3JlYXRlZF9jYWxsYmFjaygKCWZ1bmN0aW9uKCkKCQlsb2NhbF9mYWN0aW9uID0gY206Z2V0X2xvY2FsX2ZhY3Rpb24oKTsKCQlpZiBub3Qgc3RyaW5nLmZpbmQobG9jYWxfZmFjdGlvbiwgIm1rX2ZhY3QiKSB0aGVuIGNtOnNodXRkb3duKCkgZW5kOwoJCWlmIG5vdCAobG9jYWxfZmFjdGlvbiA9PSAiIikgdGhlbgoJCQlpbmNfdGFiKCk7CgkJCV9HLnNjcmlwdF9lbnYgPSBnZXRmZW52KDEpOwoJCQkKCQkJLS0gZmFjdGlvbiBzY3JpcHRzIGxvYWRlZCBoZXJlCgkJCWlmIGxvYWRfZmFjdGlvbl9zY3JpcHQobG9jYWxfZmFjdGlvbikgYW5kIGxvYWRfZmFjdGlvbl9zY3JpcHQobG9jYWxfZmFjdGlvbiAuLiAiX2ludHJvIikgdGhlbgoJCQkJZGVjX3RhYigpOwoJCQllbHNlCgkJCQlkZWNfdGFiKCk7CgkJCWVuZDsKCQllbmQKCWVuZAopOwoKCi0tIHRyeSBhbmQgbG9hZCBhIGZhY3Rpb24gc2NyaXB0CmZ1bmN0aW9uIGxvYWRfZmFjdGlvbl9zY3JpcHQoc2NyaXB0bmFtZSkKCWxvY2FsIHN1Y2Nlc3MsIGVycl9jb2RlID0gcGNhbGwoZnVuY3Rpb24oKSByZXF1aXJlKHNjcmlwdG5hbWUpIGVuZCk7CgkJCQoJaWYgc3VjY2VzcyB0aGVuCgkJb3V0cHV0KHNjcmlwdG5hbWUgLi4gIi5sdWEgbG9hZGVkIik7CgllbHNlCgkJc2NyaXB0X2Vycm9yKCJFUlJPUjogVHJpZWQgdG8gbG9hZCBmYWN0aW9uIHNjcmlwdCAiIC4uIHNjcmlwdG5hbWUgLi4gIiB3aXRob3V0IHN1Y2Nlc3MgLSBlaXRoZXIgdGhlIHNjcmlwdCBpcyBub3QgcHJlc2VudCBvciBpdCBpcyBub3QgdmFsaWQuIFNlZSBlcnJvciBiZWxvdyIpOwoJCW91dHB1dCgiKioqKioqKioqKioqKiIpOwoJCW91dHB1dCgiUmV0dXJuZWQgbHVhIGVycm9yIGlzOiIpOwoJCW91dHB1dChlcnJfY29kZSk7CgkJb3V0cHV0KCIqKioqKioqKioqKioqIik7CgllbmQ7CgkKCXJldHVybiBzdWNjZXNzOwplbmQ7CgoKCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KLS0JZnVuY3Rpb24gdG8gY2FsbCB3aGVuIHRoZSBmaXJzdCB0aWNrIG9jY3VycwotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgpjbTpyZWdpc3Rlcl9maXJzdF90aWNrX2NhbGxiYWNrKAoJZnVuY3Rpb24oKQoJCWlmIGlzX2Z1bmN0aW9uKHN0YXJ0X2dhbWVfZm9yX2ZhY3Rpb24pIHRoZW4KCQkJc3RhcnRfZ2FtZV9mb3JfZmFjdGlvbih0cnVlKTsJCS0tIHNldCB0byBmYWxzZSB0byBub3Qgc2hvdyBjdXRzY2VuZQoJCWVsc2UKCQkJc2NyaXB0X2Vycm9yKCJzdGFydF9nYW1lX2Zvcl9mYWN0aW9uKCkgZnVuY3Rpb24gaXMgYmVpbmcgY2FsbGVkIGJ1dCBoYXNuJ3QgYmVlbiBsb2FkZWQgLSB0aGUgc2NyaXB0IGhhcyBnb25lIHdyb25nIHNvbWV3aGVyZSBlbHNlLCBpbnZlc3RpZ2F0ZSEiKTsKCQllbmQ7CgkJCgkJc3RhcnRfZ2FtZV9hbGxfZmFjdGlvbnMoKTsKCWVuZAopOwoKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQotLQlhZGRpdGlvbmFsIHNjcmlwdCBmaWxlcyB0byBsb2FkCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCnJlcXVpcmUoIm1rMTIxMl9zdGFydCIpOwpyZXF1aXJlKCJjb21tb24vbWFpbiIpOwpyZXF1aXJlKCJhdHRfdHJhaXRzIik7CgpyZXF1aXJlKCJtazEyMTJfY2hhbmdlX2NhcGl0YWwiKTsKcmVxdWlyZSgibWsxMjEyX2Rpc2NvcmQiKTsKcmVxdWlyZSgibWsxMjEyX3Nsb3RzIik7CgpyZXF1aXJlKCJieXphbnRpdW0vbWFpbiIpOwpyZXF1aXJlKCJraW5nZG9tcy9tYWluIik7CnJlcXVpcmUoImx1Y2t5bmF0aW9ucy9tYWluIik7CnJlcXVpcmUoIm1lY2hhbmljcy9tYWluIik7CnJlcXVpcmUoIm1vbmdvbHMvbWFpbiIpOwpyZXF1aXJlKCJuaWNrbmFtZXMvbWFpbiIpOwpyZXF1aXJlKCJzdGFydGluZ2JhdHRsZXMvbWFpbiIpOwpyZXF1aXJlKCJzdG9yeS9tYWluIik7CnJlcXVpcmUoInRpbXVyaWRzL21haW4iKTsKCnJlcXVpcmUoImNoYWxsZW5nZXMvbWFpbiIpOwpyZXF1aXJlKCJpcm9ubWFuL21haW4iKTsKCi0tIFRlbXBvcmFyeQpyZXF1aXJlKCJwcmV0ZW5kZXJfY3Jhc2hfc3RvcGdhcCIpOwoKLS0gQ0lWSUwgV0FSIEZJWApyZXF1aXJlKCJjaXZpbF93YXJfZml4Iik7Ci0tIE1LMTIxMiBUV0RMTCBTUCBQUk9CRSBWMzogbmF0aXZlIGxvYWQgYWZ0ZXIgbm9ybWFsIE1LMTIxMiByZXF1aXJlcy4KTUsxMjEyX1NQX1Byb2JlX1dyaXRlKCJWMyBQUkVfTE9BRExJQiIpCgpsb2NhbCBmdW5jdGlvbiBNSzEyMTJfU1BfUHJvYmVfTG9hZCgpCiAgICBpZiBub3QgcGFja2FnZSBvciB0eXBlKHBhY2thZ2UubG9hZGxpYikgfj0gImZ1bmN0aW9uIiB0aGVuCiAgICAgICAgTUsxMjEyX1NQX1Byb2JlX1dyaXRlKCJWMyBGQUlMIHBhY2thZ2UubG9hZGxpYl91bmF2YWlsYWJsZSIpCiAgICAgICAgcmV0dXJuCiAgICBlbmQKCiAgICBsb2NhbCBjYW5kaWRhdGVzID0geyJ0d2RsbF9hdHRpbGEuZGxsIiwgIi4vdHdkbGxfYXR0aWxhLmRsbCIsICJ0d2RsbC5kbGwiLCAiLi90d2RsbC5kbGwifQoKICAgIGZvciBpID0gMSwgI2NhbmRpZGF0ZXMgZG8KICAgICAgICBsb2NhbCBwYXRoID0gY2FuZGlkYXRlc1tpXQogICAgICAgIGxvY2FsIG9rX2xvYWQsIGxvYWRlciwgbG9hZF9lcnIgPSBwY2FsbChwYWNrYWdlLmxvYWRsaWIsIHBhdGgsICJsdWFvcGVuX3R3ZGxsIikKCiAgICAgICAgaWYgb2tfbG9hZCBhbmQgdHlwZShsb2FkZXIpID09ICJmdW5jdGlvbiIgdGhlbgogICAgICAgICAgICBNSzEyMTJfU1BfUHJvYmVfV3JpdGUoIlYzIExPQURMSUJfT0sgcGF0aD0iIC4uIHRvc3RyaW5nKHBhdGgpKQogICAgICAgICAgICBsb2NhbCBva19vcGVuLCBtb2R1bGVfb3JfZXJyb3IgPSBwY2FsbChsb2FkZXIpCgogICAgICAgICAgICBpZiBva19vcGVuIGFuZCB0eXBlKG1vZHVsZV9vcl9lcnJvcikgPT0gInRhYmxlIiB0aGVuCiAgICAgICAgICAgICAgICBNSzEyMTJfU1BfUFJPQkVfVFdETEwgPSBtb2R1bGVfb3JfZXJyb3IKICAgICAgICAgICAgICAgIHR3ZGxsID0gbW9kdWxlX29yX2Vycm9yCiAgICAgICAgICAgICAgICBNSzEyMTJfU1BfUHJvYmVfV3JpdGUoIlYzIExVQU9QRU5fT0siKQoKICAgICAgICAgICAgICAgIGlmIG1vZHVsZV9vcl9lcnJvci5jb3JlIHRoZW4KICAgICAgICAgICAgICAgICAgICBpZiB0eXBlKG1vZHVsZV9vcl9lcnJvci5jb3JlLkdhbWVCdWlsZCkgPT0gImZ1bmN0aW9uIiB0aGVuCiAgICAgICAgICAgICAgICAgICAgICAgIGxvY2FsIG9rX2dhbWUsIHZhbHVlID0gcGNhbGwobW9kdWxlX29yX2Vycm9yLmNvcmUuR2FtZUJ1aWxkKQogICAgICAgICAgICAgICAgICAgICAgICBNSzEyMTJfU1BfUHJvYmVfV3JpdGUoIlYzIEdBTUVfQlVJTEQgb2s9IiAuLiB0b3N0cmluZyhva19nYW1lKSAuLiAiIHZhbHVlPSIgLi4gdG9zdHJpbmcodmFsdWUpKQogICAgICAgICAgICAgICAgICAgIGVuZAoKICAgICAgICAgICAgICAgICAgICBpZiB0eXBlKG1vZHVsZV9vcl9lcnJvci5jb3JlLkdldEJ1aWxkU2hhKSA9PSAiZnVuY3Rpb24iIHRoZW4KICAgICAgICAgICAgICAgICAgICAgICAgbG9jYWwgb2tfc2hhLCB2YWx1ZSA9IHBjYWxsKG1vZHVsZV9vcl9lcnJvci5jb3JlLkdldEJ1aWxkU2hhKQogICAgICAgICAgICAgICAgICAgICAgICBNSzEyMTJfU1BfUHJvYmVfV3JpdGUoIlYzIEJVSUxEX1NIQSBvaz0iIC4uIHRvc3RyaW5nKG9rX3NoYSkgLi4gIiB2YWx1ZT0iIC4uIHRvc3RyaW5nKHZhbHVlKSkKICAgICAgICAgICAgICAgICAgICBlbmQKCiAgICAgICAgICAgICAgICAgICAgaWYgdHlwZShtb2R1bGVfb3JfZXJyb3IuY29yZS5Mb2cpID09ICJmdW5jdGlvbiIgdGhlbgogICAgICAgICAgICAgICAgICAgICAgICBwY2FsbChtb2R1bGVfb3JfZXJyb3IuY29yZS5Mb2csICJbU1AtUFJPQkUtVjNdIGx1YW9wZW5fdHdkbGwgc3VjY2VlZGVkIikKICAgICAgICAgICAgICAgICAgICBlbmQKICAgICAgICAgICAgICAgIGVuZAoKICAgICAgICAgICAgICAgIHJldHVybgogICAgICAgICAgICBlbmQKCiAgICAgICAgICAgIE1LMTIxMl9TUF9Qcm9iZV9Xcml0ZSgiVjMgTFVBT1BFTl9GQUlMIGVycj0iIC4uIHRvc3RyaW5nKG1vZHVsZV9vcl9lcnJvcikpCiAgICAgICAgICAgIHJldHVybgogICAgICAgIGVuZAoKICAgICAgICBNSzEyMTJfU1BfUHJvYmVfV3JpdGUoCiAgICAgICAgICAgICJWMyBMT0FETElCX0ZBSUwgcGF0aD0iIC4uIHRvc3RyaW5nKHBhdGgpIC4uCiAgICAgICAgICAgICIgb2s9IiAuLiB0b3N0cmluZyhva19sb2FkKSAuLgogICAgICAgICAgICAiIGxvYWRlcj0iIC4uIHRvc3RyaW5nKGxvYWRlcikgLi4KICAgICAgICAgICAgIiBlcnI9IiAuLiB0b3N0cmluZyhsb2FkX2VycikKICAgICAgICApCiAgICBlbmQKZW5kCgpNSzEyMTJfU1BfUHJvYmVfTG9hZCgpCgpjbTpyZWdpc3Rlcl9maXJzdF90aWNrX2NhbGxiYWNrKAogICAgZnVuY3Rpb24oKQogICAgICAgIE1LMTIxMl9TUF9Qcm9iZV9Xcml0ZSgiVjMgRklSU1RfVElDSyIpCiAgICAgICAgaWYgTUsxMjEyX1NQX1BST0JFX1RXRExMCiAgICAgICAgYW5kIE1LMTIxMl9TUF9QUk9CRV9UV0RMTC53b3JsZAogICAgICAgIGFuZCB0eXBlKE1LMTIxMl9TUF9QUk9CRV9UV0RMTC53b3JsZC5HZXRGYWN0aW9uQ291bnQpID09ICJmdW5jdGlvbiIgdGhlbgogICAgICAgICAgICBsb2NhbCBva19jb3VudCwgdmFsdWUgPSBwY2FsbChNSzEyMTJfU1BfUFJPQkVfVFdETEwud29ybGQuR2V0RmFjdGlvbkNvdW50KQogICAgICAgICAgICBNSzEyMTJfU1BfUHJvYmVfV3JpdGUoIlYzIEZBQ1RJT05TIG9rPSIgLi4gdG9zdHJpbmcob2tfY291bnQpIC4uICIgdmFsdWU9IiAuLiB0b3N0cmluZyh2YWx1ZSkpCiAgICAgICAgZW5kCiAgICBlbmQKKQo="
+          [System.IO.File]::WriteAllBytes("probe-src/campaigns/main_attila/scripting.lua", [Convert]::FromBase64String($b64))
 
       - name: Install prebuilt RPFM CLI 4.5.4
         shell: pwsh
@@ -199,7 +84,7 @@ dst.write_text(text + tail, encoding="utf-8")
           Copy-Item "build/twdll-attila/Release/twdll.dll" "$root/DROP-IN/twdll.dll"
           Copy-Item "zzz_mk1212_twdll_sp_probe_v3.pack" "$root/zzz_mk1212_twdll_sp_probe_v3.pack"
 
-          @(
+          $readme = @(
             "MK1212 TWDLL SP PROBE V3",
             "========================",
             "Exact native source SHA: 7c6f5b6d691313f128e9212e37c87c2292e79504",
@@ -210,28 +95,20 @@ dst.write_text(text + tail, encoding="utf-8")
             "   mod `"zzz_mk1212_twdll_sp_probe_v3.pack`";",
             "4. Keep it LAST among MK1212 mod lines.",
             "5. Start MK1212 single player and reach the campaign map.",
-            "6. Search the Attila game directory for MK1212_SP_PROBE_BOOT.txt and twdll.log.",
-            "",
-            "Interpretation:",
-            "- no MK1212_SP_PROBE_BOOT.txt = this pack is not winning/being loaded",
-            "- BOOT exists + LOADLIB_FAIL = loader/path/dependency problem",
-            "- LOADLIB_OK + LUAOPEN_FAIL = ABI/signature init problem",
-            "- LUAOPEN_OK = native module loaded"
-          ) | Set-Content -Encoding UTF8 "$root/README-FIRST.txt"
+            "6. Search for MK1212_SP_PROBE_BOOT.txt and twdll.log."
+          )
+          $readme | Set-Content -Encoding UTF8 "$root/README-FIRST.txt"
 
-          @'
-$ErrorActionPreference = "Continue"
-$script = Join-Path $env:APPDATA "The Creative Assembly\Attila\scripts\user.script.txt"
-Write-Host "user.script.txt: $script"
-if (Test-Path $script) {
-    Write-Host "---- user.script.txt ----"
-    Get-Content $script
-    Write-Host "---- probe line ----"
-    Select-String -Path $script -Pattern "zzz_mk1212_twdll_sp_probe_v3.pack"
-} else {
-    Write-Warning "user.script.txt does not exist"
-}
-'@ | Set-Content -Encoding UTF8 "$root/VERIFY-USER-SCRIPT.ps1"
+          $verify = @(
+            '$ErrorActionPreference = "Continue"',
+            '$script = Join-Path $env:APPDATA "The Creative Assembly\Attila\scripts\user.script.txt"',
+            'Write-Host "user.script.txt: $script"',
+            'if (Test-Path $script) {',
+            '  Get-Content $script',
+            '  Select-String -Path $script -Pattern "zzz_mk1212_twdll_sp_probe_v3.pack"',
+            '} else { Write-Warning "user.script.txt does not exist" }'
+          )
+          $verify | Set-Content -Encoding UTF8 "$root/VERIFY-USER-SCRIPT.ps1"
 
           Get-ChildItem $root -Recurse -File | Get-FileHash -Algorithm SHA256 |
             ForEach-Object {
@@ -247,3 +124,4 @@ if (Test-Path $script) {
           name: MK1212-twdll-SP-PROBE-V3-7c6f5b6d691313f128e9212e37c87c2292e79504
           path: MK1212-twdll-SP-PROBE-V3-7c6f5b6d691313f128e9212e37c87c2292e79504.zip
           retention-days: 7
+          if-no-files-found: error
