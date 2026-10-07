@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <cstddef>
 #include "common/tw.h"
 #include "common/campaign_hooks.h"
 #include "common/game_api.h"
@@ -33,10 +34,15 @@ extern void register_tweaker_methods(lua_State *L);
 extern void uninstall_tweakers();
 
 static bool g_is_initialized = false;
+static size_t g_active_lua_state_count = 0;
 
 static int l_twdll_gc_cleanup(lua_State*) {
-    if (g_is_initialized) {
-        Log("[twdll] GC destroying Lua state — uninstalling campaign hooks and tweakers");
+    if (g_active_lua_state_count > 0) {
+        --g_active_lua_state_count;
+    }
+
+    if (g_is_initialized && g_active_lua_state_count == 0) {
+        Log("[twdll] Last Lua state destroyed — uninstalling campaign hooks and tweakers");
         uninstall_tweakers();
         uninstall_campaign_hooks();
         g_is_initialized = false;
@@ -44,20 +50,9 @@ static int l_twdll_gc_cleanup(lua_State*) {
     return 0;
 }
 
-static const char* dll_reason_name(DWORD reason) {
-    switch (reason) {
-        case DLL_PROCESS_DETACH: return "DLL_PROCESS_DETACH";
-        case DLL_PROCESS_ATTACH: return "DLL_PROCESS_ATTACH";
-        case DLL_THREAD_ATTACH:  return "DLL_THREAD_ATTACH";
-        case DLL_THREAD_DETACH:  return "DLL_THREAD_DETACH";
-        default:                 return "UNKNOWN";
-    }
-}
-
 BOOL APIENTRY DllMain(const HMODULE hModule, const DWORD reason, LPVOID) {
-    Log("DllMain() called, reason=%u (%s)", reason, dll_reason_name(reason));
     if (reason == DLL_PROCESS_ATTACH) {
-        Log("DllMain() PROCESS_ATTACH: disabling thread attach/detach calls");
+        // Do not log, allocate, lock, scan or install hooks while the Windows loader lock is held.
         DisableThreadLibraryCalls(hModule);
     }
     return TRUE;
@@ -72,8 +67,11 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     Log("[twdll] luaopen_twdll: called");
 
     if (!g_is_initialized) {
-        Log("[twdll] First load: initializing Game API and hooks");
-        initialize_lua_api();
+        Log("[twdll] First load: initializing Lua ABI, Game API and hooks");
+        if (!initialize_lua_api()) {
+            Log("[twdll] luaopen_twdll: initialization aborted because the required Lua ABI is incomplete");
+            return 0;
+        }
         initialize_game_api();
         install_campaign_hooks();
         g_is_initialized = true;
@@ -87,7 +85,8 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     }
     l_settop(L, 0);
 
-    Log("[twdll] luaopen_twdll: registering modules");
+    ++g_active_lua_state_count;
+    Log("[twdll] luaopen_twdll: registering modules (active Lua states: %zu)", g_active_lua_state_count);
 
     l_createtable(L, 0, 8);
 

@@ -19,6 +19,7 @@ extern void uninstall_battle_hook();
 extern void uninstall_cai_hooks();
 
 static const char* TARGET_MODULE = "empire.retail.dll";
+static bool g_minhook_initialized = false;
 
 void install_campaign_hooks() {
     Log("[twdll] install_campaign_hooks: starting for %s", TARGET_MODULE);
@@ -43,6 +44,7 @@ void install_campaign_hooks() {
         Log("[twdll] install_campaign_hooks: MH_Initialize failed (%d)", mhs);
         return;
     }
+    g_minhook_initialized = true;
 
     install_world_hook(base, size);
     install_campaign_ui_hook(base, size);
@@ -56,14 +58,21 @@ void install_campaign_hooks() {
 
 void uninstall_campaign_hooks() {
     Log("[twdll] uninstall_campaign_hooks: starting");
-    // Disable and remove installed hooks, then clear global pointers.
+
     uninstall_world_hook();
     uninstall_campaign_ui_hook();
     uninstall_settlement_slots_hook();
     uninstall_model_hook();
     uninstall_battle_hook();
     uninstall_cai_hooks();
-    // Optionally deinitialize MinHook if no longer needed.
-    MH_Uninitialize();
+
+    if (g_minhook_initialized) {
+        MH_STATUS mhs = MH_Uninitialize();
+        if (mhs != MH_OK && mhs != MH_ERROR_NOT_INITIALIZED) {
+            Log("[twdll] uninstall_campaign_hooks: MH_Uninitialize failed (%d)", mhs);
+        }
+        g_minhook_initialized = false;
+    }
+
     Log("[twdll] uninstall_campaign_hooks: done");
 }

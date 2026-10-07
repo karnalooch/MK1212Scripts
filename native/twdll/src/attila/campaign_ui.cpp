@@ -99,6 +99,9 @@ void install_campaign_ui_hook(uintptr_t base, size_t size) {
     mhs = MH_EnableHook(reinterpret_cast<void*>(ctor_addr));
     if (mhs != MH_OK) {
         Log("[twdll] [%s] MH_EnableHook failed (%d)", label, mhs);
+        MH_RemoveHook(reinterpret_cast<void*>(ctor_addr));
+        campaign_ui_ctor_addr = 0;
+        orig_campaign_ui_ctor = nullptr;
         return;
     }
 
@@ -149,19 +152,23 @@ void install_settlement_slots_hook(uintptr_t base, size_t size) {
         Log("[twdll] [%s] signature not resolved", label);
         return;
     }
-    settlement_cb_initialize_addr = g_settlement_cb_initialize_addr;
+    const uintptr_t target_addr = g_settlement_cb_initialize_addr;
 
-    MH_STATUS mhs = MH_CreateHook(reinterpret_cast<void*>(settlement_cb_initialize_addr),
+    MH_STATUS mhs = MH_CreateHook(reinterpret_cast<void*>(target_addr),
                                   reinterpret_cast<void*>(HookedSettlementCallbackInitialize),
                                   reinterpret_cast<void**>(&orig_settlement_cb_initialize));
     if (mhs != MH_OK) {
         Log("[twdll] [%s] MH_CreateHook failed (%d)", label, mhs);
         return;
     }
+    settlement_cb_initialize_addr = target_addr;
 
-    mhs = MH_EnableHook(reinterpret_cast<void*>(settlement_cb_initialize_addr));
+    mhs = MH_EnableHook(reinterpret_cast<void*>(target_addr));
     if (mhs != MH_OK) {
         Log("[twdll] [%s] MH_EnableHook failed (%d)", label, mhs);
+        MH_RemoveHook(reinterpret_cast<void*>(target_addr));
+        settlement_cb_initialize_addr = 0;
+        orig_settlement_cb_initialize = nullptr;
         return;
     }
 

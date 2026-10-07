@@ -15,7 +15,12 @@ bool is_valid_game_host() {
         return static_cast<char>(std::tolower(c));
     });
 
-    if (path_lower.find("attila.exe") == std::string::npos) {
+    const size_t slash = path_lower.find_last_of("\\/");
+    const std::string exe_name = (slash == std::string::npos)
+        ? path_lower
+        : path_lower.substr(slash + 1);
+
+    if (exe_name != "attila.exe") {
         return false;
     }
 

@@ -9,7 +9,14 @@ All notable changes to this project will be documented in this file.
 - Added `twdll.battle.EnableSmeHealthBars([enabled=true])` — updates health bars on unit cards and 3D banners in real time for 1-man units (SMEs, monsters, single heroes) based on remaining hit points.
 
 ### Fixed
+- Fixed DLL initialization so an incomplete required Lua runtime API fails closed instead of continuing into module registration with unresolved native entry points.
+- Fixed native hook lifecycle so partial MinHook failures roll back immediately and hooks remain owned until the final Lua environment using twdll is collected.
 - Fixed `twdll.tweakers.SetInt(name, val)` returning `true` when setting non-existent tweaker names, properly returning `false` on unresolved names matching `SetFloat` and `SetBool`.
+- Fixed `FACTION_SCRIPT_INTERFACE:SetFactionLeader(..., true)` so the heir-coming-of-age boolean reaches the engine as a boolean instead of being coerced through the integer path.
+- Fixed `REGION_SCRIPT_INTERFACE:SetPopulationSurplus` and `SetGrowthPoints` so negative Lua values clamp to 0 instead of wrapping to a large unsigned value.
+- Fixed `twdll.world.LoadGame` so it returns `false` when the engine load-game signature is unavailable instead of reporting a dispatch that never happened.
+- Fixed campaign-variable rollback so the campaign model and database copies restore their own captured runtime values, and `TWEAKER_SCRIPT_INTERFACE:SetRawValue` preserves the raw 32-bit float bit pattern when synchronizing campaign variables.
+- Fixed `TWEAKER_SCRIPT_INTERFACE:SetValue` so unsupported Lua value types fail closed instead of reporting success without a valid mutation.
 
 ## [0.10.0] - 2026-08-23
 
@@ -45,6 +52,7 @@ All notable changes to this project will be documented in this file.
 - Extended the game's unit interface (`UNIT_SCRIPT_INTERFACE`) with `ConvertUnit(unit_key)` — replaces the unit with a new unit of the given type in the same army, using the engine's native unit conversion path (same as religion/technology upgrades). Health proportion (scaled men count), experience, and combat statistics are preserved, and general bodyguard snapshots are automatically synchronised. The original unit object is destroyed.
 
 ### Changed
+- `twdll.core.Log` now bounds each native log line to 4096 bytes, processes at most 64 Lua arguments per call, and stops appending once `twdll.log` reaches 8 MiB; hitting the diagnostics budget does not alter gameplay.
 - `twdll.world.SetMaxTraits([val])`, `twdll.world.SetMaxUnitsInArmy([val])`, `twdll.world.SetMaxUnitsInNavy([val])`, and `twdll.world.SetReinforcementCap([val])` now accept no arguments or `nil` to restore the game's vanilla defaults, and all modified world/engine limits are automatically rolled back to their original vanilla values when the Lua environment is detached/cleaned up.
 - `twdll.core.Log` now accepts any number of arguments of any Lua data type (e.g. `nil`, numbers, booleans, tables, userdata), automatically converting them via Lua's `tostring` similar to standard `print(...)`.
 - `GetInfluence` / `SetInfluence` replace the legacy Rome 2 character methods (`GetGravitas` / `SetGravitas` and `GetAmbition` / `SetAmbition`).

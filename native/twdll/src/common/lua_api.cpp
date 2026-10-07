@@ -35,34 +35,43 @@ lua_settop_t        g_game_lua_settop        = nullptr;
 extern const char*            GAME_MODULE_NAME;
 extern const TW_SignatureInfo g_signatures[];
 
-void initialize_lua_api() {
+bool initialize_lua_api() {
     HMODULE hMod = GetModuleHandleA(GAME_MODULE_NAME);
     if (!hMod) {
         Log("[twdll] initialize_lua_api: failed to get handle for '%s'", GAME_MODULE_NAME);
-        return;
+        return false;
     }
 
     MODULEINFO mi = {};
     if (!GetModuleInformation(GetCurrentProcess(), hMod, &mi, sizeof(mi))) {
         Log("[twdll] initialize_lua_api: GetModuleInformation failed for '%s'", GAME_MODULE_NAME);
-        return;
+        return false;
     }
 
     uintptr_t base = reinterpret_cast<uintptr_t>(hMod);
     size_t    size = mi.SizeOfImage;
+    size_t    total = 0;
+    size_t    resolved = 0;
 
     for (const TW_SignatureInfo* s = g_signatures; s->function_name != nullptr; ++s) {
+        ++total;
+        if (s->target_function_ptr) {
+            *s->target_function_ptr = nullptr;
+        }
+
         if (!s->signature || s->signature[0] == '\0') {
-            Log("[twdll] Skipping '%s': empty signature", s->function_name);
+            Log("[twdll] REQUIRED Lua signature is empty: %s", s->function_name);
             continue;
         }
+
         try {
             uintptr_t addr = Scanner::find_signature(base, size, s->signature);
-            if (addr) {
+            if (addr && s->target_function_ptr) {
                 *s->target_function_ptr = reinterpret_cast<void*>(addr);
+                ++resolved;
                 Log("[twdll] Found: %s", s->function_name);
             } else {
-                Log("[twdll] NOT FOUND: %s", s->function_name);
+                Log("[twdll] REQUIRED Lua signature NOT FOUND: %s", s->function_name);
             }
         } catch (const std::exception& e) {
             Log("[twdll] Exception scanning '%s': %s", s->function_name, e.what());
@@ -70,4 +79,14 @@ void initialize_lua_api() {
             Log("[twdll] Unknown exception scanning '%s'", s->function_name);
         }
     }
+
+    if (total == 0 || resolved != total) {
+        Log("[twdll] initialize_lua_api: FAIL-CLOSED (%zu/%zu required Lua entry points resolved)",
+            resolved, total);
+        return false;
+    }
+
+    Log("[twdll] initialize_lua_api: complete (%zu/%zu required Lua entry points resolved)",
+        resolved, total);
+    return true;
 }

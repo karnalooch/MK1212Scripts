@@ -115,11 +115,19 @@ jobs:
 
       - name: Configure Attila x86 build
         shell: pwsh
-        run: cmake -S native/twdll -B build/twdll-attila -A Win32 -DTW_GAME=attila
+        run: cmake -S native/twdll -B build/twdll-attila -A Win32 -DTW_GAME=attila -DBUILD_TESTING=ON
 
       - name: Build twdll target
         shell: pwsh
         run: cmake --build build/twdll-attila --config Release --target twdll --parallel 2
+
+      - name: Build native scanner tests
+        shell: pwsh
+        run: cmake --build build/twdll-attila --config Release --target twdll_signature_scanner_tests --parallel 2
+
+      - name: Run native scanner tests
+        shell: pwsh
+        run: ctest --test-dir build/twdll-attila -C Release --output-on-failure
 
       - name: Verify Attila DLL PE contract
         shell: pwsh

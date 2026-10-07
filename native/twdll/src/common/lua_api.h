@@ -165,8 +165,8 @@ struct TW_SignatureInfo {
     const char* signature;
 };
 
-// Initializes all g_game_* pointers via signature scanning.
-// Called from DllMain on DLL_PROCESS_ATTACH.
-void initialize_lua_api();
+// Resolves all Lua ABI entry points required by the module.
+// Returns false if any required signature is missing; callers must fail closed.
+bool initialize_lua_api();
 
 #endif // BUILD_TESTING_LUA

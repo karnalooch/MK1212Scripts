@@ -8,11 +8,25 @@
 
 Run custom C++ code inside Total War: Attila's Lua engine. (Rome 2 support is frozen.)
 
+> [!IMPORTANT]
+> **MK1212 monorepo note:** this directory is now the maintained native source for
+> `karnalooch/MK1212Scripts`. The upstream badges, release links and API site below remain useful
+> provenance/reference, but upstream nightly binaries do **not** contain MK1212-specific runtime
+> hardening. For MK1212 runtime evidence, build from an exact MK1212Scripts commit and record
+> `twdll.core.GetBuildSha()`. See
+> `../../docs/research/TWDLL_RUNTIME_AUDIT.md` and
+> `../../docs/research/TWDLL_OBSERVABILITY_BACKEND.md`.
+
 ## Installation
 
-1. Download the latest development build: [**`libtwdll-nightly.zip`**](https://github.com/bukowa/twdll/releases/download/nightly/libtwdll-nightly.zip) (or check all releases on the [Dev Build page](https://github.com/bukowa/twdll/releases/tag/nightly))
-2. Extract `twdll_attila.dll` into your Total War: Attila game root directory (where `Attila.exe` is located)
-3. The DLL is active and ready to be loaded by your mod script
+For upstream twdll users, the upstream nightly remains available from
+[**`libtwdll-nightly.zip`**](https://github.com/bukowa/twdll/releases/download/nightly/libtwdll-nightly.zip).
+
+For **MK1212**, build the DLL from the exact monorepo commit being tested instead of substituting the upstream nightly.
+
+1. Configure/build the Attila Win32 target from `native/twdll/`.
+2. Copy the resulting `twdll.dll`/packaged Attila DLL to the Total War: Attila game root directory (where `Attila.exe` is located).
+3. Record the MK1212Scripts SHA returned by `twdll.core.GetBuildSha()` with any runtime evidence.
 
 ## Usage
 
@@ -38,7 +52,9 @@ twdll.core.Log("Hello from C++!")
 > the current hook architecture works, not a permanent contract — it may change in the future.
 
 ## Documentation
-- [Online API Documentation](https://bukowa.github.io/twdll/)
+- [Online upstream API Documentation](https://bukowa.github.io/twdll/)
+- [MK1212 runtime/code audit](../../docs/research/TWDLL_RUNTIME_AUDIT.md)
+- [MK1212 observability contract](../../docs/research/TWDLL_OBSERVABILITY_BACKEND.md)
 
 > **Rome 2 support is frozen.** No code, build, or docs changes are actively made for Rome 2 —
 > the `src/rome2/`, `tests/rome2/`, and `docs/rome2/` trees are preserved as-is. Active development,
