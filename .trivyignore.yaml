@@ -1,0 +1,5 @@
+misconfigurations:
+  - id: AVD-DS-0002
+    paths:
+      - "native/twdll/docs/lua/ldoc/Dockerfile"
+    statement: "Imported upstream LDoc tooling intentionally starts as root so its entrypoint can drop privileges to the mounted workdir owner; it is not used by MK1212 runtime or native CI."

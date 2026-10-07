@@ -41,6 +41,8 @@ REQUIRED_FILES = (
     "native/twdll/tests/attila/tests.save",
     "native/twdll/vendor/minhook/CMakeLists.txt",
     "native/twdll/vendor/minhook/LICENSE.txt",
+    "trivy.yaml",
+    ".trivyignore.yaml",
 )
 TEXT_SUFFIXES = {".lua", ".tsv", ".md", ".yml", ".yaml", ".json", ".py"}
 CONFLICT_MARKER_RE = re.compile(rb"(?m)^\\s*(?:<{7}(?:\\s|$)|={7}(?:\\s|$)|>{7}(?:\\s|$))")
@@ -72,6 +74,24 @@ for expected in (
 
 if (ROOT / "native/twdll/.gitmodules").exists():
     fail("native/twdll must vendor MinHook; nested .gitmodules is not allowed")
+
+if (ROOT / ".trivyignore").exists():
+    fail("global .trivyignore is not allowed; keep security exceptions path-scoped")
+
+trivy_config = (ROOT / "trivy.yaml").read_text(encoding="utf-8").strip()
+if trivy_config != "ignorefile: .trivyignore.yaml":
+    fail("trivy.yaml must only select the path-scoped .trivyignore.yaml")
+
+trivy_ignore = (ROOT / ".trivyignore.yaml").read_text(encoding="utf-8")
+for expected in (
+    "AVD-DS-0002",
+    "native/twdll/docs/lua/ldoc/Dockerfile",
+    "Imported upstream LDoc tooling",
+):
+    if expected not in trivy_ignore:
+        fail(f"Trivy exception contract missing: {expected}")
+if trivy_ignore.count("- id:") != 1 or trivy_ignore.count("paths:") != 1:
+    fail("Trivy exception contract must contain exactly one path-scoped finding")
 
 lua_files = sorted(ROOT.rglob("*.lua"))
 tsv_files = sorted(ROOT.rglob("*.tsv"))
