@@ -51,6 +51,7 @@ Canonical research docs:
 - `docs/research/SCRIPT_SAFETY_GUARDRAILS.md`
 - `docs/research/TWDLL_OBSERVABILITY_BACKEND.md`
 - `docs/research/MP_DUAL_PEER_SIMULATION.md`
+- `docs/research/MP_FULL_EXPERIMENTAL_PROFILE.md`
 
 ## Native runtime observability
 
@@ -94,6 +95,10 @@ Mandatory rules:
 - Existing synchronization hazards are technical debt to audit deliberately; do not silently broaden a change into a mass rewrite.
 - Any change to MP-sensitive RNG, feature gating, vassal/diplomacy correlation, persistence, deferred operations or native-observability boundaries MUST update or extend the dual-peer simulation/source contracts when behavior changes.
 - A green dual-peer simulator is repository-level proof only. It MUST NOT be reported as RUNTIME-PROVEN Attila multiplayer evidence.
+- `campaigns/main_attila/common/mkmp_features.lua` is the canonical script-side MP feature registry. Do not add new scattered MP unlock guards when the registry can express the policy.
+- Features classified as `experimental_local_ui` or `experimental_choice_event` MAY be enabled in the experimental profile but MUST remain explicitly labeled runtime-unproven until #15-style two-peer evidence exists.
+- Peer-local modifiers and external mutators MUST remain fail-closed unless a separate synchronization/environment contract proves them safe.
+- The full-profile matriculation test is a mandatory repository-level gate for changes that alter MP feature activation or its declared risk mode.
 
 ## Output data integrity — treat it like money in the bank
 
