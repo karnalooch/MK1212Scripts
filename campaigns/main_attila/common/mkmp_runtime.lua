@@ -22,6 +22,17 @@ MKMP_RUNTIME = {
 local function MKMP_Runtime_Log_Internal(message)
 	local text = "[MKMP][RUNTIME] "..tostring(message);
 
+	if MKMP_Debug_Log then
+		MKMP_Debug_Log(
+			"runtime",
+			{
+				message = message,
+				available = MKMP_RUNTIME.available,
+				reason = MKMP_RUNTIME.reason
+			}
+		);
+	end
+
 	if MKMP_RUNTIME.module
 	and MKMP_RUNTIME.module.core
 	and type(MKMP_RUNTIME.module.core.Log) == "function" then

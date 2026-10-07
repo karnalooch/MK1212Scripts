@@ -17,6 +17,15 @@ local PENDING_OPERATION_MAX_AGE_TURNS = 1;
 FACTIONS_TO_FACTIONS_VASSALIZED = {};
 
 local function VassalTrackingLog(message)
+	if MKMP_Debug_Log then
+		MKMP_Debug_Log(
+			"vassal",
+			{
+				message = message
+			}
+		);
+	end
+
 	if dev and dev.log then
 		dev.log("[MKMP][VASSAL] "..tostring(message));
 	end

@@ -14,6 +14,7 @@ require("common/mk1212_campaign_cutscenes");
 require("common/mk1212_localisation_lists");
 require("common/mk1212_update_region_loc");
 require("common/mk1212_vassal_tracking");
+require("common/mkmp_debug");
 require("common/mkmp_runtime");
 
 require("common/ui/mk1212_global_ui");
@@ -24,6 +25,8 @@ if not cm:is_multiplayer() then
 end
 
 function Common_Initializer()
+	MKMP_Debug_Initialize();
+
 	if cm:is_multiplayer() then
 		MKMP_Runtime_Initialize();
 	end

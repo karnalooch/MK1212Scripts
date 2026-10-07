@@ -28,7 +28,11 @@ REQUIRED_FILES = (
     "scripts/ci/mp_contracts.json",
     "scripts/ci/test_mp_dual_peer.py",
     "scripts/ci/test_mp_source_contracts.py",
+    "scripts/ci/test_mp_debug_logging.py",
+    "scripts/ci/compare_mp_debug_logs.py",
+    "campaigns/main_attila/common/mkmp_debug.lua",
     "docs/research/MP_DUAL_PEER_SIMULATION.md",
+    "docs/research/MP_DEBUG_LOGGING.md",
 )
 TEXT_SUFFIXES = {".lua", ".tsv", ".md", ".yml", ".yaml", ".json", ".py"}
 CONFLICT_MARKER_RE = re.compile(rb"(?m)^\\s*(?:<{7}(?:\\s|$)|={7}(?:\\s|$)|>{7}(?:\\s|$))")
