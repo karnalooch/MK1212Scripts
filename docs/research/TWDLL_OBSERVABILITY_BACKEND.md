@@ -1,7 +1,7 @@
 # twdll as the MK1212 runtime observability backend
 
-Status: implementation-ready / runtime proof pending  
-Issue: #7  
+Status: **canonical Attila runtime proven; MK1212 direct integration in progress; two-peer proof pending**  
+Issues: #7, #44  
 Last reviewed: 2026-10-07
 
 ## Links and provenance
@@ -389,7 +389,7 @@ Repository CI now has a separate proof boundary:
 - verify the resulting `twdll.dll` is an x86 PE image;
 - verify the built image contains the `luaopen_twdll` export marker.
 
-These are repository/build proofs only. They do **not** prove that the current Attila executable can load or safely run the DLL.
+Those checks are repository/build proofs only. They do not by themselves prove runtime compatibility; that boundary was later crossed by the canonical real-game proof recorded below.
 
 ## Runtime safety contract after issue #40
 
@@ -404,29 +404,63 @@ The source-level runtime audit in `TWDLL_RUNTIME_AUDIT.md` hardens the native bo
 - diagnostics budget exhaustion is fail-soft and never cancels, retries or changes a gameplay mutation;
 - the host guard requires the actual executable basename `attila.exe` plus `empire.retail.dll`.
 
-This improves failure semantics but is still **REPO-OBSERVED** until an exact current Attila build loads and exercises the DLL.
-
 Issue #42 / PR #43 adds a heavier native proof around that boundary: Release+Debug x86 builds under `/W4 /WX`, deterministic scanner fuzzing, logger concurrency/exact-byte-budget tests, host-guard tests and source-contract checks for the audit fixes. That stress proof found and fixed a Windows text-mode newline expansion bug in the logger budget.
+
+## Canonical real-game Attila proof — 2026-10-07
+
+The repository-native proof is now backed by a real Steam Attila run using the canonical upstream-style test harness and native source SHA:
+
+`7c6f5b6d691313f128e9212e37c87c2292e79504`
+
+Evidence bundle: `TWDLL-RUNTIME-EVIDENCE-20261007-213219.zip`.
+
+Runtime fingerprints recorded by the harness:
+
+- `Attila.exe` SHA-256: `51b833d5b8fd8505a7cd035fd92f68cace681d62ea74d9ad8fbae26326635bf5`;
+- `empire.retail.dll` SHA-256: `8a40cbcff108e1cba14cc7eb6c7f4dfb054c7745b236d1bfc0fde5c85e2a353d`;
+- tested `twdll.dll` SHA-256: `e34da1c67b13d3a30695f1d2fdfc01d02e215017257e7cc1c6918680ebf46189`.
+
+Observed runtime result:
+
+- required Lua ABI resolution: **23/23**;
+- game signatures: **33/33**;
+- native in-game assertions: **224 passed / 0 failed / 0 skipped**;
+- `twdll.core.GetBuildSha()` returned the exact expected repository SHA;
+- WORLD, CAMPAIGN_UI, settlement-slot, CAMPAIGN_MODEL, BATTLE and CAI occupation hooks installed successfully;
+- save -> load executed successfully;
+- final Lua-state teardown restored **3740 tweakers** and **714 campaign variables**, removed hooks, then a fresh Lua state re-resolved **23/23 + 33/33** and reinstalled hooks;
+- lifecycle ended with `All tests and save/load cycle PASSED.`.
+
+This proves **single-player canonical Attila runtime compatibility for that exact executable pair and native SHA**. It does **not** yet prove that the direct MK1212 bootstrap works in-product, nor that two peers observe identical native semantics.
+
+Issue #44 moves from the canonical harness into the real MK1212 bootstrap. The product adapter now initializes from `Common_Initializer()` in both SP and MP, remains optional/fail-closed, validates `GameBuild == "Attila"` and a 40-character native build SHA, and allows only one `luaopen_twdll` per Lua state.
 
 ## Validation plan
 
-### Stage 1 — load proof
+### Stage 1 — canonical load proof — **PASS**
 
-- current 2026 Attila build;
-- exact twdll SHA;
-- load from campaign script;
-- log `GameBuild`;
-- query one read-only world value;
-- unload/exit cleanly.
+- current 2026 Attila build fingerprinted;
+- exact twdll SHA recorded;
+- native module loaded in the real process;
+- `GameBuild` / `GetBuildSha` observed;
+- 23/23 Lua ABI + 33/33 game signatures resolved;
+- clean teardown observed.
 
-### Stage 2 — save/load proof
+### Stage 2 — canonical save/load proof — **PASS**
 
-- new campaign;
-- save;
-- quit;
-- reload;
-- verify native adapter reinitializes cleanly;
-- no duplicate hooks/listeners.
+- canonical test campaign loaded;
+- full native suite passed 224/224;
+- save executed;
+- load executed;
+- hooks/tweakers/campaign variables restored on teardown;
+- fresh Lua state reinitialized cleanly.
+
+### Stage 2b — direct MK1212 product bootstrap — **IN PROGRESS (#44)**
+
+- initialize the same adapter from the canonical MK1212 script path;
+- prove SP product startup with and without the DLL;
+- prove product save/load with no duplicate `luaopen_twdll` in one Lua state;
+- preserve Lua-only gameplay when native observability is unavailable.
 
 ### Stage 3 — two-peer passive proof
 
@@ -468,22 +502,31 @@ Until then:
 
 ## Current implementation state
 
-Implemented without claiming runtime proof:
+RUNTIME-PROVEN in the canonical single-player Attila harness:
 
-- optional `package.loadlib` under `pcall`;
-- missing DLL -> Lua-only gameplay continues;
-- failed `luaopen_twdll` -> Lua-only gameplay continues;
-- campaign singleton query occurs only from `Common_Initializer` after the campaign world exists;
-- native build SHA and faction count are diagnostic only;
+- current tested Attila executable pair loads the exact native SHA;
+- required Lua ABI resolves 23/23;
+- game signatures resolve 33/33;
+- native in-game suite passes 224/224;
+- save/load reinitialization works with clean teardown and re-hooking.
+
+Implemented for direct MK1212 integration on issue #44:
+
+- `Common_Initializer()` initializes runtime observability in **both SP and MP**;
+- repeated initialization in one Lua state is idempotent;
+- loader candidates cover `twdll_attila.dll`, canonical `twdll`, and `twdll.dll`;
+- wrong game identity or invalid build SHA fails closed;
+- missing DLL / failed `luaopen_twdll` leaves normal Lua gameplay running;
+- campaign singleton query remains after the campaign world exists;
+- native build SHA and faction count remain diagnostic only;
 - battle memory addresses are filtered;
-- deterministic Lua-side semantic campaign snapshot is available for later comparison.
+- deterministic Lua-side semantic campaign snapshot remains available for later comparison.
 
-Still intentionally unproven until the final runtime pass:
+Still intentionally unproven:
 
-- current 2026 Attila binary compatibility;
-- save/load reinitialization;
+- direct MK1212 product runtime proof after #44 is packaged;
 - two-peer passive behavior;
 - exact host/client equality of semantic snapshots;
-- whether loading twdll itself changes any MP engine behavior.
+- whether merely loading twdll on both peers changes multiplayer engine behavior.
 
-Those items remain open because they require running Attila, not because the adapter lacks an implementation path.
+The remaining multiplayer items require real host/client Attila sessions and stay tracked separately from repository simulation.
