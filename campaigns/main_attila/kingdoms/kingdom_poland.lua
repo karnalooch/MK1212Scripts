@@ -29,7 +29,7 @@ function Add_Kingdom_Poland_Listeners()
 		);
 	end
 
-	if cm:is_multiplayer() == false then
+	if MKMP_FeatureEnabled("decisions") then
 		Register_Decision(
 			"form_kingdom_poland", 
 			function() 	
@@ -87,7 +87,7 @@ function Polish_Regions_Check(context)
 	POLISH_KINGDOM_REGIONS_OWNED = has_regions;
 		
 	if has_regions == true then
-		if cm:is_multiplayer() == true or context:faction():is_human() == false then
+		if context:faction():is_human() == false or not MKMP_FeatureEnabled("decisions") then
 			Polish_Kingdom_Formed(faction_name);
 		elseif not mkHRE or faction_name ~= mkHRE.emperor_key then
 			Enable_Decision("form_kingdom_poland");
@@ -100,7 +100,7 @@ function Polish_Kingdom_Formed(faction_name)
 	POLISH_KINGDOM_FACTION = faction_name;
 	Rename_Faction(faction_name, faction_name.."_lvl"..tostring(FACTIONS_DFN_LEVEL[faction_name]));
 
-	if cm:is_multiplayer() == false then
+	if MKMP_FeatureEnabled("decisions") then
 		Remove_Decision("form_kingdom_poland");
 		Add_Decision("found_an_empire", faction_name, false, false);
 	end

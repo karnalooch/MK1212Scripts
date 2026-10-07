@@ -83,6 +83,7 @@ flowchart LR
 - [MK1212 scripting safety guardrails](SCRIPT_SAFETY_GUARDRAILS.md)
 - [twdll as the MK1212 runtime observability backend](TWDLL_OBSERVABILITY_BACKEND.md)
 - [Dual-peer multiplayer simulation harness](MP_DUAL_PEER_SIMULATION.md)
+- [Full experimental multiplayer script profile](MP_FULL_EXPERIMENTAL_PROFILE.md)
 - [Upstream author handoff: multiplayer hardening](MULTIPLAYER_HARDENING_AUTHOR_HANDOFF.md)
 
 ## Evidence states

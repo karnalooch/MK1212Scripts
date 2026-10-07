@@ -778,3 +778,47 @@ testing                    -> one exact-SHA final two-peer proof
 No intentional gameplay rebalance is part of this hardening work.
 
 The long-term goal is to make the existing multiplayer subset deterministic and diagnosable first, then re-enable currently disabled mechanics one at a time with evidence rather than assumptions.
+
+
+---
+
+# 13. Experimental full multiplayer script profile
+
+After the initial hardening work, the fork added an explicit engineering profile:
+
+`full_experimental_v1`
+
+Canonical documentation:
+
+- `docs/research/MP_FULL_EXPERIMENTAL_PROFILE.md`
+- issue #30
+
+The profile re-enables the script-side campaign systems that were historically excluded by multiplayer guards, including:
+
+- Annex Vassals;
+- Buffer States;
+- Decisions;
+- HRE;
+- Population;
+- Region Trading;
+- Occupation Decisions / region gifting;
+- Crusades and Pope/Crusade UI;
+- HRE Story Events;
+- Sicily Story Events;
+- religion-conversion UI recheck.
+
+It also restores SP-like decision flow for human multiplayer factions where the old MP code automatically resolved Kingdom/DFN/Byzantine/Papal decision paths.
+
+The following remain deliberately blocked:
+
+- Challenges;
+- Ironman/Achievements;
+- Lucky Nations;
+- legacy MK1212 networking/chat helper;
+- Change Capital external executable mutation.
+
+Every enabled feature has an explicit risk mode. Local-UI-driven features are labeled `experimental_local_ui`, and Sicily's choice path is labeled `experimental_choice_event`.
+
+This is intentionally stronger than simply deleting `cm:is_multiplayer()` guards: the registry records what is enabled, why, and which parts still require real two-peer Attila proof.
+
+The profile is covered by a high-level CI matriculation suite in addition to the existing dual-peer unit/fuzz tests. A green result proves repository-level contract consistency, not Attila runtime replication.

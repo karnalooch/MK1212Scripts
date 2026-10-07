@@ -143,6 +143,7 @@ function MKMP_Runtime_Get_Environment_Fingerprint()
 			"multiplayer="..tostring(cm:is_multiplayer()),
 			"game="..tostring(MKMP_RUNTIME.game_build),
 			"twdll="..tostring(MKMP_RUNTIME.twdll_sha),
+			"features="..MKMP_FeatureProfileFingerprint(),
 			limits
 		},
 		"|"

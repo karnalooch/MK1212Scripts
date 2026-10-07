@@ -32,8 +32,11 @@ function Story_Initializer()
 		Add_Hungary_Story_Events_Listeners();
 		Add_Reconquista_Story_Events_Listeners();
 
-		if cm:is_multiplayer() == false then
+		if MKMP_FeatureEnabled("hre_story") then
 			Add_HRE_Story_Events_Listeners();
+		end
+
+		if MKMP_FeatureEnabled("sicily_story") then
 			Add_Sicily_Story_Events_Listeners();
 		end
 	end

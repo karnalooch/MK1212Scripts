@@ -50,11 +50,17 @@ function Add_Pope_Listeners()
 	Add_Pope_Favour_Listeners();
 	--Add_Pope_Mission_Listeners();
 
-	if cm:is_multiplayer() == false then
+	if MKMP_FeatureEnabled("crusades") then
 		Add_Crusade_Event_Listeners();
-		--Add_Pope_College_Listeners();
+	end
+
+	--Add_Pope_College_Listeners();
+
+	if MKMP_FeatureEnabled("pope_ui") then
 		Add_Pope_UI_Listeners();
-	else
+	end
+
+	if cm:is_multiplayer() then
 		AUTOMATIC_POPE_SELECTION = true;
 	end
 	

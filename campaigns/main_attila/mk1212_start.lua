@@ -64,8 +64,11 @@ function start_game_all_factions()
 	Timurid_Initializer();
 
 	if cm:is_multiplayer() then
+		-- Legacy networking helper remains intentionally disabled.
 		--Add_MK1212_Networking_Listeners();
-	else
+	end
+
+	if MKMP_FeatureEnabled("change_capital") then
 		Add_MK1212_Change_Capital_Listeners();
 	end
 

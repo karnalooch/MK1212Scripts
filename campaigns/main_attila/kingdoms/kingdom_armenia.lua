@@ -30,7 +30,7 @@ function Add_Kingdom_Armenia_Listeners()
 	end
 
 
-	if cm:is_multiplayer() == false then
+	if MKMP_FeatureEnabled("decisions") then
 		Register_Decision(
 			"form_kingdom_armenia", 
 			function() 	
@@ -88,7 +88,7 @@ function Armenian_Regions_Check(context)
 	ARMENIAN_KINGDOM_REGIONS_OWNED = has_regions;
 		
 	if has_regions == true then
-		if cm:is_multiplayer() == true or context:faction():is_human() == false then
+		if context:faction():is_human() == false or not MKMP_FeatureEnabled("decisions") then
 			Armenian_Kingdom_Formed(faction_name);
 		elseif not mkHRE or faction_name ~= mkHRE.emperor_key then
 			Enable_Decision("form_kingdom_armenia");
@@ -101,7 +101,7 @@ function Armenian_Kingdom_Formed(faction_name)
 	ARMENIAN_KINGDOM_FACTION = faction_name;
 	Rename_Faction(faction_name, faction_name.."_lvl"..tostring(FACTIONS_DFN_LEVEL[faction_name]));
 
-	if cm:is_multiplayer() == false then
+	if MKMP_FeatureEnabled("decisions") then
 		Remove_Decision("form_kingdom_armenia");
 		Add_Decision("found_an_empire", faction_name, false, false);
 	end

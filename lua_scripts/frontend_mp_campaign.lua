@@ -7,10 +7,12 @@
 ---------------------------------------------------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------------------------------------------------
 
-disclaimertitlestring = "Multiplayer Scripts Disclaimer";
-disclaimerstring = "Due to a lack of networking functionality in Total War: Attila's scripting environment, a great number of scripted features have been disabled for multiplayer campaigns."..
-					"\n\nEnabled Features:\nInvasions\nPapal Favour\nStarting Battles\nWar Weariness\nWorld Events\n\nPartially Working Features:\nDynamic Faction Names (Automatic)\nKingdom Events (Automatic)\nStory Events(HRE & Sicily Disabled)"..
-					"\n\nDisabled Features:\nAnnexing Vassals\nBuffer States\nChallenges\nCrusades\nDecisions\nHoly Roman Empire System\nIronman/Achievements\nPopulation";
+disclaimertitlestring = "Experimental Full Multiplayer Script Profile";
+disclaimerstring = "This build enables the MK1212 full experimental multiplayer script profile."..
+					"\n\nEnabled core systems include invasions, Papal systems, Starting Battles, War Weariness, World Events, Dynamic Faction Names, Kingdom Events, Annexing Vassals, Buffer States, Decisions, the Holy Roman Empire, Population, Region Trading, occupation-region gifting, Crusades/Pope UI, and HRE/Sicily Story Events."..
+					"\n\nIMPORTANT: systems initiated from local UI or dilemma choices are repository-tested but are NOT yet proven to replicate identically between two real Attila peers. Final two-peer runtime validation is still required."..
+					"\n\nIntentionally blocked peer-local modifiers: Challenges, Ironman/Achievements, Lucky Nations. The legacy MK1212 networking/chat experiment also remains disabled."..
+					"\n\nUse this profile as an experimental multiplayer candidate, not as a claim that every Attila engine desync has been solved.";
 
 eh:add_listener(
 	"OnFrontendScreenTransition_MP_Campaign",
