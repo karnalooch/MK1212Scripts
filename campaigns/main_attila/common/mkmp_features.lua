@@ -39,6 +39,7 @@ MKMP_FEATURES = {
 	["population"] = {enabled = true, mode = "experimental_local_ui"},
 	["region_trading"] = {enabled = true, mode = "experimental_local_ui"},
 	["occupation_decisions"] = {enabled = true, mode = "experimental_local_ui"},
+	["religion_conversion_ui"] = {enabled = true, mode = "experimental_local_ui"},
 	["crusades"] = {enabled = true, mode = "experimental_local_ui"},
 	["pope_ui"] = {enabled = true, mode = "experimental_local_ui"},
 	["hre_story"] = {enabled = true, mode = "shared_model"},
@@ -50,7 +51,8 @@ MKMP_FEATURES = {
 	["lucky_nations"] = {enabled = false, mode = "blocked_local_config"},
 
 	-- Stale chat/UI experiment is not a synchronization backend.
-	["legacy_networking"] = {enabled = false, mode = "blocked_stale"}
+	["legacy_networking"] = {enabled = false, mode = "blocked_stale"},
+	["change_capital"] = {enabled = false, mode = "blocked_external_mutator"}
 };
 
 function MKMP_FeatureEnabled(feature_name)
