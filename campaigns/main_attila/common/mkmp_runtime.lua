@@ -294,6 +294,56 @@ function MKMP_Runtime_Get_Campaign_Snapshot()
 	return table.concat(parts, "|");
 end
 
+-- Read-only diagnostic bridge. Never use these observations as gameplay authority.
+-- Returning explicit unavailable states avoids claiming Lua/native parity when WORLD is nil.
+function MKMP_Runtime_Diagnostic_Campaign_Count()
+    local ok, count = pcall(function()
+        if not cm or type(cm.model) ~= "function" then return nil; end
+        local model = cm:model();
+        if not model or type(model.world) ~= "function" then return nil; end
+        local world = model:world();
+        if not world or type(world.faction_list) ~= "function" then return nil; end
+        local factions = world:faction_list();
+        if not factions or type(factions.num_items) ~= "function" then return nil; end
+        return factions:num_items();
+    end);
+    if not ok or type(count) ~= "number" or count < 0 or count ~= math.floor(count) then
+        return nil, "lua_count_unavailable";
+    end
+    return count, "ready";
+end
+
+function MKMP_Runtime_Diagnostic_Parity()
+    local lua_count, lua_state = MKMP_Runtime_Diagnostic_Campaign_Count();
+    local native_count = nil;
+    local native_state = "native_unavailable";
+    local module = MKMP_RUNTIME.module;
+    if MKMP_RUNTIME.available and module and module.world
+    and type(module.world.GetFactionCount) == "function" then
+        local ok, result = pcall(module.world.GetFactionCount);
+        if ok and type(result) == "number" and result >= 0
+        and result == math.floor(result) then
+            native_count = result;
+            native_state = "ready";
+        else
+            native_state = "native_count_unavailable";
+        end
+    end
+
+    local parity = "not_comparable";
+    if lua_count ~= nil and native_count ~= nil then
+        parity = (lua_count == native_count) and "match" or "mismatch";
+    end
+    return {
+        schema = 1,
+        lua_count = lua_count,
+        lua_state = lua_state,
+        native_count = native_count,
+        native_state = native_state,
+        parity = parity
+    };
+end
+
 function MKMP_Runtime_Get_Battle_Telemetry()
 	if not MKMP_RUNTIME.available
 	or not MKMP_RUNTIME.module
