@@ -279,6 +279,9 @@ try {
             $_.Contains("schema=2 source_sha=$ExpectedSourceSha runtime_status available=false reason_code=dll_unavailable luaopen_calls=0")
         }).Count -gt 0
         $Result.initializer_enter = $txt.Contains("source_sha=$ExpectedSourceSha initializer_enter")
+        $Result.gameplay_initializer_complete = $txt.Contains("source_sha=$ExpectedSourceSha gameplay_initializer_complete")
+        $Result.trace_status_count = @($txt -split "[`r`n]+" | Where-Object { $_.Contains("schema=2 source_sha=$ExpectedSourceSha runtime_status ") }).Count
+        if ($Result.trace_status_count -eq 0) { $Result.fallback_ready = $false }
     }
     $nativeCopy = Join-Path $Evidence 'twdll.log'
     if (Test-Path $nativeCopy) { $Result.native_ready = ([string](Get-Content $nativeCopy -Raw)).Contains("[MKMP][RUNTIME] ready game=Attila twdll_sha=$ExpectedSourceSha") }
@@ -327,7 +330,7 @@ try {
     $Result.restore_errors = $RestoreErrors
     $RuntimePass = $Result.native_ready -and $Result.debug_ready
     if ($NoDll) { $RuntimePass = $DllFilesAbsent -and $Result.fallback_ready -and -not $Result.native_ready -and -not (Test-Path $nativeCopy) }
-    $Result.pass = $Result.bootstrap_enter -and $Result.initializer_enter -and $RuntimePass -and $Result.pack_preserved -and $Result.rollback_ok -and -not $RunError -and -not $Result.evaluation_error
+    $Result.pass = $Result.bootstrap_enter -and $Result.initializer_enter -and $Result.gameplay_initializer_complete -and $RuntimePass -and $Result.pack_preserved -and $Result.rollback_ok -and -not $RunError -and -not $Result.evaluation_error
     $Result | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'result.json')
     $zip = Join-Path $Here ('MK1212-PR45-SP-EVIDENCE-' + $Stamp + '.zip')
     Compress-Archive -Path "$Evidence\*" -DestinationPath $zip
