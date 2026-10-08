@@ -306,7 +306,8 @@ try {
                 $sequence = 0
                 $seenStatus = $false
                 $segmentGameplayComplete = $false
-            } elseif ($ev -match '^initializer_enter seq=([0-9]+)                if ($pending -or [int]$Matches[1] -ne ($sequence + 1)) { $validFallback = $false; $validNative = $false }
+            } elseif ($ev -match '^initializer_enter seq=([0-9]+)$') {
+                if ($pending -or [int]$Matches[1] -ne ($sequence + 1)) { $validFallback = $false; $validNative = $false }
                 $sequence = [int]$Matches[1]
                 $totalSegments++
                 $sessionHasInitializer = $true
