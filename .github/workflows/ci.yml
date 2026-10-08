@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - master
+      - feat/44-mk1212-twdll-runtime-integration # stacked turn-observation PR validation
   push:
     branches:
       - master
