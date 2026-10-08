@@ -406,7 +406,7 @@ end
 function MKMP_Runtime_Get_Turn_Observation_V1()
     local result = {
         schema = 1,
-        source = "attlia_lua_campaign_model",
+        source = "attila_lua_campaign_model",
         available = false,
         reason = "model_unavailable",
         local_faction = "unknown",
