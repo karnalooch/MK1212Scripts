@@ -90,6 +90,9 @@ jobs:
       - name: Run deterministic MP dual-peer simulation
         run: python -m unittest discover -s scripts/ci -p "test_mp_*.py" -v
 
+      - name: Verify exact-source dual-client package contracts
+        run: python -m unittest discover -s scripts/ci -p "test_dual_client_package.py" -v
+
   native_twdll:
     name: Native twdll Attila build
     runs-on: windows-latest
@@ -158,6 +161,33 @@ jobs:
           }
 
           Write-Host ("Native artifact contract PASS: {0}; machine=0x{1:x4}; luaopen_twdll present" -f $dll, $machine)
+
+      - name: Test dual-client lab in Windows PowerShell 5.1
+        shell: powershell
+        run: ./scripts/ci/test_dual_client_lab.ps1
+
+      - name: Test dual-client lab in PowerShell 7
+        shell: pwsh
+        run: ./scripts/ci/test_dual_client_lab.ps1
+
+      - name: Set up Python 3.14 for operator package
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+
+      - name: Build exact-source dual-client lab package
+        env:
+          PACKAGE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: pwsh
+        run: python scripts/ci/build_dual_client_lab.py --source-sha $env:PACKAGE_SOURCE_SHA
+
+      - name: Upload dual-client lab package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mk1212-dual-client-lab-${{ github.event.pull_request.head.sha || github.sha }}
+          path: build/dual-client-lab/mk1212-dual-client-lab-${{ github.event.pull_request.head.sha || github.sha }}/
+          if-no-files-found: error
+          retention-days: 30
 
   aggregate:
     name: Aggregate CI gate
