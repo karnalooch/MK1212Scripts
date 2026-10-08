@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - master
+      - feat/35-turn-observation-v1 # temporary exact-HEAD proof on stacked PR
   workflow_dispatch:
 
 permissions: {}
@@ -88,6 +89,9 @@ jobs:
 
       - name: Test product probe packaging
         run: python -m unittest discover -s scripts/ci -p "test_product_probe.py" -v
+
+      - name: Test TurnObservationV1 source and safety contracts
+        run: python -m unittest discover -s scripts/ci -p "test_turn_observation_v1.py" -v
 
       - name: Guard multiplayer-sensitive Lua additions
         env:

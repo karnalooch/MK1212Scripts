@@ -127,13 +127,13 @@ def build(output: Path, dll: Path, rpfm: Path, root: Path = ROOT) -> Path:
             'Native: RUN-MK1212-PR45-SP-TEST.cmd. Test battle -> campaign -> save/load.\n'
             'Fallback: RUN-MK1212-PR45-NO-DLL-TEST.cmd. Start SP, move army, end turn, save/load.\n'
             'No-DLL mode temporarily isolates local DLL candidates and requires loader failure.\n'
-            'World observations are bounded to initialization and four faction-turn events.\n'
+            'WORLD samples bounded to 5; TurnObservationV1 events bounded to 32 callbacks.\n'
             'Previous MK1212 probe packs are backed up and isolated automatically.\n'
             'Run RUN-MK1212-PR45-SP-TEST.cmd, click Play, start/load SINGLE PLAYER,\n'
-            'reach the campaign map, wait ten seconds, then exit normally.\n'
+            'reach map, do ordinary actions, finish 1-2 turns, optionally save/load, then exit.\n'
             'The active Workshop scripts pack is temporarily replaced and restored.\n'
             'Backups and fresh evidence stay beside this harness.\n'
-            'Return MK1212-PR45-SP-EVIDENCE-*.zip. Check result.json and PR45_RUNTIME_TRACE.txt.\n')
+            'Return ONE MK1212-PR45-SP-EVIDENCE-*.zip. See result.json, coverage.json and trace; UNKNOWN is not PASS.\n')
         manifest = {'schema': 1, 'source_sha': sha, 'files': records,
                     'dll_sha256': hashlib.sha256(dll.read_bytes()).hexdigest(),
                     'rpfm_sha256': hashlib.sha256(rpfm.read_bytes()).hexdigest()}

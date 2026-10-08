@@ -165,6 +165,116 @@ function Common_Initializer(...)
         elseif status.available == false and reason:sub(1, 15) == "dll_unavailable" then reason_code = "dll_unavailable"; end
         Probe_Trace("runtime_status seq="..probe_init_seq.." available="..tostring(status.available).." reason_code="..reason_code.." luaopen_calls="..tostring(status.luaopen_calls));
         if reason_code ~= "ready" then Probe_Trace("runtime_error_detail text="..reason); end
+        -- Separate read-only V1 turn observations from bounded WORLD samples.
+        local turn_samples = 0;
+        local function Probe_Turn(phase, context)
+            if turn_samples >= 64 then return; end
+            turn_samples = turn_samples + 1;
+            local ok_turn, observation = pcall(function()
+                if type(MKMP_Runtime_Get_Turn_Observation_Event_V1) ~= "function" then return nil; end
+                return MKMP_Runtime_Get_Turn_Observation_Event_V1(phase);
+            end);
+            if not ok_turn or type(observation) ~= "table" then
+                Probe_Trace("turn_v1 event="..phase.." status=unavailable reason=query_failed");
+                return;
+            end
+            local faction_name = "unknown";
+            if context then
+                pcall(function()
+                    if type(context.faction) == "function" then
+                        local faction = context:faction();
+                        if faction and type(faction.name) == "function" then
+                            local name = faction:name();
+                            if type(name) == "string" and name:match("^[%w_]+$") then faction_name = name; end
+                        end
+                    end
+                end);
+            end
+            Probe_Trace("turn_v1 event="..phase..
+                " status="..(observation.available and "partial" or "unavailable")..
+                " turn="..tostring(observation.turn_number)..
+                " multiplayer="..tostring(observation.multiplayer)..
+                " event_faction="..faction_name..
+                " active_faction="..tostring(observation.active_faction)..
+                " local_faction="..tostring(observation.local_faction)..
+                " phase="..tostring(observation.phase)..
+                " reason="..tostring(observation.reason));
+        end
+        -- AEEF Flight Recorder V1: bounded, observational Lua events only.
+        -- Events are allowlisted; unsupported event names merely produce no callbacks.
+        local flight_count = 0;
+        local flight_limit = 48;
+        local flight_sequence = 0;
+        local function Flight_Record(event_name, context)
+            if flight_count >= flight_limit then return; end
+            flight_count = flight_count + 1;
+            flight_sequence = flight_sequence + 1;
+            local observation = nil;
+            pcall(function()
+                if type(MKMP_Runtime_Get_Turn_Observation_Event_V1) == "function" then
+                    observation = MKMP_Runtime_Get_Turn_Observation_Event_V1(event_name);
+                end
+            end);
+            local event_faction = "unknown";
+            pcall(function()
+                if context and type(context.faction) == "function" then
+                    local faction = context:faction();
+                    if faction and type(faction.name) == "function" then
+                        local value = faction:name();
+                        if type(value) == "string" and value:match("^[%w_]+$") then
+                            event_faction = value;
+                        end
+                    end
+                end
+            end);
+            local turn_number = "unknown";
+            local multiplayer = "unknown";
+            if type(observation) == "table" then
+                turn_number = tostring(observation.turn_number);
+                multiplayer = tostring(observation.multiplayer);
+            end
+            Probe_Trace("flight_v1 seq="..flight_sequence..
+                " event="..event_name.." turn="..turn_number..
+                " multiplayer="..multiplayer..
+                " faction="..event_faction.." owner=unknown phase=unknown");
+        end
+        -- One guarded V2 census per initializer; do not rescan 182 factions on every AI callback.
+        pcall(function()
+            if type(MKMP_Runtime_Get_Turn_Observation_V2) ~= "function" then return; end
+            local v2 = MKMP_Runtime_Get_Turn_Observation_V2();
+            local locals = table.concat(v2.local_factions or {}, ",");
+            local humans = table.concat(v2.human_factions or {}, ",");
+            Probe_Trace("turn_v2 player_turn="..tostring(v2.player_turn)..
+                " local_state="..tostring(v2.local_factions_state)..
+                " local_count="..tostring(#(v2.local_factions or {}))..
+                " human_state="..tostring(v2.human_factions_state)..
+                " human_count="..tostring(#(v2.human_factions or {}))..
+                " script_faction="..tostring(v2.script_faction_turn)..
+                " active_faction="..tostring(v2.active_faction)..
+                " parity="..tostring(v2.faction_count_parity)..
+                " locals="..locals.." humans="..humans);
+        end);
+        Flight_Record("initializer", nil);
+        local flight_events = {"FactionTurnStart", "FactionTurnEnd"};
+        if cm and type(cm.add_listener) == "function" then
+            for _, flight_event in ipairs(flight_events) do
+                local event_name = flight_event;
+                local listener_id = "AEEF_Flight_"..event_name;
+                local registered = pcall(function()
+                    cm:add_listener(listener_id, event_name, true, function(context)
+                        Flight_Record(event_name, context);
+                        if flight_count >= flight_limit then
+                            pcall(function() cm:remove_listener(listener_id); end);
+                        end
+                    end, true);
+                end);
+                Probe_Trace("flight_listener event="..event_name..
+                    " state="..(registered and "registered" or "unavailable"));
+            end
+        else
+            Probe_Trace("flight_listener state=receiver_unavailable");
+        end
+        Probe_Turn("initializer", nil);
         Probe_World("initializer");
         if not probe_listener_registered then
             Probe_Trace("listener_register_attempt");
@@ -174,10 +284,11 @@ function Common_Initializer(...)
             else
                 local registered, registration_error = pcall(function()
                     receiver:add_listener("PR45_World_Probe", "FactionTurnStart", true, function(context)
-                        if probe_world_samples >= 5 then return; end
+                        if turn_samples >= 32 then return; end
                         Probe_Trace("listener_callback_enter phase=faction_turn_start");
+                        Probe_Turn("faction_turn_start", context);
                         Probe_World("faction_turn_start");
-                        if probe_world_samples >= 5 then
+                        if turn_samples >= 32 then
                             local removed, remove_error = pcall(function() receiver:remove_listener("PR45_World_Probe"); end);
                             Probe_Trace("listener_remove_result state="..(removed and "ok" or "failed"));
                             if not removed then Probe_Trace("listener_remove_detail text="..tostring(remove_error)); end
@@ -438,6 +549,62 @@ try {
     $RuntimePass = $Result.native_ready -and $Result.debug_ready -and $Result.trace_native_ready
     if ($NoDll) { $RuntimePass = $DllFilesAbsent -and $Result.fallback_ready -and -not $Result.native_ready -and -not (Test-Path $nativeCopy) }
     $Result.pass = $Result.bootstrap_enter -and $Result.initializer_enter -and $Result.gameplay_initializer_complete -and $RuntimePass -and $Result.pack_preserved -and $Result.rollback_ok -and -not $RunError -and -not $Result.evaluation_error
+    # Coverage is evidence accounting, NEVER a gameplay pass/fail gate.
+    try {
+        $coverage = [ordered]@{
+            schema = 1
+            source_sha = $ExpectedSourceSha
+            mode = $Mode
+            turn_v1_samples = 0
+            turn_events = [ordered]@{ initializer = 0; faction_turn_start = 0 }
+            available_turn_samples = 0
+            resolved_event_factions = 0
+            active_owner_proven = $false
+            simultaneous_turns_proven = $false
+            statuses = [ordered]@{
+                runtime_bootstrap = 'NOT_OBSERVED'
+                ai_turn_callback = 'NOT_OBSERVED'
+                turn_number = 'NOT_OBSERVED'
+                event_faction = 'NOT_OBSERVED'
+                active_owner = 'UNKNOWN'
+                save_load = 'NOT_OBSERVED'
+                battle_return = 'NOT_OBSERVED'
+                multiplayer_simultaneity = 'NOT_OBSERVED'
+                rollback = 'NOT_OBSERVED'
+            }
+        }
+        if ($Result.bootstrap_enter) { $coverage.statuses.runtime_bootstrap = 'OBSERVED' }
+        if ($Result.rollback_ok) { $coverage.statuses.rollback = 'PASS' } else { $coverage.statuses.rollback = 'FAIL' }
+        $traceCopy = Join-Path $Evidence 'PR45_RUNTIME_TRACE.txt'
+        if (Test-Path -LiteralPath $traceCopy) {
+            foreach ($line in @(Get-Content -LiteralPath $traceCopy)) {
+                if ($line -match ' turn_v1 event=(initializer|faction_turn_start) status=(partial|unavailable) turn=([0-9]+|unknown) multiplayer=(true|false|unknown) event_faction=([A-Za-z0-9_]+) ') {
+                    $eventName = $Matches[1]
+                    $coverage.turn_v1_samples++
+                    $coverage.turn_events[$eventName]++
+                    if ($Matches[2] -eq 'partial') { $coverage.available_turn_samples++; $coverage.statuses.turn_number = 'OBSERVED' }
+                    if ($Matches[5] -ne 'unknown') { $coverage.resolved_event_factions++; $coverage.statuses.event_faction = 'OBSERVED' }
+                }
+            }
+        }
+        $coverage | Add-Member -NotePropertyName flight_recorder -NotePropertyValue ([ordered]@{schema=1; samples=0; observed_events=@{}; sequence_valid=$true; last_seq=0; capped_at=48})
+        if (Test-Path -LiteralPath $traceCopy) {
+            foreach ($line in @(Get-Content -LiteralPath $traceCopy)) {
+                if ($line -match ' flight_v1 seq=([0-9]+) event=([A-Za-z0-9_]+) turn=([0-9]+|unknown) multiplayer=(true|false|unknown) faction=([A-Za-z0-9_]+) owner=unknown phase=unknown$') {
+                    $n = [int]$Matches[1]; $kind = $Matches[2]
+                    if ($n -ne ($coverage.flight_recorder.last_seq + 1)) { $coverage.flight_recorder.sequence_valid = $false }
+                    $coverage.flight_recorder.last_seq = $n
+                    $coverage.flight_recorder.samples++
+                    if (-not $coverage.flight_recorder.observed_events.ContainsKey($kind)) { $coverage.flight_recorder.observed_events[$kind] = 0 }
+                    $coverage.flight_recorder.observed_events[$kind]++
+                }
+            }
+        }
+        if ($coverage.turn_events.faction_turn_start -gt 0) { $coverage.statuses.ai_turn_callback = 'OBSERVED_CALLBACK_ONLY' }
+        $coverage | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'coverage.json')
+    } catch {
+        $Result.coverage_error = $_.Exception.Message
+    }
     $Result | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'result.json')
     $zip = Join-Path $Here ('MK1212-PR45-SP-EVIDENCE-' + $Stamp + '.zip')
     Compress-Archive -Path "$Evidence\*" -DestinationPath $zip
