@@ -321,7 +321,7 @@ function Repair-GoldbergSetupLegacyMarker {
         $current = Get-GoldbergSetupDigest -Path $markerPath -MaxBytes 131072
         if ($current.sha256 -cne $before.sha256 -or $current.bytes -ne $before.bytes) { throw 'The previous marker changed during recovery; it was preserved.' }
         # Only owned metadata is replaced. Game, mod, lab and source files are never moved or removed.
-        [IO.File]::Replace($temporary, $markerPath, $null)
+        [IO.File]::Replace($temporary, $markerPath, [System.Management.Automation.Language.NullString]::Value)
         $markerReplaced = $true
         [void](Assert-GoldbergSetupOwnership -Paths $Paths -Package $Package)
         [Console]::Out.WriteLine('MK1212_SETUP_RECOVERY=PREVIOUS_MARKER_ONLY; preserved backup: ' + $backupPath)

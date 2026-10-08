@@ -316,7 +316,8 @@ function Write-LabJson {
             $stream.Write($bytes, 0, $bytes.Length)
             $stream.Flush()
         } finally { $stream.Dispose() }
-        if ($ReplaceOwned -and (Test-Path -LiteralPath $Path)) { [System.IO.File]::Replace($temporary, $Path, $null) }
+        # PowerShell $null coerces to an empty string here; File.Replace needs a real .NET null backup path.
+        if ($ReplaceOwned -and (Test-Path -LiteralPath $Path)) { [System.IO.File]::Replace($temporary, $Path, [System.Management.Automation.Language.NullString]::Value) }
         else { [System.IO.File]::Move($temporary, $Path) }
     } finally { if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue } }
 }

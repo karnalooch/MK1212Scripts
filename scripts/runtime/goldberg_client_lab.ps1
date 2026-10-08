@@ -323,7 +323,7 @@ function Seed-GoldProfile {
             if ($previousSnapshot.status -ne 'CAPTURED' -or $previousSnapshot.sha256 -cne $previousHash -or (Get-GoldbergDigest -Path $destination -MaxBytes 1048576) -cne $previousHash) { throw 'The previous isolated profile was not backed up unchanged; its replacement was blocked.' }
             $temporary = $destination + '.upgrade-' + [guid]::NewGuid().ToString('N')
             Write-GoldbergManagedText -Path $temporary -Value $generated -Root $Peer.profile_physical
-            [IO.File]::Replace($temporary, $destination, $null)
+            [IO.File]::Replace($temporary, $destination, [System.Management.Automation.Language.NullString]::Value)
         }
     } else { Write-GoldbergManagedText -Path $destination -Value $generated -Root $Peer.profile_physical }
     $Peer.mod_script_sha256 = Get-GoldbergDigest -Path $destination -MaxBytes 1048576

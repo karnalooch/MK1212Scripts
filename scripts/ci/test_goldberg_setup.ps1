@@ -304,6 +304,27 @@ try {
         Assert-SetupTrue (-not (Test-Path -LiteralPath (Join-Path $setupDriveTemp 'escaped.txt'))) 'no file escaped its toolkit root'
     }
 
+    Invoke-SetupCheck 'Owned lab JSON state is atomically replaced and read back without modifying original game or Workshop files' {
+        $fixture = New-SetupFixture 'owned-state-replacement'
+        [void][IO.Directory]::CreateDirectory($fixture.paths.LabRoot)
+        $path = Join-Path $fixture.paths.LabRoot '.test-owned-state.json'
+        $sourceBefore = Get-SetupHashes -Root $fixture.paths.GameRoot
+        $modsBefore = Get-SetupHashes -Root $fixture.paths.ModsRoot
+        $labId = [Guid]::NewGuid().ToString('N')
+        Write-LabJson -Path $path -Value ([ordered]@{ schema = 1; lab_id = $labId; revision = 0; status = 'INITIAL_SYNTHETIC_STATE' })
+        $original = [IO.File]::ReadAllText($path)
+        Write-LabJson -Path $path -ReplaceOwned -Value ([ordered]@{ schema = 1; lab_id = $labId; revision = 1; status = 'UPDATED_SYNTHETIC_STATE'; source_catalog_sha256 = ('a' * 64) })
+        $updated = Read-LabJson -Path $path
+        Assert-SetupEqual $updated.lab_id $labId 'owned state replacement preserves the lab identity'
+        Assert-SetupEqual $updated.revision 1 'replacement revision is actually persisted'
+        Assert-SetupEqual $updated.status 'UPDATED_SYNTHETIC_STATE' 'changed state reads back through the real helper'
+        Assert-SetupEqual $updated.source_catalog_sha256 ('a' * 64) 'newly added state fields survive atomic replacement'
+        Assert-SetupTrue ([IO.File]::ReadAllText($path) -cne $original) 'successful replacement changes the original state bytes'
+        Assert-SetupEqual (@(Get-ChildItem -LiteralPath $fixture.paths.LabRoot -Force).Count) 1 'successful replacement leaves no temporary or backup file'
+        Assert-SetupHashes (Get-SetupHashes -Root $fixture.paths.GameRoot) $sourceBefore 'state replacement preserves original game bytes'
+        Assert-SetupHashes (Get-SetupHashes -Root $fixture.paths.ModsRoot) $modsBefore 'state replacement preserves original Workshop bytes'
+    }
+
     Invoke-SetupCheck 'Public Install resolves Sandboxie and creates a complete owned toolkit before the explicit game stub' {
         $fixture = New-SetupFixture ('public-install-' + [char]0x0142)
         Add-SetupSandboxieFixture -Fixture $fixture
