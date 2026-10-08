@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - master
+      - feat/35-turn-observation-v1 # temporary exact-HEAD proof on stacked PR
   workflow_dispatch:
 
 permissions: {}
