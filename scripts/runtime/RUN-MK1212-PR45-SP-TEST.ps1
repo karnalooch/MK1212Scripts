@@ -290,18 +290,20 @@ try {
         $sequence = 0
         $pending = $false
         $seenStatus = $false
+        $segmentGameplayComplete = $false
         $validFallback = $true
         $validNative = $true
         foreach ($ev in $events) {
             if ($ev -match '^initializer_enter seq=([0-9]+)$') {
-                if ($pending -or $seenStatus -or [int]$Matches[1] -ne ($sequence + 1)) { $validFallback = $false; $validNative = $false }
+                if ($pending -or [int]$Matches[1] -ne ($sequence + 1)) { $validFallback = $false; $validNative = $false }
                 $sequence = [int]$Matches[1]
                 $pending = $true
                 $seenStatus = $false
+                $segmentGameplayComplete = $false
                 $Result.initializer_enter = $true
             } elseif ($ev -match '^gameplay_initializer_complete seq=([0-9]+)$') {
                 if (-not $pending -or [int]$Matches[1] -ne $sequence) { $validFallback = $false; $validNative = $false }
-                else { $Result.gameplay_initializer_complete = $true }
+                else { $Result.gameplay_initializer_complete = $true; $segmentGameplayComplete = $true }
             } elseif ($ev -match '^runtime_status(?: |$)') {
                 $Result.trace_status_count++
                 if ($ev -cnotmatch '^runtime_status seq=([0-9]+) available=(true|false) reason_code=([a-z_]+) luaopen_calls=([0-9]+)$') {
@@ -313,7 +315,7 @@ try {
                     $available = $Matches[2]
                     $reason = $Matches[3]
                     $calls = [int]$Matches[4]
-                    if (-not $pending -or $seenStatus -or $seq -ne $sequence -or -not $Result.gameplay_initializer_complete) {
+                    if (-not $pending -or $seenStatus -or $seq -ne $sequence -or -not $segmentGameplayComplete) {
                         $validFallback = $false; $validNative = $false
                     }
                     if ($available -cne 'false' -or $reason -cne 'dll_unavailable' -or $calls -ne 0) { $validFallback = $false }
