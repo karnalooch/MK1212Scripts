@@ -37,6 +37,14 @@ class ProductProbeTests(unittest.TestCase):
             (root / 'common/child.lua').write_text('require("common/main");')
             self.assertEqual(len(probe.dependencies(root)), 2)
 
+    def test_trace_schema_and_line_safety(self):
+        source = (ROOT / 'campaigns/main_attila/common/main.lua').read_text()
+        instrumented = probe.instrument(source, 'b' * 40)
+        self.assertIn('schema=2 source_sha=', instrumented)
+        self.assertIn('gsub("%c", "?")', instrumented)
+        self.assertIn('string.sub(tostring(message), 1, 512)', instrumented)
+        self.assertNotIn('schema=1 source_sha=', instrumented)
+
     def test_instrumentation_precedes_first_dependency(self):
         source = (ROOT / 'campaigns/main_attila/common/main.lua').read_text()
         result = probe.instrument(source, 'a' * 40)
