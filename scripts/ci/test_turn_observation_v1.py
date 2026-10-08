@@ -45,6 +45,19 @@ class TurnObservationV1Tests(unittest.TestCase):
         self.assertIn("finally {", harness)
         self.assertIn("rollback_ok", harness)
 
+    def test_flight_recorder_is_bounded_and_read_only(self):
+        harness = (ROOT / "scripts/runtime/RUN-MK1212-PR45-SP-TEST.ps1").read_text(encoding="utf-8")
+        self.assertIn("AEEF Flight Recorder V1", harness)
+        self.assertIn("local flight_limit = 48;", harness)
+        self.assertIn('"FactionTurnStart", "FactionTurnEnd"', harness)
+        self.assertIn('Flight_Record("initializer", nil)', harness)
+        self.assertIn("owner=unknown phase=unknown", harness)
+        self.assertIn("flight_recorder", harness)
+        self.assertIn("sequence_valid", harness)
+        self.assertNotIn("SetActiveFaction", harness)
+        self.assertNotIn("SetActiveTurn", harness)
+        self.assertNotIn("VirtualProtect", harness)
+
     def test_lua_behavior_fixture(self):
         lua = next((shutil.which(x) for x in ("lua5.1", "lua", "luajit") if shutil.which(x)), None)
         if not lua:
