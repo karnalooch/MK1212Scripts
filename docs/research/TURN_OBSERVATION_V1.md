@@ -58,3 +58,7 @@ Evidence categories: DOCUMENTED / REPO-OBSERVED / RUNTIME-PROVEN / HISTORICAL-RE
 ## Stacked PR CI mechanics
 
 PR #61 targets the unmerged runtime integration branch (PR #45). GitHub Actions originally allowed pull-request targets only on `master`; CI trigger coverage was expanded on the parent branch to include `feat/44-mk1212-twdll-runtime-integration`. The child branch adds its dedicated V1 test step. A green workflow must be checked at the **exact child HEAD**; workflow dispatch and completion must not be inferred from committed YAML alone. Revert the temporary stacked-branch trigger after #45 lands, if no longer needed.
+
+## Governance and release checklist
+
+For PR #61, high-risk governance requires the exact PR-body marker `Auto-merge: manual`. The explicit marker was added to the PR after CI #94 identified the missing policy text; the change is administrative and does not alter game behavior. The PR must remain manually merged, and the **latest exact HEAD** must have green Aggregate CI plus a verified artifact before release.
