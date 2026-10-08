@@ -45,6 +45,21 @@ class ProductProbeTests(unittest.TestCase):
         self.assertIn('string.sub(tostring(message), 1, 512)', instrumented)
         self.assertNotIn('schema=1 source_sha=', instrumented)
 
+    def test_lua_native_parity_is_observability_only_and_fail_closed(self):
+        runtime = (ROOT / 'campaigns/main_attila/common/mkmp_runtime.lua').read_text(encoding='utf-8')
+        harness = (ROOT / 'scripts/runtime/RUN-MK1212-PR45-SP-TEST.ps1').read_text(encoding='utf-8')
+        self.assertIn('function MKMP_Runtime_Diagnostic_Campaign_Count()', runtime)
+        self.assertIn('function MKMP_Runtime_Diagnostic_Parity()', runtime)
+        self.assertIn('pcall(module.world.GetFactionCount)', runtime)
+        self.assertIn('pcall(function()', runtime)
+        self.assertIn('parity = "not_comparable"', runtime)
+        self.assertIn('native_state = "native_unavailable"', runtime)
+        self.assertIn('lua_count == native_count', runtime)
+        self.assertIn('faction_parity phase=', harness)
+        self.assertLess(harness.index('faction_parity phase='), harness.index('local runtime = MKMP_RUNTIME;'))
+        self.assertIn('probe_world_samples >= 5', harness)
+        self.assertNotIn('MKMP_Runtime_Diagnostic_Parity() ==', harness)
+
     def test_workshop_early_native_loader_is_bounded_and_fail_soft(self):
         harness = (ROOT / 'scripts/runtime/RUN-MK1212-PR45-SP-TEST.ps1').read_text(encoding='utf-8')
         prefix = harness.split("$Prefix = @'", 1)[1].split("'@\n$Suffix", 1)[0]
