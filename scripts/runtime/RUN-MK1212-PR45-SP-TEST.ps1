@@ -281,20 +281,130 @@ try {
         $records = @($txt -split "[`r`n]+" | Where-Object { $_.Length -gt 0 })
         $prefixValid = @($records | Where-Object { -not $_.StartsWith($prefix) }).Count -eq 0
         $events = @($records | Where-Object { $_.StartsWith($prefix) } | ForEach-Object { $_.Substring($prefix.Length) })
-        $Result.bootstrap_enter = @($events | Where-Object { $_ -ceq 'bootstrap_enter' }).Count -eq 1
+        $Result.bootstrap_enter = @($events | Where-Object { $_ -ceq 'bootstrap_enter' }).Count -gt 0
         $Result.trace_status_count = 0
         $Result.trace_invalid_status_count = 0
         $Result.fallback_ready = $false
         $Result.initializer_enter = $false
         $Result.gameplay_initializer_complete = $false
         $sequence = 0
+        $bootstraps = 0
+        $totalSegments = 0
         $pending = $false
         $seenStatus = $false
         $segmentGameplayComplete = $false
         $validFallback = $true
         $validNative = $true
         foreach ($ev in $events) {
-            if ($ev -match '^initializer_enter seq=([0-9]+)$') {
+            if ($ev -ceq 'bootstrap_enter') {
+                if ($pending -or ($sequence -gt 0 -and -not $seenStatus)) {
+                    $validFallback = $false; $validNative = $false
+                }
+                $bootstraps++
+                $sequence = 0
+                $seenStatus = $false
+                $segmentGameplayComplete = $false
+            } elseif ($ev -match '^initializer_enter seq=([0-9]+)
+                if ($pending -or [int]$Matches[1] -ne ($sequence + 1)) { $validFallback = $false; $validNative = $false }
+                $sequence = [int]$Matches[1]
+                $totalSegments++
+                $pending = $true
+                $seenStatus = $false
+                $segmentGameplayComplete = $false
+                $Result.initializer_enter = $true
+            } elseif ($ev -match '^gameplay_initializer_complete seq=([0-9]+)$') {
+                if (-not $pending -or [int]$Matches[1] -ne $sequence) { $validFallback = $false; $validNative = $false }
+                else { $Result.gameplay_initializer_complete = $true; $segmentGameplayComplete = $true }
+            } elseif ($ev -match '^runtime_status(?: |$)') {
+                $Result.trace_status_count++
+                if ($ev -cnotmatch '^runtime_status seq=([0-9]+) available=(true|false) reason_code=([a-z_]+) luaopen_calls=([0-9]+)$') {
+                    $Result.trace_invalid_status_count++
+                    $validFallback = $false
+                    $validNative = $false
+                } else {
+                    $seq = [int]$Matches[1]
+                    $available = $Matches[2]
+                    $reason = $Matches[3]
+                    $calls = [int]$Matches[4]
+                    if (-not $pending -or $seenStatus -or $seq -ne $sequence -or -not $segmentGameplayComplete) {
+                        $validFallback = $false; $validNative = $false
+                    }
+                    if ($available -cne 'false' -or $reason -cne 'dll_unavailable' -or $calls -ne 0) { $validFallback = $false }
+                    if ($available -cne 'true' -or $reason -cne 'ready' -or $calls -ne 1) { $validNative = $false }
+                    $pending = $false
+                    $seenStatus = $true
+                }
+            } elseif ($ev -match '^diagnostics_failed(?: |$)') {
+                $validFallback = $false; $validNative = $false
+            }
+        }
+        if ($pending -or $sequence -eq 0 -or $Result.trace_status_count -ne $totalSegments -or -not $prefixValid) {
+            $validFallback = $false; $validNative = $false
+        }
+        $Result.fallback_ready = $validFallback -and $Result.bootstrap_enter
+        $Result.trace_native_ready = $validNative -and $Result.bootstrap_enter
+        $Result.trace_segments = $totalSegments
+        $Result.trace_bootstraps = $bootstraps
+        $Result.trace_prefix_valid = $prefixValid
+    }
+    $nativeCopy = Join-Path $Evidence 'twdll.log'
+    if (Test-Path $nativeCopy) { $Result.native_ready = ([string](Get-Content $nativeCopy -Raw)).Contains("[MKMP][RUNTIME] ready game=Attila twdll_sha=$ExpectedSourceSha") }
+    $debugCopy = Join-Path $Evidence 'MK1212_mp_debug.log'
+    if (Test-Path $debugCopy) {
+        $Result.debug_ready = @((Get-Content $debugCopy) | Where-Object { $_.Contains('event=runtime') -and $_.Contains('available=true') -and $_.Contains('reason=ready') -and $_.Contains("twdll_sha=$ExpectedSourceSha") }).Count -gt 0
+    }
+    } catch {
+        $Result.evaluation_error = $_.Exception.Message
+    }
+    if ($Installed) {
+        try {
+            # Preserve a concurrent Workshop update instead of silently overwriting it.
+            $current = Hash $Workshop
+            if ($current -ne $OriginalHash -and $current -ne $PatchedHash) { throw 'Workshop changed externally; original backup retained' }
+            Copy-Item $Original $Workshop -Force
+            (Get-Item $Workshop).Attributes = $WorkshopAttributes
+            if ((Hash $Workshop) -ne $OriginalHash) { throw 'Workshop restore hash mismatch' }
+        } catch { $RestoreErrors += "Workshop: $_" }
+        foreach ($state in $States) {
+            try {
+                if (Test-Path $state.path) { (Get-Item $state.path).IsReadOnly = $false; Remove-Item $state.path -Force }
+                if ($state.existed) {
+                    Copy-Item (Join-Path $Backup ([IO.Path]::GetFileName($state.path))) $state.path
+                    (Get-Item $state.path).Attributes = $state.attributes
+                }
+            } catch { $RestoreErrors += "$($state.path): $_" }
+        }
+    }
+    # Restore isolated packs even if installation failed part-way through.
+    foreach ($state in $ProbeStates) {
+        if (-not $state.touched) { continue }
+        try {
+            if (Test-Path -LiteralPath $state.path) {
+                if ((Hash $state.path) -ne $state.sha256) { throw 'Probe path changed externally; verified backup retained' }
+            } else {
+                Copy-Item -LiteralPath $state.backup -Destination $state.path
+            }
+            (Get-Item -LiteralPath $state.path).Attributes = $state.attributes
+            if ((Hash $state.path) -ne $state.sha256) { throw 'Probe restore hash mismatch' }
+        } catch { $RestoreErrors += "$($state.path): $_" }
+    }
+    $Result.isolated_probe_count = $ProbeStates.Count
+    $Result.rollback_ok = $RestoreErrors.Count -eq 0
+    $Result.run_error = $RunError
+    $Result.restore_errors = $RestoreErrors
+    $RuntimePass = $Result.native_ready -and $Result.debug_ready -and $Result.trace_native_ready
+    if ($NoDll) { $RuntimePass = $DllFilesAbsent -and $Result.fallback_ready -and -not $Result.native_ready -and -not (Test-Path $nativeCopy) }
+    $Result.pass = $Result.bootstrap_enter -and $Result.initializer_enter -and $Result.gameplay_initializer_complete -and $RuntimePass -and $Result.pack_preserved -and $Result.rollback_ok -and -not $RunError -and -not $Result.evaluation_error
+    $Result | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'result.json')
+    $zip = Join-Path $Here ('MK1212-PR45-SP-EVIDENCE-' + $Stamp + '.zip')
+    Compress-Archive -Path "$Evidence\*" -DestinationPath $zip
+    Write-Host "Evidence: $zip"
+    Write-Host "PASS: $($Result.pass); rollback: $($Result.rollback_ok)"
+    if ($RestoreErrors.Count -gt 0) { Write-Warning "Restore errors: $RestoreErrors. Backups retained at $Backup" }
+}
+if (-not $Result.pass) { exit 1 }
+) {
+                if ($bootstraps -eq 0) { $validFallback = $false; $validNative = $false }
                 if ($pending -or [int]$Matches[1] -ne ($sequence + 1)) { $validFallback = $false; $validNative = $false }
                 $sequence = [int]$Matches[1]
                 $pending = $true
