@@ -716,3 +716,11 @@ The native `twdll.world.GetCaptureStatus()` function now returns read-only metad
 **Interpretation:** `hook_enabled=true, constructor_hits=0` is consistent with late installation or an incorrect hook location; it is not definitive proof of either. A hit followed by `clear_count>0` suggests a lifecycle transition but not pointer validity. Only an exact-build runtime observation can prove capture, and semantic faction-count parity after load is a separate check. No engine addresses, signature constants, DRM or executable integrity behavior were changed as part of this instrumentation.
 
 **Proof status:** Source-level instrumentation implemented; Windows native CI and actual Attila runtime evidence must be checked separately. WORLD access and simultaneous turns remain NOT PROVEN.
+
+### Early-load A/B investigation (2026-10-08)
+
+The preceding SP evidence reported `generation=1`, `constructor_hits=0`, `clear_count=0`, `hook_enabled=true`, and `world_cached=false` across the five bounded observations. These values are compatible with both a late hook installation and an incorrect resolver target; they do not decide between the two.
+
+The PR45 **Workshop-preserving test harness** now attempts `require("common/mkmp_runtime")` and `MKMP_Runtime_Initialize()` inside a protected `pcall` at the beginning of its injected `main.lua` prefix, before executing the original Workshop main body. The later initializer still initializes the debug logger, publishes the runtime status, and performs bounded WORLD observations. This is strictly an experiment: no gameplay logic, WORLD signature offsets or native hook implementation was changed. The early attempt fails soft and cannot gate ordinary gameplay.
+
+Acceptance must compare `world_capture` telemetry from an exact-SHA game run. A newly observed constructor hit would support the installation-timing hypothesis; no hit would leave both timing and resolver hypotheses open. Source-level and GitHub CI checks are not runtime proof. No manual testing is required from the user for repository CI; Attila runtime remains `NOT PROVEN` until real evidence is obtained.
