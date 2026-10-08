@@ -475,6 +475,49 @@ try {
     $RuntimePass = $Result.native_ready -and $Result.debug_ready -and $Result.trace_native_ready
     if ($NoDll) { $RuntimePass = $DllFilesAbsent -and $Result.fallback_ready -and -not $Result.native_ready -and -not (Test-Path $nativeCopy) }
     $Result.pass = $Result.bootstrap_enter -and $Result.initializer_enter -and $Result.gameplay_initializer_complete -and $RuntimePass -and $Result.pack_preserved -and $Result.rollback_ok -and -not $RunError -and -not $Result.evaluation_error
+    # Coverage is evidence accounting, NEVER a gameplay pass/fail gate.
+    try {
+        $coverage = [ordered]@{
+            schema = 1
+            source_sha = $ExpectedSourceSha
+            mode = $Mode
+            turn_v1_samples = 0
+            turn_events = [ordered]@{ initializer = 0; faction_turn_start = 0 }
+            available_turn_samples = 0
+            resolved_event_factions = 0
+            active_owner_proven = $false
+            simultaneous_turns_proven = $false
+            statuses = [ordered]@{
+                runtime_bootstrap = 'NOT_OBSERVED'
+                ai_turn_callback = 'NOT_OBSERVED'
+                turn_number = 'NOT_OBSERVED'
+                event_faction = 'NOT_OBSERVED'
+                active_owner = 'UNKNOWN'
+                save_load = 'NOT_OBSERVED'
+                battle_return = 'NOT_OBSERVED'
+                multiplayer_simultaneity = 'NOT_OBSERVED'
+                rollback = 'NOT_OBSERVED'
+            }
+        }
+        if ($Result.bootstrap_enter) { $coverage.statuses.runtime_bootstrap = 'OBSERVED' }
+        if ($Result.rollback_ok) { $coverage.statuses.rollback = 'PASS' } else { $coverage.statuses.rollback = 'FAIL' }
+        $traceCopy = Join-Path $Evidence 'PR45_RUNTIME_TRACE.txt'
+        if (Test-Path -LiteralPath $traceCopy) {
+            foreach ($line in @(Get-Content -LiteralPath $traceCopy)) {
+                if ($line -match ' turn_v1 event=(initializer|faction_turn_start) status=(partial|unavailable) turn=([0-9]+|unknown) multiplayer=(true|false|unknown) event_faction=([A-Za-z0-9_]+) ') {
+                    $eventName = $Matches[1]
+                    $coverage.turn_v1_samples++
+                    $coverage.turn_events[$eventName]++
+                    if ($Matches[2] -eq 'partial') { $coverage.available_turn_samples++; $coverage.statuses.turn_number = 'OBSERVED' }
+                    if ($Matches[5] -ne 'unknown') { $coverage.resolved_event_factions++; $coverage.statuses.event_faction = 'OBSERVED' }
+                }
+            }
+        }
+        if ($coverage.turn_events.faction_turn_start -gt 0) { $coverage.statuses.ai_turn_callback = 'OBSERVED_CALLBACK_ONLY' }
+        $coverage | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'coverage.json')
+    } catch {
+        $Result.coverage_error = $_.Exception.Message
+    }
     $Result | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'result.json')
     $zip = Join-Path $Here ('MK1212-PR45-SP-EVIDENCE-' + $Stamp + '.zip')
     Compress-Archive -Path "$Evidence\*" -DestinationPath $zip
