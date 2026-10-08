@@ -11,6 +11,7 @@ This is the documentation router and authority map for this fork.
 - [twdll runtime/code audit](research/TWDLL_RUNTIME_AUDIT.md) — active Attila C++/hook/Lua-ABI safety findings, fixes, remaining runtime risks and MP boundaries.
 - [`native/twdll/`](../native/twdll/) — canonical MK1212 native source; provenance is pinned in [`native/twdll/UPSTREAM.md`](../native/twdll/UPSTREAM.md).
 - [Dual-peer MP simulation harness](research/MP_DUAL_PEER_SIMULATION.md) — CI-only fake HOST/CLIENT determinism, persistence fuzzing, source contracts and fault injection.
+- [Two-client Windows lab](research/DUAL_CLIENT_LAB.md) — experimental Sandboxie HOST/CLIENT launcher, profile-isolation probes and bounded evidence collection on one PC.
 - [MP file debug logging](research/MP_DEBUG_LOGGING.md) — bounded `MK1212_mp_debug.log`, structured event schema and HOST/CLIENT comparator.
 - [Architecture](ARCHITECTURE.md) — repository layout, runtime boundaries and authoritative surfaces.
 - [Gumball adoption](GUMBALL_ADOPTION.md) — repository-platform baseline, current immutable platform pin and deferred items.
