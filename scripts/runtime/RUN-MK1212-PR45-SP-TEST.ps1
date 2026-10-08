@@ -210,11 +210,11 @@ function Common_Initializer(...)
             else
                 local registered, registration_error = pcall(function()
                     receiver:add_listener("PR45_World_Probe", "FactionTurnStart", true, function(context)
-                        if probe_world_samples >= 5 then return; end
+                        if turn_samples >= 32 then return; end
                         Probe_Trace("listener_callback_enter phase=faction_turn_start");
                         Probe_Turn("faction_turn_start", context);
                         Probe_World("faction_turn_start");
-                        if probe_world_samples >= 5 then
+                        if turn_samples >= 32 then
                             local removed, remove_error = pcall(function() receiver:remove_listener("PR45_World_Probe"); end);
                             Probe_Trace("listener_remove_result state="..(removed and "ok" or "failed"));
                             if not removed then Probe_Trace("listener_remove_detail text="..tostring(remove_error)); end
