@@ -80,6 +80,14 @@ local function Probe_Trace(message)
     end);
 end
 Probe_Trace("bootstrap_enter");
+-- Diagnostic-only early load experiment. Preserve gameplay on every failure.
+Probe_Trace("early_native_begin");
+local early_ok, early_err = pcall(function()
+    require("common/mkmp_runtime");
+    MKMP_Runtime_Initialize();
+end);
+Probe_Trace("early_native_result state="..(early_ok and "complete" or "failed"));
+if not early_ok then Probe_Trace("early_native_error text="..tostring(early_err)); end
 '@
 $Suffix = @'
 Probe_Trace("bootstrap_complete");
@@ -126,6 +134,18 @@ function Common_Initializer(...)
         require("common/mkmp_debug");
         require("common/mkmp_runtime");
         MKMP_Debug_Initialize();
+        -- Adapter may already be initialized before the Workshop body.
+        -- Re-emit the runtime identity after the debug logger becomes available.
+        local early_status = MKMP_Runtime_Status();
+        if MKMP_Debug_Log then
+            pcall(MKMP_Debug_Log, "runtime", {
+                available = early_status.available,
+                reason = early_status.reason,
+                twdll_sha = early_status.twdll_sha,
+                load_candidate = early_status.load_candidate,
+                message = "early_bootstrap_status"
+            });
+        end
         Probe_Trace("native_initialize_begin");
         MKMP_Runtime_Initialize();
         local status = MKMP_Runtime_Status();
