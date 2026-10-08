@@ -388,3 +388,64 @@ function MKMP_Runtime_Status()
 		last_load_error = MKMP_RUNTIME.last_load_error
 	};
 end
+
+-- Issue #35: observational state only. This must not gate orders or influence MP simulation.
+-- V1 deliberately does NOT infer the active human faction from a turn callback.
+-- Missing or unsupported engine concepts are explicit "unknown", never invented.
+local function MKMP_Turn_Observe_Protected(receiver, method)
+    if not receiver or type(receiver[method]) ~= "function" then return nil; end
+    local ok, result = pcall(function() return receiver[method](receiver); end);
+    if ok then return result; end
+    return nil;
+end
+
+local function MKMP_Turn_Valid_Integer(value)
+    return type(value) == "number" and value >= 0 and value == math.floor(value);
+end
+
+function MKMP_Runtime_Get_Turn_Observation_V1()
+    local result = {
+        schema = 1,
+        source = "attlia_lua_campaign_model",
+        available = false,
+        reason = "model_unavailable",
+        local_faction = "unknown",
+        active_faction = "unknown",
+        local_player_index = "unknown",
+        active_player_index = "unknown",
+        turn_number = "unknown",
+        phase = "unknown",
+        input_enabled = "unknown",
+        multiplayer = "unknown"
+    };
+
+    -- Nothing in this API requires or initializes the native DLL.
+    if not cm or type(cm.model) ~= "function" then return result; end
+    local model = MKMP_Turn_Observe_Protected(cm, "model");
+    if not model then return result; end
+
+    local turn = MKMP_Turn_Observe_Protected(model, "turn_number");
+    if MKMP_Turn_Valid_Integer(turn) then
+        result.turn_number = turn;
+        result.available = true;
+        result.reason = "partial_lua_turn_only";
+    else
+        result.reason = "turn_number_unavailable";
+    end
+
+    local multiplayer = MKMP_Turn_Observe_Protected(cm, "is_multiplayer");
+    if type(multiplayer) == "boolean" then
+        result.multiplayer = multiplayer;
+    end
+
+    return result;
+end
+
+-- Recording an event never converts it into engine ownership/phase proof.
+-- Non-authoritative label is intentionally distinct from phase or active_faction.
+function MKMP_Runtime_Get_Turn_Observation_Event_V1(event_name)
+    local result = MKMP_Runtime_Get_Turn_Observation_V1();
+    result.event = type(event_name) == "string" and event_name or "unknown";
+    result.event_source = "lua_callback_label_unverified";
+    return result;
+end
