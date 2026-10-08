@@ -72,7 +72,8 @@ local function Probe_Trace(message)
         local f = io.open("PR45_RUNTIME_TRACE.txt", "ab");
         if not f then return; end
         local size = f:seek("end");
-        local line = "schema=1 source_sha=SOURCE_SHA "..string.sub(tostring(message),1,512).."\n";
+        local safe = string.sub(tostring(message),1,512):gsub("[\r\n\t]", " "):gsub("%c", "?");
+        local line = "schema=2 source_sha=SOURCE_SHA "..safe.."\n";
         if size and size + #line <= 65536 then f:write(line); end
         f:close();
     end);
@@ -114,12 +115,18 @@ function Common_Initializer(...)
         Probe_Trace("native_initialize_begin");
         MKMP_Runtime_Initialize();
         local status = MKMP_Runtime_Status();
-        Probe_Trace("runtime_status available="..tostring(status.available).." reason="..tostring(status.reason).." luaopen_calls="..tostring(status.luaopen_calls));
+        local reason = tostring(status.reason);
+        local reason_code = "unknown";
+        if status.available == true and reason == "ready" then reason_code = "ready";
+        elseif status.available == false and reason:sub(1, 15) == "dll_unavailable" then reason_code = "dll_unavailable"; end
+        Probe_Trace("runtime_status available="..tostring(status.available).." reason_code="..reason_code.." luaopen_calls="..tostring(status.luaopen_calls));
+        if reason_code ~= "ready" then Probe_Trace("runtime_error_detail text="..reason); end
         Probe_World("initializer");
-        if eh and eh.add_listener then
-            eh:add_listener("PR45_World_Probe", "FactionTurnStart", true, function()
+        if cm and cm.add_listener then
+            Probe_Trace("listener_register_attempt");
+            cm:add_listener("PR45_World_Probe", "FactionTurnStart", true, function()
                 Probe_World("faction_turn_start");
-                if probe_world_samples >= 5 then eh:remove_listener("PR45_World_Probe"); end
+                if probe_world_samples >= 5 then cm:remove_listener("PR45_World_Probe"); end
             end, true);
         end
     end);
