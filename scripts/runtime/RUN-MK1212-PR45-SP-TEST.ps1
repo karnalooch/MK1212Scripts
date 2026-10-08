@@ -96,6 +96,16 @@ local function Probe_World(phase)
         if type(world.GetMemoryAddress) ~= "function" or type(world.GetFactionCount) ~= "function" then
             Probe_Trace("world phase="..phase.." state=capability_missing"); return;
         end
+        if type(world.GetCaptureStatus) == "function" then
+            local ok_capture, capture = pcall(world.GetCaptureStatus);
+            if ok_capture and type(capture) == "table" then
+                Probe_Trace("world_capture phase="..phase.." generation="..tostring(capture.generation).." hits="..tostring(capture.constructor_hits).." clears="..tostring(capture.clear_count).." enabled="..tostring(capture.hook_enabled).." cached="..tostring(capture.world_cached));
+            else
+                Probe_Trace("world_capture phase="..phase.." state=query_failed");
+            end
+        else
+            Probe_Trace("world_capture phase="..phase.." state=capability_missing");
+        end
         -- Never log or use raw addresses as gameplay authority.
         local present = world.GetMemoryAddress() ~= nil;
         local count = world.GetFactionCount();
