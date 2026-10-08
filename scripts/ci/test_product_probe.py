@@ -45,6 +45,21 @@ class ProductProbeTests(unittest.TestCase):
         self.assertIn('string.sub(tostring(message), 1, 512)', instrumented)
         self.assertNotIn('schema=1 source_sha=', instrumented)
 
+    def test_workshop_early_native_loader_is_bounded_and_fail_soft(self):
+        harness = (ROOT / 'scripts/runtime/RUN-MK1212-PR45-SP-TEST.ps1').read_text(encoding='utf-8')
+        prefix = harness.split("$Prefix = @'", 1)[1].split("'@\n$Suffix", 1)[0]
+        suffix = harness.split("$Suffix = @'", 1)[1].split("'@\n$OverlayCommon", 1)[0]
+        self.assertIn('Probe_Trace("bootstrap_enter")', prefix)
+        self.assertIn('early_native_begin', prefix)
+        self.assertIn('pcall(function()', prefix)
+        self.assertIn('MKMP_Runtime_Initialize();', prefix)
+        self.assertLess(prefix.index('early_native_begin'), prefix.index('MKMP_Runtime_Initialize();'))
+        self.assertIn('MKMP_Debug_Initialize();', suffix)
+        self.assertIn('early_bootstrap_status', suffix)
+        self.assertIn('Probe_World("initializer")', suffix)
+        self.assertNotIn('require("common/mkmp_debug")', prefix)
+        self.assertEqual(harness.count('if (-not $Result.pass) { exit 1 }'), 1)
+
     def test_instrumentation_precedes_first_dependency(self):
         source = (ROOT / 'campaigns/main_attila/common/main.lua').read_text()
         result = probe.instrument(source, 'a' * 40)
