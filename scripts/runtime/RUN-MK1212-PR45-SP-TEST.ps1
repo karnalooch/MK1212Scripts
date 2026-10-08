@@ -238,6 +238,22 @@ function Common_Initializer(...)
                 " multiplayer="..multiplayer..
                 " faction="..event_faction.." owner=unknown phase=unknown");
         end
+        -- One guarded V2 census per initializer; do not rescan 182 factions on every AI callback.
+        pcall(function()
+            if type(MKMP_Runtime_Get_Turn_Observation_V2) ~= "function" then return; end
+            local v2 = MKMP_Runtime_Get_Turn_Observation_V2();
+            local locals = table.concat(v2.local_factions or {}, ",");
+            local humans = table.concat(v2.human_factions or {}, ",");
+            Probe_Trace("turn_v2 player_turn="..tostring(v2.player_turn)..
+                " local_state="..tostring(v2.local_factions_state)..
+                " local_count="..tostring(#(v2.local_factions or {}))..
+                " human_state="..tostring(v2.human_factions_state)..
+                " human_count="..tostring(#(v2.human_factions or {}))..
+                " script_faction="..tostring(v2.script_faction_turn)..
+                " active_faction="..tostring(v2.active_faction)..
+                " parity="..tostring(v2.faction_count_parity)..
+                " locals="..locals.." humans="..humans);
+        end);
         Flight_Record("initializer", nil);
         local flight_events = {"FactionTurnStart", "FactionTurnEnd"};
         if cm and type(cm.add_listener) == "function" then
