@@ -62,3 +62,22 @@ PR #61 targets the unmerged runtime integration branch (PR #45). GitHub Actions 
 ## Governance and release checklist
 
 For PR #61, high-risk governance requires the exact PR-body marker `Auto-merge: manual`. The explicit marker was added to the PR after CI #94 identified the missing policy text; the change is administrative and does not alter game behavior. The PR must remain manually merged, and the **latest exact HEAD** must have green Aggregate CI plus a verified artifact before release.
+
+## AEEF Flight Recorder V1 — campaign event trace
+
+The SP harness now records a small **read-only** event stream called `flight_v1`:
+- `initializer`, `FactionTurnStart`, `FactionTurnEnd` (only when the current Attila build actually dispatches them).
+- Sequential per-Lua-state index, callback event, guarded campaign turn, multiplayer boolean, guarded event faction label.
+- **`owner=unknown` and `phase=unknown` are deliberate:** the callback label does not prove ownership.
+- Hard cap **48** flight records per Lua state, together with the pre-existing overall trace budget of 128 lines / 64 KiB.
+- Parsed under `coverage.json.flight_recorder` with count, event distribution and sequence validity; no claim of completeness, and no inferred input/command permissions.
+- The baseline separate WORLD probe remains capped; flight events cannot modify state or use new native hooks.
+- Unsupported callback APIs fail softly; observing no event is `NOT_OBSERVED`, not engine inactivity proof.
+
+### One-session operator path
+
+Run native probe once, open a single-player campaign, perform ordinary commands if available, end 1–2 turns, optionally save/load or fight, exit normally and submit ONE `MK1212-PR45-SP-EVIDENCE-*.zip`. Check `result.json`, `coverage.json` and `PR45_RUNTIME_TRACE.txt`. Native mode remains separate from optional no-DLL fallback. Workshop backup and rollback continue to be mandatory.
+
+### Coverage limitations
+
+This is **not yet a complete flight recorder for all game internals**: there is no universal Attila command bus or read-only network replication API established here. Do not claim that army movement, recruitment, diplomacy, saves, battles or every AI action are captured unless source-supported event probes and real runtime observations establish that. Expanding the allowlist requires an Attila-specific API check and independent tests. This release establishes a guarded instrumentation backbone, not simultaneous multiplayer turns.
