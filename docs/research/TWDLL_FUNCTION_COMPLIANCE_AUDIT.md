@@ -82,3 +82,55 @@ For a public AEEF release:
 - GNU GPLv3: https://www.gnu.org/licenses/gpl-3.0.html ; FSF FAQ: https://www.gnu.org/licenses/gpl-faq.html
 
 *This file records source observations and risk recommendations, not a legal opinion or proof that any particular function is used by the Workshop SP probe.*
+
+## MK1212 interface changes vs native UI intervention — SEGA terms review
+
+**Decision record (2026-10-08).** The baseline MK1212 mod contains changes to user interface presentation and interactions. It is essential not to conflate **Lua/DB/UI content modding** with **native hooks or writes to the game's process memory**. Neither the quantity of UI changes nor their visual prominence alone determines permission or legality; the *mechanism*, third-party asset ownership, applicable Attila modding permissions and distribution conditions matter.
+
+### EULA and modding terms: points to check in the controlling version
+
+The earlier legal research examined the SEGA Europe EULA and published modding terms (reported effective date: 2025-12-01) together with the Polish EULA. The following are **summaries of that review**, not legal quotations or independent verification of section numbering in this commit:
+
+| Provision referenced in prior review | Working interpretation for this project | Verification needed before release |
+| --- | --- | --- |
+| SEGA EULA §7(e) | Limits modifying/decompiling/reverse-engineering the product, subject to applicable-law exceptions | Confirm the controlling agreement, exact language and applicability to Attila |
+| SEGA Modding Terms §1 | Distinguishes modder-created material and publisher intellectual property | Verify rights to every distributed script, image, icon, text and asset |
+| SEGA Modding Terms §2 | Provides a modding pathway using publisher-provided tools | Check Attila's official Assembly Kit and Workshop scope, not merely a general SEGA permission |
+| SEGA Modding Terms §3 | Includes content and third-party-rights requirements | Review licensing, attribution and content provenance |
+| SEGA Modding Terms §6 | Reserves publisher/platform rights to withdraw distribution or permission | Record takedown and uninstall/rollback procedure |
+
+Interpret the EULA's general modification restrictions **alongside the express, applicable modding permissions**, rather than presenting normal Assembly Kit work as inherently prohibited. The existence of official Attila modding tools does **not** constitute general publisher approval for native in-process code hooks.
+
+Primary terms for further verification:
+- https://games.sega.com/eula/
+- https://privacy.sega.com/en/sega-europe-end-user-license-agreement
+- https://privacy.sega.com/pl/sega-umowa-licencyjna-uzytkownika-koncowego-sega-eula
+- Official Total War: ATTILA Assembly Kit documentation: https://wiki.totalwar.com/w/Assembly_Kit_(TWA).html
+
+### Two different technical pathways
+
+| Mechanism | Concrete example | Engineering recommendation |
+| --- | --- | --- |
+| Supported Lua, database and UI content | New panels, buttons, text, icon/layout and faction display via available Attila modding interfaces | **Prefer in AEEF Core**, audit asset rights and tested compatibility |
+| Native UI observation | `twdll.campaign_ui.GetMemoryAddress`, `GetMaxSlotsMajor`, `GetEncyclopediaUrl` | Optional diagnostic; even a getter may depend on native hooks, no automatic publisher approval |
+| Native UI mutation | `SetMaxSlotsMajor`, `SetMaxSlotsMinor`, `ClearMaxSlots` | Separate #60 permission/compliance gate before public packaging |
+| Native engine refresh and pointer overwrite | `RefreshSettlements`, `SetEncyclopediaUrl` | Higher risk; source includes internal engine calls and memory protection/write operations |
+| Native hook lifecycle | `MH_CreateHook`, `MH_EnableHook`, `MH_DisableHook`, `MH_RemoveHook` | Native research only until Attila-specific terms are clarified |
+
+**Repository evidence:** `native/twdll/src/attila/campaign_ui.cpp` exports the named functions; its hook teardown invokes `MH_DisableHook`/`MH_RemoveHook`, and its encyclopedia URL path uses `VirtualProtect` plus a process-memory pointer assignment. **This proves what the twdll module is capable of, not that MK1212's regular Workshop UI invokes those functions.** An explicit call-graph audit would be required to establish usage.
+
+### Polish law: distinguish study from arbitrary engine changes
+
+Prior research referenced Article 75(2)(2) of the Polish Copyright Act concerning observation, study and testing of software functioning by a lawful user, and Article 75(2)(3) concerning specific interoperability-related activities. These are conditional statutory provisions, **not a blanket authorization to patch executable instructions**, and applicability to particular Attila/twdll activities requires legal analysis. Use the official legislation portal to verify wording and current version: https://eli.gov.pl/ .
+
+### Release choices and outstanding evidence
+
+1. Keep standard MK1212 Lua/DB/UI fixes and AEEF Core on the officially supported modding lane, subject to game-specific terms and asset rights.
+2. Preserve a completely **DLL-free, functional public Core baseline**; Native cannot be a mandatory dependency.
+3. Keep WORLD hooks, native UI alterations and executable-memory modifications in a separate review track; do not imply published CI artifacts have SEGA authorization.
+4. No publisher approval for public distribution of the current native hooks has been established. **Absence of an explicit authorization is uncertainty, not proof of criminal illegality**; contract breach, statutory exceptions and bans are separate questions.
+5. Review the actual Workshop UI scripts and assets, their source/licensing, and concrete invocation paths before declaring individual features compliant.
+6. Obtain written guidance from SEGA/Creative Assembly where native permission remains ambiguous. Do not introduce DRM/CRC bypass, executable redistribution, stealth or anti-detection tactics.
+7. Document GPL-3.0 obligations for twdll independently from publisher authorization and distinguish **SOURCE-OBSERVED** from **RUNTIME-PROVEN**.
+
+**Decision:** Routine UI changes made through Attila-supported Lua/DB tooling are not categorically disallowed just because they modify game UI; native interception and memory writes receive a separate elevated review. This is a risk-management recommendation, **not legal advice nor a guarantee against takedown or Steam sanctions**.
