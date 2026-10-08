@@ -200,6 +200,64 @@ function Common_Initializer(...)
                 " phase="..tostring(observation.phase)..
                 " reason="..tostring(observation.reason));
         end
+        -- AEEF Flight Recorder V1: bounded, observational Lua events only.
+        -- Events are allowlisted; unsupported event names merely produce no callbacks.
+        local flight_count = 0;
+        local flight_limit = 48;
+        local flight_sequence = 0;
+        local function Flight_Record(event_name, context)
+            if flight_count >= flight_limit then return; end
+            flight_count = flight_count + 1;
+            flight_sequence = flight_sequence + 1;
+            local observation = nil;
+            pcall(function()
+                if type(MKMP_Runtime_Get_Turn_Observation_Event_V1) == "function" then
+                    observation = MKMP_Runtime_Get_Turn_Observation_Event_V1(event_name);
+                end
+            end);
+            local event_faction = "unknown";
+            pcall(function()
+                if context and type(context.faction) == "function" then
+                    local faction = context:faction();
+                    if faction and type(faction.name) == "function" then
+                        local value = faction:name();
+                        if type(value) == "string" and value:match("^[%w_]+$") then
+                            event_faction = value;
+                        end
+                    end
+                end
+            end);
+            local turn_number = "unknown";
+            local multiplayer = "unknown";
+            if type(observation) == "table" then
+                turn_number = tostring(observation.turn_number);
+                multiplayer = tostring(observation.multiplayer);
+            end
+            Probe_Trace("flight_v1 seq="..flight_sequence..
+                " event="..event_name.." turn="..turn_number..
+                " multiplayer="..multiplayer..
+                " faction="..event_faction.." owner=unknown phase=unknown");
+        end
+        Flight_Record("initializer", nil);
+        local flight_events = {"FactionTurnStart", "FactionTurnEnd"};
+        if cm and type(cm.add_listener) == "function" then
+            for _, flight_event in ipairs(flight_events) do
+                local event_name = flight_event;
+                local listener_id = "AEEF_Flight_"..event_name;
+                local registered = pcall(function()
+                    cm:add_listener(listener_id, event_name, true, function(context)
+                        Flight_Record(event_name, context);
+                        if flight_count >= flight_limit then
+                            pcall(function() cm:remove_listener(listener_id); end);
+                        end
+                    end, true);
+                end);
+                Probe_Trace("flight_listener event="..event_name..
+                    " state="..(registered and "registered" or "unavailable"));
+            end
+        else
+            Probe_Trace("flight_listener state=receiver_unavailable");
+        end
         Probe_Turn("initializer", nil);
         Probe_World("initializer");
         if not probe_listener_registered then
