@@ -54,3 +54,7 @@ Commands: `python -m unittest scripts/ci/test_turn_observation_v1.py`; optional 
 **INVESTIGATE**, not GO: compare local player and active turn identity on real SP/AI transitions using *documented* scripting interfaces first; only after evidence review and publisher-compliance assessment (#60) design separately authorized read-only native instrumentation. Do not introduce guessed addresses or force non-active commands. A two-peer test is necessary for an actual simultaneous-turn multiplayer claim.
 
 Evidence categories: DOCUMENTED / REPO-OBSERVED / RUNTIME-PROVEN / HISTORICAL-RE / HYPOTHESIS / BLOCKED. CI/source tests alone are never RUNTIME-PROVEN.
+
+## Stacked PR CI mechanics
+
+PR #61 targets the unmerged runtime integration branch (PR #45). GitHub Actions originally allowed pull-request targets only on `master`; CI trigger coverage was expanded on the parent branch to include `feat/44-mk1212-twdll-runtime-integration`. The child branch adds its dedicated V1 test step. A green workflow must be checked at the **exact child HEAD**; workflow dispatch and completion must not be inferred from committed YAML alone. Revert the temporary stacked-branch trigger after #45 lands, if no longer needed.
