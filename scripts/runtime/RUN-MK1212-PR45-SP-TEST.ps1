@@ -98,6 +98,16 @@ local function Probe_World(phase)
     if probe_world_samples >= 5 then return; end
     probe_world_samples = probe_world_samples + 1;
     local ok, err = pcall(function()
+        if type(MKMP_Runtime_Diagnostic_Parity) == "function" then
+            local ok_parity, parity = pcall(MKMP_Runtime_Diagnostic_Parity);
+            if ok_parity and type(parity) == "table" then
+                Probe_Trace("faction_parity phase="..phase.." lua_state="..tostring(parity.lua_state).." lua_count="..tostring(parity.lua_count).." native_state="..tostring(parity.native_state).." native_count="..tostring(parity.native_count).." result="..tostring(parity.parity));
+            else
+                Probe_Trace("faction_parity phase="..phase.." result=query_failed");
+            end
+        else
+            Probe_Trace("faction_parity phase="..phase.." result=capability_missing");
+        end
         local runtime = MKMP_RUNTIME;
         local world = runtime and runtime.module and runtime.module.world;
         if not world then Probe_Trace("world phase="..phase.." state=module_unavailable"); return; end
