@@ -7,6 +7,50 @@ function Test-GoldbergRootsDisjoint {
     return (-not (Test-LabPathContained -Root $SourceRoot -Path $LabRoot)) -and (-not (Test-LabPathContained -Root $LabRoot -Path $SourceRoot))
 }
 
+function Assert-GoldbergLayout {
+    param([string]$SourceRoot, [string]$LabRoot, [string]$HostGameRoot, [string]$ClientGameRoot)
+    $paths = @($SourceRoot, $LabRoot, $HostGameRoot, $ClientGameRoot)
+    foreach ($path in $paths) {
+        if ($path -notmatch '^[A-Za-z]:[\\/]' -or $path -match '[%\r\n]') { throw 'Laboratory paths must be explicit local Windows drive paths.' }
+        $full = [IO.Path]::GetFullPath($path).TrimEnd([char[]]@('\', '/'))
+        if ($full -ieq [IO.Path]::GetPathRoot($full).TrimEnd('\')) { throw 'A whole drive cannot be used as a laboratory directory.' }
+        Assert-LabNoReparsePath -Path $full
+    }
+    if (-not (Test-GoldbergRootsDisjoint -SourceRoot $SourceRoot -LabRoot $LabRoot)) { throw 'Original installation and laboratory metadata paths overlap.' }
+    foreach ($roleRoot in @($HostGameRoot, $ClientGameRoot)) {
+        if (-not (Test-GoldbergRootsDisjoint -SourceRoot $SourceRoot -LabRoot $roleRoot)) { throw 'An owned game copy overlaps the original installation.' }
+        if (Test-LabPathContained -Root $roleRoot -Path $LabRoot) { throw 'A game copy cannot contain laboratory metadata.' }
+        foreach ($systemPath in @([Environment]::GetFolderPath([Environment+SpecialFolder]::Windows), [Environment]::GetFolderPath([Environment+SpecialFolder]::System))) {
+            if ($systemPath -and (Test-LabPathContained -Root $systemPath -Path $roleRoot)) { throw 'A game copy cannot be placed in a Windows system directory.' }
+        }
+    }
+    if (-not (Test-GoldbergRootsDisjoint -SourceRoot $HostGameRoot -LabRoot $ClientGameRoot)) { throw 'HOST and CLIENT game directories overlap.' }
+}
+
+function Get-GoldbergVolumeBudget {
+    param([object[]]$Requirements, [object[]]$AvailableVolumes, [long]$ReserveBytes = 1073741824)
+    if ($ReserveBytes -lt 0) { throw 'Invalid per-volume reserve.' }
+    $byRoot = @{}; $groups = @{}
+    foreach ($volume in $AvailableVolumes) {
+        $root = [IO.Path]::GetPathRoot([string]$volume.root).ToUpperInvariant()
+        if (-not $root -or -not $volume.volume_id -or [long]$volume.available_bytes -lt 0 -or $byRoot.ContainsKey($root)) { throw 'Ambiguous available-volume record.' }
+        $byRoot[$root] = $volume
+    }
+    foreach ($requirement in $Requirements) {
+        $root = [IO.Path]::GetPathRoot([IO.Path]::GetFullPath([string]$requirement.path)).ToUpperInvariant()
+        if (-not $byRoot.ContainsKey($root) -or [long]$requirement.missing_bytes -lt 0) { throw 'Missing volume identity or invalid copy budget.' }
+        $volume = $byRoot[$root]; $id = [string]$volume.volume_id
+        if (-not $groups.ContainsKey($id)) { $groups[$id] = [pscustomobject]@{ volume_id = $id; roots = @(); missing_bytes = [long]0; reserve_bytes = $ReserveBytes; required_bytes = [long]0; available_bytes = [long]$volume.available_bytes } }
+        $group = $groups[$id]
+        if ($group.roots -notcontains $root) { $group.roots += $root }
+        $group.available_bytes = [Math]::Min([long]$group.available_bytes, [long]$volume.available_bytes)
+        if ($group.missing_bytes -gt ([long]::MaxValue - [long]$requirement.missing_bytes)) { throw 'Per-volume copy budget overflow.' }
+        $group.missing_bytes += [long]$requirement.missing_bytes
+    }
+    foreach ($group in $groups.Values) { $group.required_bytes = Assert-GoldbergDiskBudget -MissingBytes $group.missing_bytes -AvailableBytes $group.available_bytes -ReserveBytes $ReserveBytes }
+    return [pscustomobject]@{ volumes = @($groups.Values | Sort-Object volume_id) }
+}
+
 function Assert-GoldbergDiskBudget {
     param([long]$MissingBytes, [long]$AvailableBytes, [long]$ReserveBytes = 1073741824)
     if ($MissingBytes -lt 0 -or $AvailableBytes -lt 0 -or $ReserveBytes -lt 0 -or $MissingBytes -gt ([long]::MaxValue - $ReserveBytes)) { throw 'Invalid disk-space budget.' }
@@ -110,7 +154,7 @@ function Get-GoldbergTreeInventory {
     [long]$total = 0
     foreach ($file in ($scan.Files | Sort-Object FullName)) {
         $relative = $file.FullName.Substring($root.Length).TrimStart([char[]]@('\', '/')).Replace('\', '/')
-        if (-not $seen.Add($relative) -or $relative -eq '.mk1212-goldberg-copy.json' -or $relative -eq '.mk1212-goldberg-settings.json') { throw 'Source tree has ambiguous or reserved laboratory paths.' }
+        if (-not $seen.Add($relative) -or $relative -eq '.mk1212-goldberg-copy.json' -or $relative -eq '.mk1212-goldberg-settings.json' -or $relative -match '^\.mk1212-(workshop|goldberg-backups)(/|$)') { throw 'Source tree has ambiguous or reserved laboratory paths.' }
         if ($file.Length -lt 0 -or $file.Length -gt 17179869184 -or $total -gt ($MaxTotalBytes - $file.Length)) { throw 'Game tree exceeds its byte budget.' }
         $total += $file.Length
         $files.Add([pscustomobject]@{ relative_path = $relative; source = $file.FullName; bytes = [long]$file.Length; last_write_ticks = $file.LastWriteTimeUtc.Ticks })
@@ -123,9 +167,14 @@ function Initialize-GoldbergCopyRoot {
         [Parameter(Mandatory = $true)][string]$DestinationRoot,
         [Parameter(Mandatory = $true)][string]$LabRoot,
         [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-f]{32}$')][string]$LabId,
-        [Parameter(Mandatory = $true)][ValidateSet('HOST', 'CLIENT')][string]$Role
+        [Parameter(Mandatory = $true)][ValidateSet('HOST', 'CLIENT')][string]$Role,
+        [string]$RoleGameRoot
     )
-    if (-not (Test-LabPathContained -Root $LabRoot -Path $DestinationRoot) -or [IO.Path]::GetFullPath($LabRoot) -eq [IO.Path]::GetFullPath($DestinationRoot)) { throw 'A game copy must be strictly inside its owned lab.' }
+    if ($RoleGameRoot) {
+        $roleFull = [IO.Path]::GetFullPath($RoleGameRoot).TrimEnd([char[]]@('\', '/'))
+        $destinationFull = [IO.Path]::GetFullPath($DestinationRoot).TrimEnd([char[]]@('\', '/'))
+        if ($destinationFull -ine $roleFull -and $destinationFull -ine ($roleFull + '.staging-' + $LabId)) { throw 'A game copy must use its exact authorized role or staging directory.' }
+    } elseif (-not (Test-LabPathContained -Root $LabRoot -Path $DestinationRoot) -or [IO.Path]::GetFullPath($LabRoot) -eq [IO.Path]::GetFullPath($DestinationRoot)) { throw 'A game copy must be strictly inside its owned lab.' }
     Assert-LabNoReparsePath -Path $DestinationRoot
     $markerPath = Join-Path $DestinationRoot '.mk1212-goldberg-copy.json'
     if (Test-Path -LiteralPath $markerPath -PathType Leaf) {
@@ -151,10 +200,12 @@ function Copy-GoldbergGameTree {
         [ValidateRange(1, 100000)][int]$MaxEntries = 100000,
         [long]$MaxTotalBytes = 214748364800,
         $Inventory = $null,
-        [hashtable]$ExpectedSourceHashes = @{}
+        [hashtable]$ExpectedSourceHashes = @{},
+        [string]$RoleGameRoot
     )
     if (-not (Test-GoldbergRootsDisjoint -SourceRoot $SourceRoot -LabRoot $LabRoot)) { throw 'The original game and lab paths overlap.' }
-    [void](Initialize-GoldbergCopyRoot -DestinationRoot $DestinationRoot -LabRoot $LabRoot -LabId $LabId -Role $Role)
+    if (-not (Test-GoldbergRootsDisjoint -SourceRoot $SourceRoot -LabRoot $DestinationRoot)) { throw 'Game-copy destination overlaps its source.' }
+    [void](Initialize-GoldbergCopyRoot -DestinationRoot $DestinationRoot -LabRoot $LabRoot -LabId $LabId -Role $Role -RoleGameRoot $RoleGameRoot)
     if ($null -eq $Inventory) { $Inventory = Get-GoldbergTreeInventory -SourceRoot $SourceRoot -MaxEntries $MaxEntries -MaxTotalBytes $MaxTotalBytes }
     if ($Inventory.files.Count -gt $MaxEntries -or $Inventory.total_bytes -gt $MaxTotalBytes) { throw 'Inventory exceeds the copy budget.' }
     $results = New-Object 'System.Collections.Generic.List[object]'
@@ -285,7 +336,7 @@ function Expand-GoldbergVerifiedDll {
 function Get-GoldbergToolkitContext {
     param([Parameter(Mandatory = $true)][string]$ScriptDirectory, [string]$GoldbergArchive)
     $root = [IO.Path]::GetFullPath((Join-Path $ScriptDirectory '../..'))
-    $fixed = @('scripts/runtime/goldberg_client_lab.ps1', 'scripts/runtime/goldberg_client_lab_core.psm1', 'scripts/runtime/dual_client_lab_core.psm1', 'scripts/runtime/dual_client_probe.ps1', 'third_party/goldberg/lock.json')
+    $fixed = @('scripts/runtime/goldberg_client_lab.ps1', 'scripts/runtime/goldberg_client_lab_core.psm1', 'scripts/runtime/dual_client_lab_core.psm1', 'scripts/runtime/dual_client_probe.ps1', 'scripts/runtime/goldberg_setup.ps1', 'third_party/goldberg/lock.json')
     $source = [ordered]@{ source_sha = 'unknown'; kind = 'local_files'; integrity = 'FILE_HASHES_ONLY'; files = @() }
     foreach ($relative in $fixed) {
         $path = Join-Path $root $relative
@@ -376,10 +427,10 @@ function Install-GoldbergCopySettings {
     param(
         [string]$GameRoot, [string]$LabRoot, [string]$LabId,
         [ValidateSet('HOST', 'CLIENT')][string]$Role,
-        [string]$GoldbergDllPath, [string]$OriginalDllHash, [string[]]$InterfaceLines, [string]$Language = 'english'
+        [string]$GoldbergDllPath, [string]$OriginalDllHash, [string[]]$InterfaceLines, [string]$Language = 'english', [string]$RoleGameRoot
     )
-    [void](Initialize-GoldbergCopyRoot -DestinationRoot $GameRoot -LabRoot $LabRoot -LabId $LabId -Role $Role)
-    $backup = Join-Path (Join-Path $LabRoot 'backups') $Role
+    [void](Initialize-GoldbergCopyRoot -DestinationRoot $GameRoot -LabRoot $LabRoot -LabId $LabId -Role $Role -RoleGameRoot $RoleGameRoot)
+    $backup = $(if ($RoleGameRoot) { Join-Path $GameRoot '.mk1212-goldberg-backups' } else { Join-Path (Join-Path $LabRoot 'backups') $Role })
     Assert-LabNoReparsePath -Path $backup
     [void][IO.Directory]::CreateDirectory($backup)
     $api = Join-Path $GameRoot 'steam_api.dll'
@@ -451,6 +502,247 @@ function Assert-GoldbergConfiguredCopy {
     foreach ($leaf in @('offline.txt', 'disable_networking.txt', 'disable_lobby_creation.txt')) {
         if (Test-Path -LiteralPath (Join-Path (Join-Path $GameRoot 'steam_settings') $leaf)) { throw ('A conflicting networking setting blocks launch: ' + $leaf) }
     }
+}
+
+function Get-GoldbergPackType {
+    param([string]$Path)
+    $stream = $null; $reader = $null
+    try {
+        Assert-LabNoReparsePath -Path $Path
+        $stream = New-Object IO.FileStream -ArgumentList $Path, ([IO.FileMode]::Open), ([IO.FileAccess]::Read), ([IO.FileShare]::Read)
+        $reader = New-Object IO.BinaryReader -ArgumentList $stream
+        if ($stream.Length -lt 8) { return -1 }
+        $magic = [Text.Encoding]::ASCII.GetString($reader.ReadBytes(4))
+        if ($magic.StartsWith('MFH')) {
+            if ($stream.Length -lt 16) { return -1 }
+            $stream.Position = 8; $magic = [Text.Encoding]::ASCII.GetString($reader.ReadBytes(4))
+        }
+        if ($magic -notmatch '^PFH[0-9]$') { return -1 }
+        return [int]($reader.ReadUInt32() -band [uint32]15)
+    } finally {
+        if ($null -ne $reader) { $reader.Dispose() }
+        elseif ($null -ne $stream) { $stream.Dispose() }
+    }
+}
+
+function Get-GoldbergModCandidate {
+    param([string]$Path, [string]$SourceGameRoot, [int]$MaxEntries, [long]$MaxBytes, [string]$ModsRoot, [object[]]$ModsFiles = @())
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    $text = Read-LabTextBounded -Path $Path -MaxBytes 1048576
+    $root = [IO.Path]::GetFullPath($SourceGameRoot).TrimEnd([char[]]@('\', '/'))
+    $directories = @([pscustomobject]@{ source = (Join-Path $root 'data'); relative_path = 'data'; explicit = $false; external = $false })
+    $names = @(); $excluded = 0; $ordinal = 0
+    foreach ($line in [regex]::Split($text, '\r\n|\n|\r')) {
+        $trimmed = $line.Trim()
+        if (-not $trimmed -or $trimmed.StartsWith('//') -or $trimmed.StartsWith('#')) { continue }
+        $match = [regex]::Match($trimmed, '^(mod|add_working_directory)\s+"([^"\r\n\x00]+)"\s*;\s*$', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+        if (-not $match.Success) {
+            if ($trimmed -match '^(mod|add_working_directory)\b') { throw ('Malformed active mod directive in ' + $Path) }
+            $excluded++; continue
+        }
+        $value = $match.Groups[2].Value
+        if ($match.Groups[1].Value -ieq 'mod') {
+            if ($value -notmatch '^[^\\/:*?"<>|\x00]+\.pack$' -or $value.StartsWith('.') -or $names -contains $value) { throw 'Active mod directives require distinct plain pack filenames.' }
+            $names += $value
+        } else {
+            if (-not [IO.Path]::IsPathRooted($value) -or $value -match '(^|[\\/])\.\.([\\/]|$)|[%\r\n]') { throw 'An active working directory must be an explicit absolute path without traversal.' }
+            $directory = [IO.Path]::GetFullPath($value).TrimEnd([char[]]@('\', '/'))
+            $external = -not (Test-LabPathContained -Root $root -Path $directory)
+            if ($external -and $ModsRoot -and (-not (Test-LabPathContained -Root $ModsRoot -Path $directory) -or -not (Test-Path -LiteralPath $directory -PathType Container))) {
+                $relocations = @()
+                $workshopRelative = [regex]::Match($directory, '[\\/]content[\\/]325610[\\/](.+)$', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+                if ($workshopRelative.Success) { $relocations += (Join-Path $ModsRoot $workshopRelative.Groups[1].Value) }
+                $relocations += (Join-Path $ModsRoot ([IO.Path]::GetFileName($directory)))
+                if ([IO.Path]::GetFileName($directory) -ieq [IO.Path]::GetFileName($ModsRoot)) { $relocations += $ModsRoot }
+                $resolvedDirectories = @($relocations | Where-Object { (Test-LabPathContained -Root $ModsRoot -Path $_) -and (Test-Path -LiteralPath $_ -PathType Container) } | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd([char[]]@('\', '/')) } | Sort-Object -Unique)
+                if ($resolvedDirectories.Count -gt 1) { throw 'Moved Workshop directory has multiple possible destinations inside ModsRoot.' }
+                if ($resolvedDirectories.Count -eq 1) { $directory = $resolvedDirectories[0] }
+                else { $directory = 'UNRESOLVED:' + $directory }
+            }
+            if (-not $directory.StartsWith('UNRESOLVED:')) {
+                Assert-LabNoReparsePath -Path $directory
+                if (-not (Test-Path -LiteralPath $directory -PathType Container)) { throw ('Active mod working directory is missing: ' + $directory) }
+            }
+            if (@($directories | Where-Object { $_.source -ieq $directory }).Count -gt 0) { continue }
+            $external = $directory.StartsWith('UNRESOLVED:') -or -not (Test-LabPathContained -Root $root -Path $directory)
+            if ($external) { $ordinal++; $relative = ('.mk1212-workshop/{0:D4}' -f $ordinal) }
+            else { $relative = $directory.Substring($root.Length).TrimStart([char[]]@('\', '/')).Replace('\', '/') }
+            $directories += [pscustomobject]@{ source = $directory; relative_path = $relative; explicit = $true; external = $external }
+        }
+        if ($names.Count + $directories.Count -gt 4096) { throw 'Active mod directive count exceeds its bound.' }
+    }
+    foreach ($directory in @($directories | Where-Object { $_.source.StartsWith('UNRESOLVED:') })) {
+        $matchingDirectories = @($ModsFiles | Where-Object { $names -contains $_.Name } | ForEach-Object { $_.DirectoryName } | Sort-Object -Unique)
+        if ($matchingDirectories.Count -ne 1) { throw 'A declared moved mod directory cannot be mapped uniquely inside ModsRoot.' }
+        $directory.source = $matchingDirectories[0]
+    }
+    $uniqueDirectories = @(); $seenDirectories = @{}
+    foreach ($directory in $directories) {
+        if ($seenDirectories.ContainsKey($directory.source)) { continue }
+        $seenDirectories[$directory.source] = $true; $uniqueDirectories += $directory
+    }
+    $directories = $uniqueDirectories
+    # The explicitly selected ModsRoot is the only allowed search fallback.
+    # It resolves a missing named pack only when exactly one source exists.
+    if ($ModsRoot) {
+        foreach ($name in $names) {
+            $declared = @($directories | Where-Object { Test-Path -LiteralPath (Join-Path $_.source $name) -PathType Leaf })
+            if ($declared.Count -gt 0) { continue }
+            $matchesInRoot = @($ModsFiles | Where-Object { $_.Name -ieq $name })
+            if ($matchesInRoot.Count -ne 1) { throw ('Missing or ambiguous named pack inside selected ModsRoot: ' + $name) }
+            $sourceDirectory = $matchesInRoot[0].DirectoryName
+            if (@($directories | Where-Object { $_.source -ieq $sourceDirectory }).Count -eq 0) {
+                $ordinal++
+                $directories += [pscustomobject]@{ source = $sourceDirectory; relative_path = ('.mk1212-workshop/{0:D4}' -f $ordinal); explicit = $true; external = $true }
+            }
+        }
+    }
+    $mods = @(); $wanted = @{}; $visible = @{}; $scanned = 0
+    foreach ($directory in $directories) {
+        if (-not (Test-Path -LiteralPath $directory.source -PathType Container)) { continue }
+        Assert-LabNoReparsePath -Path $directory.source
+        foreach ($entry in [IO.Directory]::EnumerateFileSystemEntries($directory.source)) {
+            $scanned++; if ($scanned -gt $MaxEntries) { throw 'Active mod directory inventory exceeds its entry bound.' }
+            $item = Get-Item -LiteralPath $entry -Force -ErrorAction Stop
+            if ($item.PSIsContainer -or $item.Extension -ine '.pack') { continue }
+            Assert-LabNoReparsePath -Path $item.FullName
+            $key = $item.Name.ToLowerInvariant()
+            if (-not $visible.ContainsKey($key)) { $visible[$key] = @() }
+            $visible[$key] += [pscustomobject]@{ source = $item.FullName; directory = $directory; item = $item }
+            # Every direct pack in an explicitly selected directory is retained:
+            # Movie packs can be active without a mod directive.
+            if ($directory.explicit -or (Get-GoldbergPackType -Path $item.FullName) -eq 4) { $wanted[$item.FullName] = [pscustomobject]@{ source = $item.FullName; directory = $directory; item = $item } }
+        }
+    }
+    foreach ($name in $names) {
+        $key = $name.ToLowerInvariant()
+        if (-not $visible.ContainsKey($key)) { throw ('Active mod pack is missing from its declared directories: ' + $name) }
+        $candidates = @($visible[$key])
+        if ($candidates.Count -ne 1) { throw ('Active mod basename is ambiguous across visible directories: ' + $name) }
+        $chosen = $candidates[0]; $wanted[$chosen.source] = $chosen
+        $mods += [pscustomobject]@{ name = $name; source = $chosen.source; sha256 = $null }
+    }
+    $packs = @(); [long]$total = 0; $hashes = @{}
+    foreach ($directory in $directories) {
+        $records = @($wanted.Values | Where-Object { $_.directory.source -ieq $directory.source } | Sort-Object { $_.item.Name })
+        foreach ($record in $records) {
+            $item = $record.item
+            if ($item.Length -gt 17179869184 -or $total -gt ($MaxBytes - $item.Length)) { throw 'Selected mod packs exceed their byte budget.' }
+            $total += $item.Length
+            if ($item.Length -ge 1073741824) { Write-Host ('Hashing selected mod source: ' + $item.FullName) }
+            $digest = Get-GoldbergDigest -Path $item.FullName
+            $relative = $(if ($directory.relative_path) { $directory.relative_path + '/' + $item.Name } else { $item.Name })
+            $packs += [pscustomobject]@{ source = $item.FullName; source_root = $directory.source; relative_path = $relative; bytes = [long]$item.Length; sha256 = $digest; external = $directory.external }
+            $hashes[$item.FullName] = $digest
+        }
+    }
+    foreach ($mod in $mods) { $mod.sha256 = $hashes[$mod.source] }
+    $semantic = [ordered]@{
+        directories = @($directories | ForEach-Object { [ordered]@{ source = $_.source.ToLowerInvariant(); relative_path = $_.relative_path; explicit = $_.explicit } })
+        mods = @($mods | ForEach-Object { [ordered]@{ name = $_.name.ToLowerInvariant(); source = $_.source.ToLowerInvariant(); sha256 = $_.sha256 } })
+        packs = @($packs | ForEach-Object { [ordered]@{ source = $_.source.ToLowerInvariant(); relative_path = $_.relative_path.ToLowerInvariant(); bytes = $_.bytes; sha256 = $_.sha256 } })
+    }
+    $canonical = $semantic | ConvertTo-Json -Depth 8 -Compress
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    try { $fingerprint = ([BitConverter]::ToString($algorithm.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical)))).Replace('-', '').ToLowerInvariant() }
+    finally { $algorithm.Dispose() }
+    return [pscustomobject]@{ status = 'SELECTED_RUNTIME_UNVERIFIED'; fingerprint = $fingerprint; packs = $packs; mods = $mods; directories = $directories; total_bytes = $total; path = [IO.Path]::GetFullPath($Path); manifest_sha256 = (Get-GoldbergDigest -Path $Path -MaxBytes 1048576); excluded_lines = $excluded; has_selection = ($names.Count -gt 0 -or @($directories | Where-Object { $_.explicit }).Count -gt 0) }
+}
+
+function Get-GoldbergActiveModSelection {
+    param([string]$SourceGameRoot, [string]$UserScriptPath, [string]$UsedModsPath, [string]$ModsRoot, [ValidateRange(1, 100000)][int]$MaxEntries = 20000, [long]$MaxBytes = 107374182400)
+    if ($MaxBytes -lt 1) { throw 'Invalid selected-mod byte budget.' }
+    if (-not $UsedModsPath) { $UsedModsPath = Join-Path $SourceGameRoot 'used_mods.txt' }
+    $candidates = @(); $modsFiles = @()
+    if ($ModsRoot) {
+        $ModsRoot = [IO.Path]::GetFullPath($ModsRoot).TrimEnd([char[]]@('\', '/'))
+        Assert-LabNoReparsePath -Path $ModsRoot
+        if (-not (Test-Path -LiteralPath $ModsRoot -PathType Container)) { throw 'Selected ModsRoot does not exist; choose the installed Workshop/custom mod folder.' }
+        $scan = Get-LabFilesBounded -Root $ModsRoot -MaxEntries $MaxEntries -MaxDepth 18
+        if ($scan.Truncated -or $scan.Warnings.Count -gt 0) { throw 'Selected ModsRoot search exceeds its bounds or contains unreadable/reparse paths.' }
+        $modsFiles = @($scan.Files | Where-Object { $_.Extension -ieq '.pack' })
+    }
+    foreach ($path in @($UserScriptPath, $UsedModsPath)) {
+        $candidate = Get-GoldbergModCandidate -Path $path -SourceGameRoot $SourceGameRoot -MaxEntries $MaxEntries -MaxBytes $MaxBytes -ModsRoot $ModsRoot -ModsFiles $modsFiles
+        if ($null -ne $candidate) { $candidates += $candidate }
+    }
+    $selected = @($candidates | Where-Object { $_.has_selection })
+    if ($selected.Count -eq 0) { throw 'No active mod manifest was resolved. Select the intended mods in the existing launcher first; vanilla fallback is disabled.' }
+    $chosen = $selected[0]
+    foreach ($candidate in $selected) { if ($candidate.fingerprint -cne $chosen.fingerprint) { throw 'user.script and used_mods select conflicting mod order, directories or files.' } }
+    if ($chosen.packs.Count -eq 0) { throw 'The active manifest resolves to no pack files; vanilla fallback is disabled.' }
+    return [pscustomobject]@{ schema = 1; status = 'SELECTED_RUNTIME_UNVERIFIED'; fingerprint = $chosen.fingerprint; packs = $chosen.packs; mods = $chosen.mods; directories = $chosen.directories; total_bytes = $chosen.total_bytes; manifest_sources = @($candidates | ForEach-Object { [pscustomobject]@{ path = $_.path; sha256 = $_.manifest_sha256; has_selection = $_.has_selection; excluded_lines = $_.excluded_lines } }) }
+}
+
+function Copy-GoldbergSelectedMods {
+    param($Selection, [string]$GameRoot, [string]$LabRoot, [string]$LabId, [ValidateSet('HOST', 'CLIENT')][string]$Role, [string]$RoleGameRoot)
+    if ($Selection.schema -ne 1 -or $Selection.fingerprint -notmatch '^[0-9a-f]{64}$' -or $Selection.packs.Count -lt 1 -or $Selection.packs.Count -gt 20000 -or [long]$Selection.total_bytes -lt 0 -or [long]$Selection.total_bytes -gt 214748364800) { throw 'Unsupported selected-mod manifest.' }
+    [long]$manifestBytes = 0
+    foreach ($pack in $Selection.packs) {
+        if ([long]$pack.bytes -lt 0 -or [long]$pack.bytes -gt 17179869184 -or $manifestBytes -gt (214748364800 - [long]$pack.bytes)) { throw 'Selected-mod copy exceeds its total byte bound.' }
+        $manifestBytes += [long]$pack.bytes
+    }
+    if ($manifestBytes -ne [long]$Selection.total_bytes) { throw 'Selected-mod manifest byte total is inconsistent.' }
+    [void](Initialize-GoldbergCopyRoot -DestinationRoot $GameRoot -LabRoot $LabRoot -LabId $LabId -Role $Role -RoleGameRoot $RoleGameRoot)
+    $results = @(); $seen = @{}
+    foreach ($pack in $Selection.packs) {
+        $relative = [string]$pack.relative_path
+        if ($relative -match '(^|[\\/])\.{1,2}([\\/]|$)|^[\\/]|^[A-Za-z]:' -or $seen.ContainsKey($relative) -or [long]$pack.bytes -lt 0 -or [long]$pack.bytes -gt 17179869184 -or $pack.sha256 -notmatch '^[0-9a-f]{64}$') { throw 'Invalid or colliding selected-pack destination.' }
+        $seen[$relative] = $true
+        $destination = Join-Path $GameRoot $relative
+        if (-not (Test-LabPathContained -Root $GameRoot -Path $destination) -or (Test-LabPathContained -Root $GameRoot -Path $pack.source)) { throw 'Selected mod source/destination ownership overlaps.' }
+        Assert-LabNoReparsePath -Path $pack.source
+        Assert-LabNoReparsePath -Path $destination
+        $sourceInfo = Get-Item -LiteralPath $pack.source -ErrorAction Stop
+        if ($sourceInfo.PSIsContainer -or $sourceInfo.Length -ne [long]$pack.bytes) { throw 'Selected source pack changed size after selection.' }
+        if (Test-Path -LiteralPath $destination) {
+            Assert-GoldbergSingleLinkFile -Path $destination
+            if ((Get-GoldbergDigest -Path $pack.source) -cne $pack.sha256 -or (Get-GoldbergDigest -Path $destination) -cne $pack.sha256) { throw ('Selected source or retained copied pack hash differs: ' + $relative) }
+            $results += [pscustomobject]@{ relative_path = $relative; sha256 = $pack.sha256; bytes = $pack.bytes; status = 'VERIFIED_EXISTING' }
+            continue
+        }
+        [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($destination))
+        if (@([IO.Directory]::EnumerateFiles([IO.Path]::GetDirectoryName($destination), ([IO.Path]::GetFileName($destination) + '.partial-*'))).Count -gt 0) { throw 'An incomplete selected-mod copy is retained for review.' }
+        $temporary = $destination + '.partial-' + [guid]::NewGuid().ToString('N')
+        $inputFile = $null; $outputFile = $null; $algorithm = $null
+        try {
+            $inputFile = New-Object IO.FileStream -ArgumentList $pack.source, ([IO.FileMode]::Open), ([IO.FileAccess]::Read), ([IO.FileShare]::Read)
+            if ($inputFile.Length -ne [long]$pack.bytes) { throw 'Selected source pack changed before copying.' }
+            $outputFile = New-Object IO.FileStream -ArgumentList $temporary, ([IO.FileMode]::CreateNew), ([IO.FileAccess]::Write), ([IO.FileShare]::None)
+            $algorithm = [Security.Cryptography.SHA256]::Create(); $buffer = New-Object byte[] 1048576
+            [long]$copied = 0; [long]$progress = 0
+            while (($read = $inputFile.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                $copied += $read
+                if ($copied -gt [long]$pack.bytes) { throw 'Selected source pack exceeded its copy bound.' }
+                $outputFile.Write($buffer, 0, $read); [void]$algorithm.TransformBlock($buffer, 0, $read, $buffer, 0)
+                $progress += $read
+                if ($progress -ge 1073741824) { Write-Host ('Copying ' + $Role + ' selected mod: ' + $relative + ' (' + $copied + ' bytes)'); $progress = 0 }
+            }
+            [void]$algorithm.TransformFinalBlock((New-Object byte[] 0), 0, 0)
+            $actualHash = ([BitConverter]::ToString($algorithm.Hash)).Replace('-', '').ToLowerInvariant()
+            $outputFile.Flush(); $outputFile.Dispose(); $outputFile = $null
+            if ($copied -ne [long]$pack.bytes -or $actualHash -cne $pack.sha256 -or (Get-GoldbergDigest -Path $temporary) -cne $pack.sha256) { throw 'Selected source changed after selection or copy hash differs.' }
+            [IO.File]::Move($temporary, $destination)
+        } finally {
+            if ($null -ne $algorithm) { $algorithm.Dispose() }
+            if ($null -ne $outputFile) { $outputFile.Dispose() }
+            if ($null -ne $inputFile) { $inputFile.Dispose() }
+        }
+        $results += [pscustomobject]@{ relative_path = $relative; sha256 = $pack.sha256; bytes = $pack.bytes; status = 'COPIED' }
+    }
+    return [pscustomobject]@{ status = 'COPIED_VERIFIED'; fingerprint = $Selection.fingerprint; files = $results }
+}
+
+function Get-GoldbergSelectedModScript {
+    param($Selection, [string]$GameRoot)
+    $lines = @()
+    foreach ($directory in $Selection.directories) {
+        if (-not $directory.explicit) { continue }
+        $mapped = $(if ($directory.relative_path) { Join-Path $GameRoot $directory.relative_path } else { $GameRoot })
+        $lines += ('add_working_directory "' + $mapped + '";')
+    }
+    foreach ($mod in $Selection.mods) { $lines += ('mod "' + $mod.name + '";') }
+    return ($lines -join "`r`n")
 }
 
 function Get-GoldbergModScript {
@@ -529,4 +821,4 @@ function Get-GoldbergNetworkObservation {
     return [pscustomobject]$network
 }
 
-Export-ModuleMember -Function Test-GoldbergRootsDisjoint, Assert-GoldbergDiskBudget, Get-GoldbergDigest, Get-GoldbergPeMachine, Get-GoldbergPeerSettings, Get-GoldbergInterfaces, Get-GoldbergTreeInventory, Initialize-GoldbergCopyRoot, Copy-GoldbergGameTree, Expand-GoldbergVerifiedDll, Get-GoldbergToolkitContext, Assert-GoldbergSingleLinkFile, Write-GoldbergManagedText, Install-GoldbergCopySettings, Assert-GoldbergConfiguredCopy, Get-GoldbergModScript, Get-GoldbergNetworkObservation
+Export-ModuleMember -Function Test-GoldbergRootsDisjoint, Assert-GoldbergLayout, Get-GoldbergVolumeBudget, Assert-GoldbergDiskBudget, Get-GoldbergDigest, Get-GoldbergPeMachine, Get-GoldbergPeerSettings, Get-GoldbergInterfaces, Get-GoldbergTreeInventory, Initialize-GoldbergCopyRoot, Copy-GoldbergGameTree, Expand-GoldbergVerifiedDll, Get-GoldbergToolkitContext, Assert-GoldbergSingleLinkFile, Write-GoldbergManagedText, Install-GoldbergCopySettings, Assert-GoldbergConfiguredCopy, Get-GoldbergActiveModSelection, Copy-GoldbergSelectedMods, Get-GoldbergSelectedModScript, Get-GoldbergModScript, Get-GoldbergNetworkObservation

@@ -1,214 +1,179 @@
-# Dwie Attile na jednym komputerze — Goldberg HOST + CLIENT
+# Instalator dwóch Attili — MK1212, HOST na C: i CLIENT na D:
 
-Ta paczka przygotowuje dwa oddzielne środowiska z Twojej istniejącej instalacji
-Total War: ATTILA. Zawiera oryginalne archiwum Goldberga, jego kod źródłowy,
-licencje oraz skrypt Windows. **Nie musisz pobierać drugiej kopii gry.**
+**Uruchom `MK1212-Setup.exe`, wskaż grę oraz folder z modami i wybierz miejsca
+na obie kopie.** Instalator przygotuje osobne katalogi gry, skopiuje wybrane
+paczki oraz utworzy skrót do uruchamiania obu klientów. Nie musisz pobierać
+ponownie Attili ani ręcznie podmieniać plików.
 
-To eksperyment z emulowanym połączeniem LAN. Testy skryptów na Windowsie nie są
-dowodem, że konkretna wersja Attili wejdzie do lobby, rozegra turę albo poprawnie
-wczyta zapis. Te kroki trzeba wykonać w obu oknach gry. Wyniki tego wariantu nie
-potwierdzają automatycznie działania zwykłego multiplayera Steam.
+Zestaw zawiera przypięte oryginalne archiwum Goldberga z odpowiadającym mu kodem
+źródłowym i licencjami. Pliki Attili i modów pochodzą z katalogów wskazanych na
+Twoim komputerze. To nadal eksperyment z emulowanym LAN: poprawne kopiowanie
+plików i testy instalatora nie dowodzą działania konkretnej kampanii MK1212.
 
-## 1. Pierwsze uruchomienie
+## 1. Instalacja krok po kroku
 
-1. Zainstaluj **Sandboxie-Plus, stabilną wersję x64**, ze
-   [strony projektu](https://sandboxie-plus.com/downloads/). Instalator sterownika
-   może poprosić o uprawnienia administratora. Jeśli instalator wymaga ponownego
-   uruchomienia Windowsa, zrób je przed uruchomieniem paczki.
-2. Wypakuj **cały** `MK1212-GoldbergLab.zip` do nowego katalogu, na przykład
-   **`D:\Goldberg-Attila-Start`**. Nie uruchamiaj skryptu z podglądu ZIP-a.
-3. Jeśli wybór MK1212 w launcherze jest nieaktualny, uruchom raz zwykłą grę
-   z działającym zestawem modów, sprawdź menu i zamknij ją. Zaczekaj też na
-   koniec aktualizacji Steam. Skrypt potrzebuje stabilnych plików przy kopiowaniu.
-4. Uruchom dwuklikiem **`RUN-GOLDBERG-LAB.cmd`**.
-5. Przeczytaj wynik w otwartym oknie. Pierwszy start sprawdza instalację,
-   przygotowuje dwie kopie i uruchamia oba okna. Następne starty korzystają
-   z przygotowanego laboratorium.
+1. Poczekaj na zakończenie pobierania gry i modów przez Steam. Jeżeli zmieniałeś
+   ostatnio wybór modów, uruchom raz zwykłą Attilę z działającym MK1212, sprawdź
+   menu i zamknij grę. Dzięki temu istniejąca lista modów odpowiada Twojemu wyborowi.
+2. Uruchom **`MK1212-Setup.exe`**. Wybierz folder launchera; domyślnie jest to
+   **`D:\MK1212\Launcher`**. Sam launcher jest mały, ale jego podfolder `lab`
+   mieści także osobne profile, zapisy oraz raporty.
+3. W kroku **„Gra Steam i mody”** wskaż folder z `Attila.exe`, a niżej
+   **folder z modami**. Możesz użyć całego katalogu Workshop dla Attili albo
+   własnego katalogu z paczkami. Przycisk **„Przeglądaj…”** otwiera wybór folderu.
+4. Wybierz foldery obu kopii. Domyślne ustawienie odpowiada podziałowi C:/D:
+   **HOST — `C:\MK1212\HOST`**, **CLIENT — `D:\MK1212\CLIENT`**.
+5. Sprawdź wykryty folder **Sandboxie-Plus**. Jeśli programu brakuje, użyj
+   odsyłacza w kreatorze do [oficjalnej strony](https://sandboxie-plus.com/downloads/),
+   zainstaluj stabilną wersję x64 i wskaż jej folder. Instalacja sterownika może
+   wymagać uprawnień administratora oraz restartu Windowsa. Zrób wymagany restart
+   przed przygotowaniem kopii. Sandboxie nie jest dołączone do naszego EXE.
+6. Kliknij **„Instaluj”**. Szczegóły pokażą sprawdzanie plików, miejsca,
+   kopiowanie gry i modów oraz przygotowanie osobnych profili. Pierwszy przebieg
+   może potrwać, zwłaszcza na HDD. Przy błędzie kreator zatrzyma się z komunikatem.
+7. Po zakończeniu użyj skrótu **„MK1212 — uruchom obie Attile”** na pulpicie.
+   Ścieżki są zapamiętane; nie trzeba wpisywać komend.
 
-Znana z wcześniejszych logów ścieżka instalacji operatora to:
+Dla instalacji znanej z wcześniejszych logów operatora:
 
-```text
-D:\SteamLibrary\steamapps\common\Total War Attila
-```
-
-Jeśli wykrywanie nie znajdzie właściwej instalacji, otwórz terminal w katalogu
-wypakowanej paczki i podaj ją jawnie:
-
-```powershell
-.\RUN-GOLDBERG-LAB.cmd -GameRoot "D:\SteamLibrary\steamapps\common\Total War Attila"
-```
-
-Możesz również wskazać inne miejsce na oba duże katalogi gry:
-
-```powershell
-.\RUN-GOLDBERG-LAB.cmd -GameRoot "D:\SteamLibrary\steamapps\common\Total War Attila" -LabRoot "E:\MK1212-GoldbergLab"
-```
-
-`LabRoot` musi być oddzielony od oryginalnej instalacji.
-Najwygodniej użyć nowego pustego katalogu obok wypakowanego narzędzia. Skrypt zatrzyma się przy nieznanym właścicielu,
-nakładających się ścieżkach lub dowiązaniach katalogów.
-
-## 2. Miejsce na dysku i zawartość laboratorium
-
-Domyślnym katalogiem roboczym jest **`D:\MK1212-GoldbergLab`**. Pierwsze
-przygotowanie wymaga miejsca na **dwie pełne kopie instalacji oraz rezerwę**.
-Skrypt oblicza wymaganie z rzeczywistej zawartości gry. Nie zakłada stałego
-rozmiaru Attili lub MK1212. Pierwsze kopiowanie i sprawdzanie sum plików może
-potrwać, zwłaszcza na dysku HDD.
-
-| Element | Położenie lub nazwa |
+| Pole w instalatorze | Wartość domyślna lub oczekiwana |
 | --- | --- |
-| Kopia HOST | `D:\MK1212-GoldbergLab\games\HOST` |
-| Kopia CLIENT | `D:\MK1212-GoldbergLab\games\CLIENT` |
-| Sandboxie HOST | `MK1212GoldHost` |
-| Sandboxie CLIENT | `MK1212GoldClient` |
-| Raporty | `D:\MK1212-GoldbergLab\evidence\<czas>-<tryb>-<identyfikator>\report.json` |
-| Stan przygotowania | `D:\MK1212-GoldbergLab\.mk1212-goldberg-lab.json` |
-| Zachowane oryginalne API z kopii | `D:\MK1212-GoldbergLab\backups\HOST` i `CLIENT` |
+| Gra Steam | `D:\SteamLibrary\steamapps\common\Total War Attila` |
+| Folder modów Workshop | `D:\SteamLibrary\steamapps\workshop\content\325610` |
+| Kopia HOST | `C:\MK1212\HOST` |
+| Kopia CLIENT | `D:\MK1212\CLIENT` |
+| Launcher | `D:\MK1212\Launcher` |
+| Sandboxie-Plus | Zwykle `C:\Program Files\Sandboxie-Plus`; wybierz faktyczny folder |
 
-Pliki gry są fizycznie kopiowane, a ich zawartość sprawdzana. Każda kopia otrzymuje
-osobny `steam_api.dll` i własne ustawienia. Własne profile Attili powstają wewnątrz
-dwóch piaskownic; skrypt sprawdza ich rozdzielenie plikiem z jednorazowym znacznikiem.
-Dokładne fizyczne ścieżki profili zapisuje raport, ponieważ układ katalogów
-Sandboxie zależy od konfiguracji Windowsa.
+Folder Workshop powyżej wynika ze wskazanej biblioteki Steam; jego istnienie
+jest sprawdzane na komputerze. Jeżeli paczki trzymasz gdzie indziej, wybierz ten
+katalog. Instalator wymaga 64-bitowego Windowsa i działa w kontekście bieżącego
+użytkownika, aby korzystać z jego wyboru modów i profilu.
 
-Oryginalny katalog Steam służy jako źródło odczytu. Dotychczasowe ustawienia
-Goldberga, jeśli już były w źródle, są zachowane w kopiach zapasowych laboratorium;
-każdy klient otrzymuje znaną konfigurację do tego eksperymentu.
+## 2. Co zostanie skopiowane
 
-## 3. Co robi jeden dwuklik
+HOST i CLIENT dostają **pełne, fizycznie niezależne kopie gry**. Pliki nie są
+łączone hardlinkami. Wybrane paczki z Workshop są kopiowane do własnych katalogów
+wewnątrz odpowiedniej kopii; zachowane są nazwy i oddzielne katalogi źródłowe.
+Każda strona otrzymuje tę samą wybraną listę modów i te same sumy zawartości.
 
-Domyślny tryb `Run` wykonuje następujące kroki:
+Instalator ustala wybór oraz kolejność z istniejących plików:
 
-1. Weryfikuje pliki narzędzia, oryginalne archiwum Goldberga i jego bibliotekę x86.
-2. Wyszukuje instalację gry oraz narzędzia zainstalowanego Sandboxie.
-3. Sprawdza rozłączność ścieżek, ilość danych, miejsce na dysku i własność katalogów.
-4. Kopiuje grę dla HOST i CLIENT, porównując zawartość obu kopii ze źródłem.
-5. Zachowuje oryginalne `steam_api.dll` z kopii i umieszcza w nich zweryfikowanego
-   Goldberga. Wydobywa wersje interfejsów z własnego oryginalnego DLL gry.
-6. Tworzy osobne profile, sprawdza ich mapowanie i przygotowuje konfigurację.
-7. Uruchamia skopiowane `Attila.exe` we właściwych piaskownicach, z katalogiem
-   roboczym ustawionym na odpowiednią kopię gry.
-8. Zapisuje zaobserwowane procesy, ścieżki, przynależność do piaskownic i diagnostykę.
+- `used_mods.txt` w katalogu gry;
+- `scripts\user.script.txt` w profilu Attili, jeżeli zawiera wybór modów.
 
-Start procesu jest raportowany oddzielnie od działania lobby. Sam kod wyjścia
-`Start.exe` nie oznacza sukcesu uruchomienia Attili. Skrypt sprawdza rzeczywiste
-procesy. Przy ponownym wywołaniu uwzględnia już działających klientów.
+Wybór folderu z modami wskazuje **skąd brać paczki**. Kolejność nadal pochodzi
+z działającej konfiguracji gry. Importer nie układa MK1212 alfabetycznie i nie
+włącza wszystkich subskrypcji znalezionych w Workshop. W obrębie wybranych
+katalogów zachowuje także towarzyszące pliki `.pack`, ponieważ paczki typu
+Movie mogą być widoczne dla gry bez osobnego wpisu `mod`.
 
-Przerwane przygotowanie zachowuje częściowe pliki do sprawdzenia. Kompletny
-plik może zostać ponownie wykorzystany po porównaniu z aktualnym źródłem.
-Uszkodzony plik lub pozostawiona część kopiowania powodują `BLOCKED` i nie
-są po cichu nadpisywane. Jeżeli poprzednie przygotowanie nie utworzyło jeszcze piaskownic, czysty ponowny
-eksperyment można uruchomić z innym nowym `-LabRoot`, po sprawdzeniu wolnego
-miejsca. Jeśli piaskownice już istnieją, zachowaj raport: ich stałe nazwy są
-związane z poprzednim laboratorium i zmiana samego `-LabRoot` ich nie przejmuje.
+Jeżeli ścieżki w liście modów są nieaktualne, importer próbuje odszukać wskazane
+paczki **wewnątrz wybranego folderu modów**, z ograniczeniem liczby przeglądanych
+plików. Niejednoznaczny wynik, brak paczki, nieobsługiwana dyrektywa modów albo
+sprzeczne listy zatrzymują przygotowanie. Nie następuje ciche uruchomienie
+podstawowej gry zamiast żądanego MK1212.
 
-## 4. Połączenie obu gier
+Do nowych profili trafiają tylko rozpoznane polecenia modów; oryginały manifestów
+zostają zachowane jako dowody. Polecenia automatycznego ładowania zapisu,
+generowania kampanii lub wyjścia z gry nie są wykonywane przez importer.
 
-Gdy zobaczysz oba okna, zacznij od najkrótszego testu:
+Po udanym przygotowaniu raport zapisuje
+`MODS_PREPARED_HASH_MATCHED_RUNTIME_UNVERIFIED`. Oznacza to zgodną przygotowaną
+zawartość. **Menu MK1212 w obu oknach trzeba jeszcze sprawdzić w samej grze.**
 
-1. W każdym oknie ustaw tryb okienkowy i ogranicz ustawienia graficzne. Na początek
-   rozsądne jest 1280 × 720 oraz niski profil grafiki, aby wygodnie przełączać gry.
-2. W oknie HOST otwórz multiplayer/LAN i utwórz lobby. Nazwy przycisków zależą
-   od języka i wersji gry.
-3. W oknie CLIENT otwórz przeglądarkę gier LAN i odszukaj lobby HOST.
-4. Wejdź do lobby. Sprawdź, czy są widoczni obaj gracze o różnych nazwach.
-5. Rozpocznij krótką rozgrywkę. Dla kampanii sprawdź wykonanie tury przez obie
-   strony, zapis oraz ponowne wczytanie.
-6. Uruchom zbieranie raportu, najlepiej zanim zamkniesz oba procesy:
+## 3. Miejsce na C: i D:
 
-```powershell
-.\RUN-GOLDBERG-LAB.cmd -Mode Collect
-```
+Rozmiar jest obliczany z rzeczywistych plików. Na każdym dysku potrzebne jest
+miejsce na przypadającą mu kopię gry, importowane paczki i rezerwę. Ścieżki
+wskazujące ten sam wolumin współdzielą jeden budżet; program nie liczy tego
+samego wolnego miejsca dwukrotnie.
 
-Jeżeli użyłeś innego katalogu laboratorium, dodaj ten sam `-LabRoot`.
-Raport nie odczytuje stanu lobby z ekranu, więc dołącz własną krótką notatkę:
-czy oba okna wystartowały, czy CLIENT zobaczył HOST, na którym kroku pojawił
-się problem oraz czy test dotyczył podstawowej gry czy MK1212.
+HOST może znajdować się na systemowym C:. Launcher i jego dane robocze mają
+pozostać na dysku niesystemowym, domyślnie D:. Jeśli na C: zostało za mało
+miejsca, instalator poda wymaganie i zatrzyma kopiowanie. W takim przypadku
+trzeba zwolnić miejsce albo wskazać inne miejsce dla HOST.
 
-## 5. MK1212 i kolejność modów
+Pliki kopiowania powstają tymczasowo na tym samym woluminie co dany klient.
+Po sprawdzeniu są przenoszone do katalogu docelowego bez dodatkowej pełnej kopii
+między C: i D:. Oryginalne pliki Steam oraz źródłowe paczki modów są odczytywane;
+zmiany API i konfiguracji dotyczą przygotowanych kopii.
 
-Bezpośredni start `Attila.exe` wymaga rzeczywistej konfiguracji modów. Wybór
-w launcherze CA może być zapisany w `used_mods.txt` w katalogu gry, a ręczna
-konfiguracja w `scripts\user.script.txt` profilu Attili. Nie można odtworzyć
-Twojego wyboru modów z samej nazwy katalogu gry.
+## 4. Uruchomienie i krótki test
 
-Skrypt porównuje rozpoznane dyrektywy z obu istniejących manifestów i zachowuje
-ich kolejność. Do nowych profili wpisuje wyłącznie rozpoznane polecenia modów;
-oryginały manifestów przechowuje osobno jako dowód. Polecenia automatycznego
-wczytania zapisu, generowania kampanii czy wyjścia z gry są pomijane.
+Skrót na pulpicie uruchamia obu klientów z zapamiętaną konfiguracją. Podczas
+pierwszego testu:
 
-W obu rolach potrzebne są **te same paczki `.pack`, w tej samej kolejności**.
-Importer obsługuje paczki znajdujące się już wewnątrz kopiowanej instalacji.
-**Nie kopiuje zewnętrznych katalogów Workshop.** Gdy manifest wskazuje takie
-pliki, niekompletną listę albo konflikt, zapisuje `MODS_NOT_CONFIGURED` i pustą
-listę modów. Dwa okna mogą wtedy uruchomić podstawową grę; wymagają osobnego
-przygotowania paczek MK1212, zanim zaczniemy testować mod. Zachowaj istniejący
-manifest wyboru modów i sprawdź w raporcie wynik jego rozpoznania. Nie dopisuj
-listy nazw paczek na podstawie przypadkowego poradnika.
+1. Sprawdź, czy **obie** gry pokazują MK1212.
+2. Włącz tryb okienkowy; dla wygodnego przełączania można zacząć od 1280 × 720
+   i niższych ustawień grafiki.
+3. W HOST utwórz lobby multiplayer/LAN, a w CLIENT odszukaj je i dołącz.
+4. Potwierdź dwóch graczy o różnych nazwach.
+5. Rozpocznij krótką kampanię: sprawdź przejście tury, zapis i ponowne wczytanie.
+6. Z menu Start **„MK1212 — dwie Attile”** wybierz **„Zbierz raport”**,
+   najlepiej przy nadal uruchomionych procesach.
 
-Jeżeli raport nie potwierdza konfiguracji modów, potraktuj uruchomienie jako test
-samego mechanizmu dwóch gier. Do ustalenia prawidłowego MK1212 przekaż istniejący
-`used_mods.txt` i/lub `user.script.txt`, plus komunikat raportu o brakujących
-paczkach. Nie zaczynaj porównywania kampanii, gdy jedna strona uruchomiła inną
-listę modów. Skrypt nie pobiera modów ani nie ustala za Ciebie nowego load order.
+Raporty trafiają domyślnie do
+`D:\MK1212\Launcher\lab\evidence\<czas>-<tryb>-<identyfikator>\report.json`.
+Stan laboratorium i dokładne ścieżki profili są zapisywane obok. Piaskownice
+nazywają się `MK1212GoldHost` i `MK1212GoldClient`.
 
-## 6. Dodatkowe tryby
+Start procesu, wykryte porty i przynależność do piaskownicy są raportowane
+oddzielnie od działania lobby. Program nie rozpoznaje przebiegu kampanii na
+ekranie. Do raportu dodaj krótko: czy oba okna pokazały MK1212, czy CLIENT
+zobaczył HOST i na jakim kroku wystąpił problem.
 
-W terminalu otwartym w katalogu paczki:
+## 5. Ponowienie instalacji i usuwanie launchera
 
-```powershell
-# Tylko kontrola warunków przed przygotowaniem.
-.\RUN-GOLDBERG-LAB.cmd -Mode Preflight
+Instalator zapisuje ścieżki w `installer-settings.json`. Normalne uruchamianie
+ze skrótu korzysta z tego pliku. Jeżeli ponawiasz przerwaną instalację, podaj
+te same foldery i użyj tego samego wydania instalatora. Kompletny plik jest
+wykorzystywany ponownie dopiero po sprawdzeniu zawartości.
 
-# Przygotowanie kopii i profili bez uruchamiania gry.
-.\RUN-GOLDBERG-LAB.cmd -Mode Prepare
+Nieznane katalogi, zmienione pliki i częściowe kopie są zachowywane. Program
+nie nadpisuje ich w celu ukrycia błędu. Nowe wydanie instalatora nie przejmuje
+po cichu istniejącej instalacji innej wersji. Poprzednie laboratoria i nazwy
+piaskownic także mają przypisaną własność; przy takim konflikcie zachowaj raport.
 
-# Uruchomienie już przygotowanych kopii.
-.\RUN-GOLDBERG-LAB.cmd -Mode LaunchBoth
+Opcja **„Odinstaluj launcher”** usuwa zweryfikowane pliki narzędzia, jego skróty
+i wpis w aplikacjach Windowsa. **Kopie gier, mody w kopiach, profile, zapisy i
+raporty pozostają na dyskach.** To pozwala zachować eksperyment i własne zapisy.
 
-# Raport o bieżącym stanie i dostępnych logach.
-.\RUN-GOLDBERG-LAB.cmd -Mode Collect
-```
-
-Można jawnie wskazać niestandardową instalację Sandboxie:
-
-```powershell
-.\RUN-GOLDBERG-LAB.cmd -SandboxieRoot "D:\Programy\Sandboxie-Plus"
-```
-
-Język jest odczytywany z manifestu zainstalowanej gry, gdy można go jednoznacznie
-ustalić; w przeciwnym razie używany jest `english`, co pojawia się w raporcie.
-Możesz wskazać język zainstalowany w Twojej grze, wspólny dla obu klientów:
-
-```powershell
-.\RUN-GOLDBERG-LAB.cmd -Language polish
-```
-
-Archiwum emulatora jest już w paczce. Opcjonalny `-GoldbergArchive` pozwala
-wskazać ten sam oryginalny plik w innym miejscu; jego suma nadal musi odpowiadać
-wersji zapisanej w `third_party\goldberg\lock.json`.
-
-## 7. Gdy coś się zatrzyma
-
-| Objaw | Co sprawdzić |
+| Komunikat lub objaw | Dalszy krok |
 | --- | --- |
-| Brak `Start.exe` lub `SbieIni.exe` | Czy Sandboxie-Plus jest zainstalowane i czy wskazano właściwy `-SandboxieRoot`. |
-| Za mało miejsca | Wskazaną przez raport liczbę wymaganych bajtów; wybierz pusty `-LabRoot` na większym dysku. |
-| Obcy katalog, istniejące ustawienia lub plik częściowy | Zachowaj raport. Sprawdź wskazany plik; można wybrać nowy katalog laboratorium. |
-| Nie udało się udowodnić oddzielnych profili | Komunikat probe/Sandboxie. Nie kopiuj plików na ślepo do zwykłego AppData. |
-| Attila otwiera Steam, natychmiast znika albo nie inicjalizuje API | Zbierz raport z dokładną wersją gry i hashem. Zgodność tego builda nie jest jeszcze potwierdzona. |
-| Lobby się nie pojawia | Czy obie gry działają, czy karta Ethernet/Wi-Fi jest aktywna, czy porty 47584/47585 są wolne i czy raport widzi właściwe procesy. |
-| Windows pyta o dostęp aplikacji do sieci | Sprawdź, czy ścieżka dotyczy kopii HOST/CLIENT. Dla testu korzystaj z własnej sieci prywatnej. |
-| Brak MK1212 lub różne mody w obu oknach | Wynik rozpoznania manifestu i dostępność wskazanych paczek `.pack`. |
+| Brak źródłowego `Attila.exe` | Wskaż główny katalog zainstalowanej Attili. |
+| Brak aktywnej listy modów | Uruchom raz zwykłą grę z wybranym MK1212, zamknij ją i ponów instalację. |
+| Brakująca paczka | Zaczekaj na pobranie Workshop; sprawdź wybrany folder modów. |
+| Sprzeczna lista albo powtarzająca się nazwa | Zachowaj komunikat i istniejące manifesty; trzeba rozstrzygnąć konkretny wybór. |
+| Za mało miejsca | Sprawdź wskazany wolumin i liczbę wymaganych bajtów. |
+| Brak `Start.exe`, `SbieIni.exe` lub usługi Sandboxie | Zainstaluj Sandboxie-Plus, wskaż folder i wykonaj wymagany restart. |
+| Obcy katalog lub istniejąca inna wersja | Zachowaj dane oraz raport; nie kasuj na ślepo plików ani piaskownic. |
+| Brak menu MK1212 mimo przygotowania | Zbierz raport i podaj, co wyświetlają oba okna. |
+| Steam otwiera się zamiast gry albo proces znika | Zbierz raport z wersją gry i sumami plików. Zgodność konkretnego builda wymaga sprawdzenia. |
+| Lobby jest niewidoczne | Sprawdź obie gry, aktywną kartę Ethernet/Wi-Fi oraz raportowane porty i procesy. |
 
-Goldberg w tej wersji wykorzystuje porty TCP/UDP i wyszukiwanie LAN. Konfiguracja
-podaje dodatkowo adresy drugiego klienta na `127.0.0.1`, ale upstream nadal
-korzysta również z broadcastu. Potrzebna jest aktywna zwykła karta sieciowa.
-Zajęty port może spowodować wybranie innego portu przez emulator; zapisane
-ustawienie nie jest dowodem zaobserwowanego połączenia.
+Goldberg korzysta z TCP/UDP i wyszukiwania LAN. Ustawienia zawierają porty
+47584/47585 oraz wzajemne adresy `127.0.0.1`, ale upstream nadal używa również
+broadcastu. Potrzebna jest aktywna karta sieciowa. Instalator nie zmienia globalnie
+zapory ani uprawnień IPC. Jeśli Windows pyta o dostęp do sieci, sprawdź, czy
+okno dotyczy rzeczywistej kopii HOST/CLIENT w Twojej prywatnej sieci.
 
-## 8. Wersja emulatora i licencja
+## 6. Opcjonalny ZIP i polecenia diagnostyczne
+
+Wydanie ZIP zachowuje ręczny launcher. Po wypakowaniu całej paczki można jawnie
+wskazać wszystkie ścieżki:
+
+```powershell
+.\RUN-GOLDBERG-LAB.cmd -GameRoot "D:\SteamLibrary\steamapps\common\Total War Attila" -ModsRoot "D:\SteamLibrary\steamapps\workshop\content\325610" -HostGameRoot "C:\MK1212\HOST" -ClientGameRoot "D:\MK1212\CLIENT" -LabRoot "D:\MK1212-GoldbergLab"
+```
+
+Tryby `Preflight`, `Prepare`, `LaunchBoth` i `Collect` wybiera się przez `-Mode`.
+Przy kolejnych wywołaniach zachowaj te same jawne ścieżki. Instalator EXE i jego
+skróty robią to automatycznie. Język jest odczytywany z manifestu Steam; opcjonalny
+`-Language polish` wybiera język zainstalowany w grze. Pierwszy katalog roboczy
+ręcznego ZIP-a domyślnie różni się od instalacji EXE.
+
+## 7. Wersja emulatora i licencja
 
 Wybrano oryginalny projekt
 [Mr_Goldberg/goldberg_emulator](https://mr_goldberg.gitlab.io/goldberg_emulator/),

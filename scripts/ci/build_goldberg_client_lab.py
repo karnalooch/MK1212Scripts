@@ -26,6 +26,8 @@ ARCHIVE_PATH = "third_party/goldberg/goldberg-original-475342f0.zip"
 PACKAGE_FILES = (
     ("docs/research/GOLDBERG_DUAL_CLIENT_LAB.md", "README.md"),
     ("scripts/runtime/RUN-GOLDBERG-LAB.cmd", "RUN-GOLDBERG-LAB.cmd"),
+    ("scripts/runtime/RUN-INSTALLED-GOLDBERG.cmd", "RUN-INSTALLED-GOLDBERG.cmd"),
+    ("scripts/runtime/goldberg_setup.ps1", "scripts/runtime/goldberg_setup.ps1"),
     ("scripts/runtime/goldberg_client_lab.ps1", "scripts/runtime/goldberg_client_lab.ps1"),
     ("scripts/runtime/goldberg_client_lab_core.psm1", "scripts/runtime/goldberg_client_lab_core.psm1"),
     ("scripts/runtime/dual_client_lab_core.psm1", "scripts/runtime/dual_client_lab_core.psm1"),
@@ -34,6 +36,8 @@ PACKAGE_FILES = (
     ("third_party/goldberg/UPSTREAM.md", "third_party/goldberg/UPSTREAM.md"),
     ("third_party/goldberg/LICENSE.LGPL-3.0.txt", "third_party/goldberg/LICENSE.LGPL-3.0.txt"),
     ("third_party/goldberg/LICENSE.GPL-3.0.txt", "third_party/goldberg/LICENSE.GPL-3.0.txt"),
+    ("third_party/nsis/LICENSE.txt", "third_party/nsis/LICENSE.txt"),
+    ("third_party/nsis/UPSTREAM.md", "third_party/nsis/UPSTREAM.md"),
 )
 
 

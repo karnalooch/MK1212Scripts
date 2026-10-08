@@ -81,6 +81,37 @@ function New-GoldSourceFixture {
     return [pscustomobject]@{ root = $fixtureRoot; source = $source; lab = $lab; id = [Guid]::NewGuid().ToString('N') }
 }
 
+function New-GoldWorkshopFixture {
+    param([string]$Name)
+    $fixture = New-GoldSourceFixture $Name
+    $workshop = Join-Path $fixture.root 'Steam Library [mods]/steamapps/workshop/content/325610'
+    $firstDirectory = Join-Path $workshop '1001'
+    $secondDirectory = Join-Path $workshop '1002'
+    $firstPack = Join-Path $firstDirectory 'mk1212_z.pack'
+    $secondPack = Join-Path $secondDirectory 'mk1212_a.pack'
+    Write-GoldFixture $firstPack 'WORKSHOP-Z'
+    Write-GoldFixture $secondPack 'WORKSHOP-A'
+    Write-GoldFixture (Join-Path $firstDirectory 'visible_companion.pack') 'VISIBLE-COMPANION'
+    Write-GoldFixture (Join-Path $workshop '1003/unselected.pack') 'UNSELECTED'
+    $profile = Join-Path $fixture.root 'Original profile [user]/scripts'
+    $userScript = Join-Path $profile 'user.script.txt'
+    $usedMods = Join-Path $profile 'used_mods.txt'
+    $scriptText = @(
+        ('add_working_directory "' + $firstDirectory + '";'),
+        ('add_working_directory "' + $secondDirectory + '";'),
+        'mod "mk1212_z.pack";',
+        'mod "test.pack";',
+        'mod "mk1212_a.pack";'
+    ) -join "`r`n"
+    Write-GoldFixture $userScript $scriptText
+    return [pscustomobject]@{
+        fixture = $fixture; workshop = $workshop; profile = $profile
+        first_directory = $firstDirectory; second_directory = $secondDirectory
+        first_pack = $firstPack; second_pack = $secondPack
+        user_script = $userScript; used_mods = $usedMods; script_text = $scriptText
+    }
+}
+
 function Get-GoldFixtureHashes {
     param([string]$Root)
     $result = @{}
@@ -123,6 +154,54 @@ try {
         Assert-GoldThrows { Assert-GoldbergDiskBudget -MissingBytes -1 -AvailableBytes 100 -ReserveBytes 5 } 'negative missing bytes'
         Assert-GoldThrows { Assert-GoldbergDiskBudget -MissingBytes 1 -AvailableBytes -1 -ReserveBytes 5 } 'negative available bytes'
         Assert-GoldThrows { Assert-GoldbergDiskBudget -MissingBytes ([long]::MaxValue) -AvailableBytes ([long]::MaxValue) -ReserveBytes 1 } 'sum overflow'
+    }
+
+    Invoke-GoldCheck 'Role layout permits an owned copy on the system drive and rejects source or peer overlap' {
+        $layoutFixture = New-GoldSourceFixture 'split-layout'
+        $runtimeFullPath = [System.IO.Path]::GetFullPath($RuntimeDirectory)
+        $layoutLab = Join-Path $runtimeFullPath ('synthetic-layout-' + [Guid]::NewGuid().ToString('N'))
+        $hostRoot = Join-Path $layoutFixture.root 'HOST/game'
+        $clientRoot = Join-Path $layoutLab 'games/CLIENT'
+        Assert-GoldEqual ([System.IO.Path]::GetPathRoot($hostRoot).TrimEnd('\')) ([Environment]::GetEnvironmentVariable('SystemDrive')) 'HOST fixture exercises the Windows system drive'
+        Assert-GoldbergLayout -SourceRoot $layoutFixture.source -LabRoot $layoutLab -HostGameRoot $hostRoot -ClientGameRoot $clientRoot | Out-Null
+        Assert-GoldbergLayout -SourceRoot $layoutFixture.source -LabRoot $layoutLab -HostGameRoot (Join-Path $layoutLab 'games/HOST') -ClientGameRoot (Join-Path $layoutLab 'games/CLIENT') | Out-Null
+        Assert-GoldThrows { Assert-GoldbergLayout -SourceRoot $layoutFixture.source -LabRoot $layoutLab -HostGameRoot $hostRoot -ClientGameRoot $hostRoot } 'identical role roots'
+        Assert-GoldThrows { Assert-GoldbergLayout -SourceRoot $layoutFixture.source -LabRoot $layoutLab -HostGameRoot $hostRoot -ClientGameRoot (Join-Path $hostRoot 'nested-client') } 'nested role roots'
+        Assert-GoldThrows { Assert-GoldbergLayout -SourceRoot $layoutFixture.source -LabRoot $layoutLab -HostGameRoot (Join-Path $layoutFixture.source 'HOST') -ClientGameRoot $clientRoot } 'copy inside source installation'
+        Assert-GoldThrows { Assert-GoldbergLayout -SourceRoot $layoutFixture.source -LabRoot $layoutLab -HostGameRoot $layoutFixture.root -ClientGameRoot $clientRoot } 'copy root containing original installation'
+        Assert-GoldThrows { Assert-GoldbergLayout -SourceRoot $layoutFixture.source -LabRoot $layoutLab -HostGameRoot $runtimeFullPath -ClientGameRoot $clientRoot } 'copy root containing laboratory metadata'
+        Assert-GoldThrows { Assert-GoldbergLayout -SourceRoot $layoutFixture.source -LabRoot $layoutLab -HostGameRoot ([System.IO.Path]::GetPathRoot($hostRoot)) -ClientGameRoot $clientRoot } 'whole system drive cannot become an owned game copy'
+    }
+
+    Invoke-GoldCheck 'Disk space is reserved per physical volume without pooling free space or repeating its reserve' {
+        $requirements = @(
+            [pscustomobject]@{ path = 'C:\Host/game'; missing_bytes = [long]10 },
+            [pscustomobject]@{ path = 'D:\Client/game'; missing_bytes = [long]20 }
+        )
+        $sameVolume = @(
+            [pscustomobject]@{ root = 'C:\'; volume_id = 'fixture-shared'; available_bytes = [long]35 },
+            [pscustomobject]@{ root = 'D:\'; volume_id = 'fixture-shared'; available_bytes = [long]35 }
+        )
+        $same = Get-GoldbergVolumeBudget -Requirements $requirements -AvailableVolumes $sameVolume -ReserveBytes 5
+        Assert-GoldEqual $same.volumes.Count 1 'two drive roots on one physical volume share one budget'
+        Assert-GoldEqual $same.volumes[0].missing_bytes 30 'same-volume copy bytes sum'
+        Assert-GoldEqual $same.volumes[0].required_bytes 35 'same-volume reserve is added once'
+        $separate = @(
+            [pscustomobject]@{ root = 'C:\'; volume_id = 'fixture-c'; available_bytes = [long]15 },
+            [pscustomobject]@{ root = 'D:\'; volume_id = 'fixture-d'; available_bytes = [long]25 }
+        )
+        $split = Get-GoldbergVolumeBudget -Requirements $requirements -AvailableVolumes $separate -ReserveBytes 5
+        Assert-GoldEqual $split.volumes.Count 2 'separate volumes each have a budget'
+        $hostBudget = @($split.volumes | Where-Object { $_.volume_id -eq 'fixture-c' })
+        $clientBudget = @($split.volumes | Where-Object { $_.volume_id -eq 'fixture-d' })
+        Assert-GoldEqual $hostBudget[0].required_bytes 15 'HOST volume exact inclusive boundary'
+        Assert-GoldEqual $clientBudget[0].required_bytes 25 'CLIENT volume exact inclusive boundary'
+        $separate[0].available_bytes = [long]1000000
+        $separate[1].available_bytes = [long]24
+        Assert-GoldThrows { Get-GoldbergVolumeBudget -Requirements $requirements -AvailableVolumes $separate -ReserveBytes 5 } 'spare HOST capacity cannot cover a CLIENT volume shortage'
+        $extraOnHost = @($requirements) + @([pscustomobject]@{ path = 'C:\Lab/evidence'; missing_bytes = [long]1 })
+        Assert-GoldThrows { Get-GoldbergVolumeBudget -Requirements $extraOnHost -AvailableVolumes $sameVolume -ReserveBytes 5 } 'all directories on a shared volume contribute to the required bytes'
+        Assert-GoldThrows { Get-GoldbergVolumeBudget -Requirements @([pscustomobject]@{ path = 'E:\Unknown/game'; missing_bytes = [long]1 }) -AvailableVolumes $sameVolume -ReserveBytes 0 } 'unobserved volume cannot be assigned guessed free space'
     }
 
     Invoke-GoldCheck 'PE machine detection distinguishes x86 and x64 and rejects malformed files' {
@@ -228,6 +307,212 @@ try {
         Assert-GoldEqual $ambiguous.text '' 'ambiguous pack selection yields no executable directives'
     }
 
+    Invoke-GoldCheck 'Active manifests preserve resolved Workshop order without searching unrelated subscriptions' {
+        $modsFixture = New-GoldWorkshopFixture 'workshop-selection'
+        $fixture = $modsFixture.fixture
+        $sourceBefore = Get-GoldFixtureHashes -Root $fixture.source
+        $workshopBefore = Get-GoldFixtureHashes -Root $modsFixture.workshop
+        $profileBefore = Get-GoldFixtureHashes -Root $modsFixture.profile
+        $selection = Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script
+        Assert-GoldEqual $selection.status 'SELECTED_RUNTIME_UNVERIFIED' 'active mod selection is not game-runtime proof'
+        Assert-GoldEqual (($selection.mods | ForEach-Object { $_.name }) -join '|') 'mk1212_z.pack|test.pack|mk1212_a.pack' 'resolved mod order is not alphabetically sorted'
+        Assert-GoldEqual (@($selection.packs | Where-Object { $_.source -ieq $modsFixture.first_pack }).Count) 1 'first selected external Workshop pack is present'
+        Assert-GoldEqual (@($selection.packs | Where-Object { $_.source -ieq $modsFixture.second_pack }).Count) 1 'second selected external Workshop pack is present'
+        Assert-GoldEqual (@($selection.packs | Where-Object { [System.IO.Path]::GetFileName($_.source) -eq 'visible_companion.pack' }).Count) 1 'visible pack companions in a selected directory are retained'
+        Assert-GoldEqual (@($selection.packs | Where-Object { [System.IO.Path]::GetFileName($_.source) -eq 'unselected.pack' }).Count) 0 'unreferenced Workshop item is not discovered by subscription guessing'
+        Assert-GoldThrows { Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script -MaxEntries 1 } 'selected-directory scan obeys its entry budget'
+        Assert-GoldThrows { Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script -MaxBytes 1 } 'selected Workshop bytes obey the copy budget'
+        Assert-GoldHashMaps (Get-GoldFixtureHashes -Root $fixture.source) $sourceBefore 'selection preserves original game'
+        Assert-GoldHashMaps (Get-GoldFixtureHashes -Root $modsFixture.workshop) $workshopBefore 'selection preserves Workshop files'
+        Assert-GoldHashMaps (Get-GoldFixtureHashes -Root $modsFixture.profile) $profileBefore 'selection preserves original manifest'
+        Write-GoldFixture $modsFixture.used_mods $modsFixture.script_text
+        $equivalent = Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script -UsedModsPath $modsFixture.used_mods
+        Assert-GoldEqual (($equivalent.mods | ForEach-Object { $_.name }) -join '|') 'mk1212_z.pack|test.pack|mk1212_a.pack' 'equivalent active manifests agree'
+        $lateDirectories = @(
+            'mod "mk1212_z.pack";',
+            ('add_working_directory "' + $modsFixture.first_directory + '";'),
+            'mod "test.pack";',
+            ('add_working_directory "' + $modsFixture.second_directory + '";'),
+            'mod "mk1212_a.pack";'
+        ) -join "`r`n"
+        Write-GoldFixture $modsFixture.user_script $lateDirectories
+        $late = Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script -UsedModsPath $modsFixture.used_mods
+        Assert-GoldEqual (($late.mods | ForEach-Object { $_.name }) -join '|') 'mk1212_z.pack|test.pack|mk1212_a.pack' 'all declared directories are resolved before ordered mods'
+    }
+
+    Invoke-GoldCheck 'An explicitly selected ModsRoot relocates Workshop item directories without using old source paths' {
+        $modsFixture = New-GoldWorkshopFixture 'workshop-relocation'
+        $fixture = $modsFixture.fixture
+        $oldRoot = Join-Path $fixture.root 'Unavailable Library/steamapps/workshop/content/325610'
+        $movedRoot = Join-Path $fixture.root 'Moved Workshop/content/325610'
+        foreach ($pair in @(@($modsFixture.first_directory, '1001'), @($modsFixture.second_directory, '1002'))) {
+            $targetDirectory = Join-Path $movedRoot $pair[1]
+            [void][System.IO.Directory]::CreateDirectory($targetDirectory)
+            foreach ($file in (Get-ChildItem -LiteralPath $pair[0] -File)) { [System.IO.File]::Copy($file.FullName, (Join-Path $targetDirectory $file.Name), $false) }
+        }
+        $relocatedScript = @(
+            ('add_working_directory "' + (Join-Path $oldRoot '1001') + '";'),
+            ('add_working_directory "' + (Join-Path $oldRoot '1002') + '";'),
+            'mod "mk1212_z.pack";',
+            'mod "test.pack";',
+            'mod "mk1212_a.pack";'
+        ) -join "`r`n"
+        Write-GoldFixture $modsFixture.user_script $relocatedScript
+        $originalBefore = Get-GoldFixtureHashes -Root $modsFixture.workshop
+        $movedBefore = Get-GoldFixtureHashes -Root $movedRoot
+        Assert-GoldThrows { Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script } 'unavailable manifest directories require an explicit new mod root'
+        $selection = Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script -ModsRoot $movedRoot
+        Assert-GoldEqual (($selection.mods | ForEach-Object { $_.name }) -join '|') 'mk1212_z.pack|test.pack|mk1212_a.pack' 'relocation retains active load order'
+        Assert-GoldEqual (@($selection.mods | Where-Object { $_.name -eq 'mk1212_z.pack' })[0].source) (Join-Path $movedRoot '1001/mk1212_z.pack') 'Workshop item ID maps the first pack into the selected root'
+        Assert-GoldEqual (@($selection.mods | Where-Object { $_.name -eq 'mk1212_a.pack' })[0].source) (Join-Path $movedRoot '1002/mk1212_a.pack') 'Workshop item ID maps the second pack into the selected root'
+        foreach ($pack in @($selection.packs | Where-Object { $_.external })) { Assert-GoldTrue (Test-LabPathContained -Root $movedRoot -Path $pack.source) 'all relocated external assets remain inside the selected ModsRoot' }
+        Write-GoldFixture $modsFixture.user_script $modsFixture.script_text
+        $explicitRoot = Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script -ModsRoot $movedRoot
+        Assert-GoldEqual (@($explicitRoot.mods | Where-Object { $_.name -eq 'mk1212_z.pack' })[0].source) (Join-Path $movedRoot '1001/mk1212_z.pack') 'the selected root is honored even when the old Workshop folder still exists'
+        Assert-GoldHashMaps (Get-GoldFixtureHashes -Root $modsFixture.workshop) $originalBefore 'relocation preserves original Workshop files'
+        Assert-GoldHashMaps (Get-GoldFixtureHashes -Root $movedRoot) $movedBefore 'relocation reads selected files without modifying them'
+    }
+
+    Invoke-GoldCheck 'A custom ModsRoot permits only bounded unique resolution and preserves explicit directory authority' {
+        $modsFixture = New-GoldWorkshopFixture 'custom-mod-root'
+        $fixture = $modsFixture.fixture
+        $customRoot = Join-Path $fixture.root 'User selected mods [custom]'
+        $alpha = Join-Path $customRoot 'nested/alpha'
+        $beta = Join-Path $customRoot 'nested/beta'
+        Write-GoldFixture (Join-Path $alpha 'mk1212_z.pack') 'CUSTOM-Z'
+        Write-GoldFixture (Join-Path $alpha 'companion.pack') 'CUSTOM-COMPANION'
+        Write-GoldFixture (Join-Path $beta 'mk1212_a.pack') 'CUSTOM-A'
+        $activeOrder = @('mod "mk1212_a.pack";', 'mod "mk1212_z.pack";', 'mod "test.pack";') -join "`r`n"
+        Write-GoldFixture $modsFixture.user_script $activeOrder
+        $selection = Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script -ModsRoot $customRoot
+        Assert-GoldEqual (($selection.mods | ForEach-Object { $_.name }) -join '|') 'mk1212_a.pack|mk1212_z.pack|test.pack' 'unique custom-root discovery preserves manifest order'
+        Assert-GoldEqual (@($selection.mods | Where-Object { $_.name -eq 'mk1212_z.pack' })[0].source) (Join-Path $alpha 'mk1212_z.pack') 'custom source is selected instead of another installed subscription'
+        Assert-GoldEqual (@($selection.packs | Where-Object { [System.IO.Path]::GetFileName($_.source) -eq 'companion.pack' }).Count) 1 'custom-folder visible companions follow the selected pack'
+        $copiedRoot = Join-Path $fixture.lab 'game'
+        $scriptText = Get-GoldbergSelectedModScript -Selection $selection -GameRoot $copiedRoot
+        Assert-GoldTrue (-not $scriptText.Contains($customRoot)) 'generated profile cannot point back to original custom mods'
+        foreach ($directory in @($selection.directories | Where-Object { $_.explicit })) {
+            Assert-GoldTrue ($scriptText.Contains(('add_working_directory "' + (Join-Path $copiedRoot $directory.relative_path) + '";'))) 'generated profile maps each active directory into the owned game copy'
+        }
+        Assert-GoldTrue ($scriptText.EndsWith($activeOrder)) 'generated profile retains the exact ordered mod directives'
+        Assert-GoldThrows { Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script -ModsRoot $customRoot -MaxEntries 1 } 'recursive custom-root discovery obeys its entry bound'
+        Assert-GoldThrows { Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script -ModsRoot (Join-Path $customRoot 'missing') } 'missing selected custom root'
+        Write-GoldFixture (Join-Path $customRoot 'another/mk1212_z.pack') 'DUPLICATE-Z'
+        $before = Get-GoldFixtureHashes -Root $customRoot
+        Assert-GoldThrows { Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script -ModsRoot $customRoot } 'recursive discovery cannot choose the first duplicate basename'
+        Write-GoldFixture $modsFixture.user_script (('add_working_directory "' + $alpha + '";') + "`r`n" + 'mod "mk1212_z.pack";')
+        $declared = Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script -ModsRoot $customRoot
+        Assert-GoldEqual $declared.mods[0].source (Join-Path $alpha 'mk1212_z.pack') 'an exact active directory resolves its pack despite an unrelated duplicate in ModsRoot'
+        Assert-GoldHashMaps (Get-GoldFixtureHashes -Root $customRoot) $before 'successful and blocked custom resolution preserve source assets'
+    }
+
+    Invoke-GoldCheck 'Missing, malformed and conflicting active manifests block instead of selecting vanilla' {
+        $modsFixture = New-GoldWorkshopFixture 'workshop-invalid-manifests'
+        $fixture = $modsFixture.fixture
+        $missing = Join-Path $modsFixture.profile 'missing.txt'
+        Assert-GoldThrows { Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $missing -UsedModsPath (Join-Path $modsFixture.profile 'also-missing.txt') } 'no active manifest exists'
+        Write-GoldFixture $modsFixture.used_mods $modsFixture.script_text
+        Write-GoldFixture $modsFixture.user_script 'mod "mk1212_z.pack"; quit;'
+        Assert-GoldThrows { Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script -UsedModsPath $modsFixture.used_mods } 'malformed user script cannot be masked by valid used_mods'
+        Write-GoldFixture $modsFixture.user_script $modsFixture.script_text
+        $reverse = @(
+            ('add_working_directory "' + $modsFixture.first_directory + '";'),
+            ('add_working_directory "' + $modsFixture.second_directory + '";'),
+            'mod "mk1212_a.pack";',
+            'mod "test.pack";',
+            'mod "mk1212_z.pack";'
+        ) -join "`r`n"
+        Write-GoldFixture $modsFixture.used_mods $reverse
+        Assert-GoldThrows { Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script -UsedModsPath $modsFixture.used_mods } 'conflicting active load order'
+        foreach ($text in @('mod "missing.pack";', 'mod "../test.pack";')) {
+            Write-GoldFixture $modsFixture.user_script $text
+            Assert-GoldThrows { Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script } 'missing or escaping selected pack'
+        }
+        Assert-GoldTrue (-not (Test-Path -LiteralPath (Join-Path $fixture.lab 'games'))) 'rejected selection cannot create game copies'
+    }
+
+    Invoke-GoldCheck 'Ambiguous pack basenames across data and selected Workshop directories are rejected' {
+        $modsFixture = New-GoldWorkshopFixture 'workshop-collisions'
+        $fixture = $modsFixture.fixture
+        Write-GoldFixture (Join-Path $modsFixture.first_directory 'shared.pack') 'FIRST-CONTENT'
+        Write-GoldFixture (Join-Path $modsFixture.second_directory 'shared.pack') 'OTHER-CONTENT'
+        $ambiguous = @(
+            ('add_working_directory "' + $modsFixture.first_directory + '";'),
+            ('add_working_directory "' + $modsFixture.second_directory + '";'),
+            'mod "shared.pack";'
+        ) -join "`r`n"
+        Write-GoldFixture $modsFixture.user_script $ambiguous
+        $before = Get-GoldFixtureHashes -Root $modsFixture.workshop
+        Assert-GoldThrows { Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script } 'same basename in two visible Workshop directories'
+        Assert-GoldHashMaps (Get-GoldFixtureHashes -Root $modsFixture.workshop) $before 'collision preserves both Workshop candidates'
+        Write-GoldFixture (Join-Path $modsFixture.first_directory 'test.pack') 'WORKSHOP-DUPLICATE'
+        Write-GoldFixture $modsFixture.user_script (('add_working_directory "' + $modsFixture.first_directory + '";') + "`r`n" + 'mod "test.pack";')
+        Assert-GoldThrows { Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script } 'Workshop basename collides with an installed data pack'
+    }
+
+    Invoke-GoldCheck 'Selected Workshop files are independent physical copies with unchanged sources and peer parity' {
+        $modsFixture = New-GoldWorkshopFixture 'workshop-copies'
+        $fixture = $modsFixture.fixture
+        $sourceBefore = Get-GoldFixtureHashes -Root $fixture.source
+        $workshopBefore = Get-GoldFixtureHashes -Root $modsFixture.workshop
+        $profileBefore = Get-GoldFixtureHashes -Root $modsFixture.profile
+        $selection = Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script
+        $copyLab = Join-Path ([System.IO.Path]::GetFullPath($RuntimeDirectory)) ('synthetic-workshop-copy-' + [Guid]::NewGuid().ToString('N'))
+        $hostRoot = Join-Path $fixture.root 'HOST/game'
+        $clientRoot = Join-Path $copyLab 'CLIENT/game'
+        Assert-GoldTrue ([System.IO.Path]::GetPathRoot($hostRoot) -ine [System.IO.Path]::GetPathRoot($clientRoot)) 'physical copy fixture exercises two Windows drive roots'
+        try {
+            Assert-GoldbergLayout -SourceRoot $fixture.source -LabRoot $copyLab -HostGameRoot $hostRoot -ClientGameRoot $clientRoot | Out-Null
+            Copy-GoldbergGameTree -SourceRoot $fixture.source -DestinationRoot $hostRoot -LabRoot $copyLab -LabId $fixture.id -Role HOST -RoleGameRoot $hostRoot | Out-Null
+            Copy-GoldbergGameTree -SourceRoot $fixture.source -DestinationRoot $clientRoot -LabRoot $copyLab -LabId $fixture.id -Role CLIENT -RoleGameRoot $clientRoot | Out-Null
+            $hostCopy = Copy-GoldbergSelectedMods -Selection $selection -GameRoot $hostRoot -LabRoot $copyLab -LabId $fixture.id -Role HOST -RoleGameRoot $hostRoot
+            $clientCopy = Copy-GoldbergSelectedMods -Selection $selection -GameRoot $clientRoot -LabRoot $copyLab -LabId $fixture.id -Role CLIENT -RoleGameRoot $clientRoot
+            foreach ($result in @($hostCopy, $clientCopy)) {
+                Assert-GoldEqual $result.status 'COPIED_VERIFIED' 'selected Workshop copy verified'
+                Assert-GoldEqual $result.fingerprint $selection.fingerprint 'both copies carry the same selected-mod identity'
+            }
+            foreach ($record in $selection.packs) {
+                Assert-GoldEqual (Get-GoldbergDigest -Path (Join-Path $hostRoot $record.relative_path)) $record.sha256 ('HOST selected pack ' + $record.relative_path)
+                Assert-GoldEqual (Get-GoldbergDigest -Path (Join-Path $clientRoot $record.relative_path)) $record.sha256 ('CLIENT selected pack ' + $record.relative_path)
+            }
+            Assert-GoldEqual (@(Get-ChildItem -LiteralPath $hostRoot -Recurse -File -Filter 'unselected.pack').Count) 0 'unselected Workshop item is not copied'
+            Assert-GoldHashMaps (Get-GoldFixtureHashes -Root $fixture.source) $sourceBefore 'Workshop copy preserves original installation'
+            Assert-GoldHashMaps (Get-GoldFixtureHashes -Root $modsFixture.workshop) $workshopBefore 'Workshop copy preserves original mod assets'
+            Assert-GoldHashMaps (Get-GoldFixtureHashes -Root $modsFixture.profile) $profileBefore 'Workshop copy preserves original load order'
+            $firstRecord = @($selection.packs | Where-Object { $_.source -ieq $modsFixture.first_pack })[0]
+            $hostPack = Join-Path $hostRoot $firstRecord.relative_path
+            $stream = [System.IO.File]::Open($hostPack, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+            try { $stream.WriteByte(0x58); $stream.Flush() } finally { $stream.Dispose() }
+            Assert-GoldHashMaps (Get-GoldFixtureHashes -Root $modsFixture.workshop) $workshopBefore 'in-place HOST mutation cannot reach Workshop originals through hardlinks'
+            Assert-GoldEqual (Get-GoldbergDigest -Path (Join-Path $clientRoot $firstRecord.relative_path)) $firstRecord.sha256 'CLIENT selected pack does not share HOST storage'
+        }
+        finally { if (Test-Path -LiteralPath $copyLab) { Remove-Item -LiteralPath $copyLab -Recurse -Force } }
+    }
+
+    Invoke-GoldCheck 'Workshop resume preserves conflicts and rejects a same-size source change after selection' {
+        $modsFixture = New-GoldWorkshopFixture 'workshop-resume'
+        $fixture = $modsFixture.fixture
+        $selection = Get-GoldbergActiveModSelection -SourceGameRoot $fixture.source -UserScriptPath $modsFixture.user_script
+        $destination = Join-Path $fixture.lab 'games/HOST'
+        Copy-GoldbergGameTree -SourceRoot $fixture.source -DestinationRoot $destination -LabRoot $fixture.lab -LabId $fixture.id -Role HOST | Out-Null
+        Copy-GoldbergSelectedMods -Selection $selection -GameRoot $destination -LabRoot $fixture.lab -LabId $fixture.id -Role HOST | Out-Null
+        $before = Get-GoldFixtureHashes -Root $destination
+        Copy-GoldbergSelectedMods -Selection $selection -GameRoot $destination -LabRoot $fixture.lab -LabId $fixture.id -Role HOST | Out-Null
+        Assert-GoldHashMaps (Get-GoldFixtureHashes -Root $destination) $before 'identical selected-mod resume leaves bytes unchanged'
+        $record = @($selection.packs | Where-Object { $_.source -ieq $modsFixture.first_pack })[0]
+        $conflict = Join-Path $destination $record.relative_path
+        Write-GoldFixture $conflict 'KEEP-THIS-EXISTING-MOD'
+        Assert-GoldThrows { Copy-GoldbergSelectedMods -Selection $selection -GameRoot $destination -LabRoot $fixture.lab -LabId $fixture.id -Role HOST } 'different retained Workshop copy'
+        Assert-GoldEqual ([System.IO.File]::ReadAllText($conflict)) 'KEEP-THIS-EXISTING-MOD' 'conflicting destination remains available for review'
+        $clientRoot = Join-Path $fixture.lab 'games/CLIENT'
+        Copy-GoldbergGameTree -SourceRoot $fixture.source -DestinationRoot $clientRoot -LabRoot $fixture.lab -LabId $fixture.id -Role CLIENT | Out-Null
+        Write-GoldFixture $modsFixture.first_pack ('X' * [int]$record.bytes)
+        $changedSource = Get-GoldFixtureHashes -Root $modsFixture.workshop
+        Assert-GoldThrows { Copy-GoldbergSelectedMods -Selection $selection -GameRoot $clientRoot -LabRoot $fixture.lab -LabId $fixture.id -Role CLIENT } 'selected Workshop bytes changed before second copy'
+        Assert-GoldTrue (-not (Test-Path -LiteralPath (Join-Path $clientRoot $record.relative_path))) 'changed selected pack cannot be published as verified'
+        Assert-GoldHashMaps (Get-GoldFixtureHashes -Root $modsFixture.workshop) $changedSource 'failed CLIENT copy never rewrites the changed Workshop source'
+    }
+
     Invoke-GoldCheck 'Copy ownership rejects unrelated and differently owned existing destinations' {
         $fixture = New-GoldSourceFixture 'ownership'
         $destination = Join-Path $fixture.lab 'games/HOST'
@@ -309,23 +594,24 @@ try {
         Write-GoldFixture (Join-Path $fixture.source 'steam_settings/offline.txt') 'old source setting'
         Write-GoldFixture (Join-Path $fixture.source 'local_save.txt') 'original_save_folder'
         $before = Get-GoldFixtureHashes -Root $fixture.source
-        $destination = Join-Path $fixture.lab 'games/HOST'
-        Copy-GoldbergGameTree -SourceRoot $fixture.source -DestinationRoot $destination -LabRoot $fixture.lab -LabId $fixture.id -Role HOST | Out-Null
+        $destination = Join-Path $fixture.root 'Authorized HOST/game'
+        Copy-GoldbergGameTree -SourceRoot $fixture.source -DestinationRoot $destination -LabRoot $fixture.lab -LabId $fixture.id -Role HOST -RoleGameRoot $destination | Out-Null
         $payloadRoot = Join-Path $fixture.lab 'tools'
         $payload = Join-Path $payloadRoot 'steam_api.dll'
         Expand-GoldbergVerifiedDll -ArchivePath $GoldbergArchivePath -Lock $goldLock -DLLDestination $payload -DestinationRoot $payloadRoot | Out-Null
         $interfaces = Get-GoldbergInterfaces -OriginalDll (Join-Path $fixture.source 'steam_api.dll')
         Assert-GoldThrows { Install-GoldbergCopySettings -GameRoot $fixture.source -LabRoot $fixture.lab -LabId $fixture.id -Role HOST -GoldbergDllPath $payload -OriginalDllHash $before['steam_api.dll'] -InterfaceLines $interfaces } 'original installation cannot be a configuration target'
-        $settings = Install-GoldbergCopySettings -GameRoot $destination -LabRoot $fixture.lab -LabId $fixture.id -Role HOST -GoldbergDllPath $payload -OriginalDllHash $before['steam_api.dll'] -InterfaceLines $interfaces
+        $settings = Install-GoldbergCopySettings -GameRoot $destination -LabRoot $fixture.lab -LabId $fixture.id -Role HOST -GoldbergDllPath $payload -OriginalDllHash $before['steam_api.dll'] -InterfaceLines $interfaces -RoleGameRoot $destination
         Assert-GoldEqual $settings.status 'CONFIGURED' 'owned copy configuration'
+        Assert-GoldTrue (Test-LabPathContained -Root $destination -Path $settings.backup) 'explicit role backups remain on the copied-game volume'
         Assert-GoldEqual ((Get-FileHash -LiteralPath (Join-Path $destination 'steam_api.dll') -Algorithm SHA256).Hash.ToLowerInvariant()) $goldLock.dll.sha256 'copied game uses pinned emulator'
-        Assert-GoldEqual ((Get-FileHash -LiteralPath (Join-Path $fixture.lab 'backups/HOST/steam_api.dll') -Algorithm SHA256).Hash.ToLowerInvariant()) $before['steam_api.dll'] 'copied original API is backed up'
-        Assert-GoldEqual ([System.IO.File]::ReadAllText((Join-Path $fixture.lab 'backups/HOST/steam_settings/offline.txt'))) 'old source setting' 'previous copied configuration retained'
+        Assert-GoldEqual ((Get-FileHash -LiteralPath (Join-Path $settings.backup 'steam_api.dll') -Algorithm SHA256).Hash.ToLowerInvariant()) $before['steam_api.dll'] 'copied original API is backed up'
+        Assert-GoldEqual ([System.IO.File]::ReadAllText((Join-Path $settings.backup 'steam_settings/offline.txt'))) 'old source setting' 'previous copied configuration retained'
         Assert-GoldTrue (-not (Test-Path -LiteralPath (Join-Path $destination 'steam_settings/offline.txt'))) 'old offline setting cannot leak into new config'
         Assert-GoldHashMaps (Get-GoldFixtureHashes -Root $fixture.source) $before 'installation never modifies original game/settings'
         Assert-GoldbergConfiguredCopy -GameRoot $destination -LabId $fixture.id -Role HOST -ExecutableHash $before['Attila.exe'] -DllHash $goldLock.dll.sha256 -InterfaceLines $interfaces
         $configuredBefore = Get-GoldFixtureHashes -Root $destination
-        Install-GoldbergCopySettings -GameRoot $destination -LabRoot $fixture.lab -LabId $fixture.id -Role HOST -GoldbergDllPath $payload -OriginalDllHash $before['steam_api.dll'] -InterfaceLines $interfaces | Out-Null
+        Install-GoldbergCopySettings -GameRoot $destination -LabRoot $fixture.lab -LabId $fixture.id -Role HOST -GoldbergDllPath $payload -OriginalDllHash $before['steam_api.dll'] -InterfaceLines $interfaces -RoleGameRoot $destination | Out-Null
         Assert-GoldHashMaps (Get-GoldFixtureHashes -Root $destination) $configuredBefore 'repeated configuration preserves existing bytes'
         Write-GoldFixture (Join-Path $destination 'steam_settings/disable_networking.txt') ''
         Assert-GoldThrows { Assert-GoldbergConfiguredCopy -GameRoot $destination -LabId $fixture.id -Role HOST -ExecutableHash $before['Attila.exe'] -DllHash $goldLock.dll.sha256 -InterfaceLines $interfaces } 'conflicting network flag prevents launch acceptance'
@@ -417,6 +703,8 @@ try {
             $cliBase = Join-Path $runtimeFullPath ('synthetic-goldberg-preflight-' + [Guid]::NewGuid().ToString('N'))
             $source = Join-Path $cliBase 'Original Attila'
             $lab = Join-Path $cliBase 'owned-lab'
+            $hostRoot = Join-Path $goldTemp 'CLI HOST/game'
+            $clientRoot = Join-Path $cliBase 'CLIENT/game'
             $missingSandboxie = Join-Path $cliBase 'missing-sandboxie'
             New-GoldPeFixture -Path (Join-Path $source 'Attila.exe')
             New-GoldPeFixture -Path (Join-Path $source 'steam_api.dll') -Payload "SteamUser017`0"
@@ -427,6 +715,7 @@ try {
                 $result = Invoke-LabNative -Executable $shellExecutable -TimeoutSeconds 45 -Arguments @(
                     '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $runtimeFullPath 'goldberg_client_lab.ps1'),
                     '-Mode', 'Preflight', '-GameRoot', $source, '-LabRoot', $lab,
+                    '-HostGameRoot', $hostRoot, '-ClientGameRoot', $clientRoot,
                     '-SandboxieRoot', $missingSandboxie, '-GoldbergArchive', $GoldbergArchivePath
                 )
                 Assert-GoldEqual $result.ExitCode 2 'missing runtime dependency exit code'
@@ -436,8 +725,13 @@ try {
                 $report = [System.IO.File]::ReadAllText($reports[0].FullName) | ConvertFrom-Json
                 Assert-GoldEqual $report.status 'BLOCKED' 'missing Sandboxie status'
                 Assert-GoldEqual $report.multiplayer 'NOT_RUN' 'no multiplayer inference'
-                Assert-GoldTrue (-not (Test-Path -LiteralPath (Join-Path $lab 'games/HOST/Attila.exe'))) 'preflight cannot create a game copy'
-                Assert-GoldTrue (-not (Test-Path -LiteralPath (Join-Path $lab 'games/CLIENT/Attila.exe'))) 'preflight cannot create a second game copy'
+                Assert-GoldTrue (($report.reasons -join ' ') -match 'Sandboxie') 'preflight reaches the dependency check with the C:/D: role layout accepted'
+                $state = [System.IO.File]::ReadAllText((Join-Path $lab '.mk1212-goldberg-lab.json')) | ConvertFrom-Json
+                Assert-GoldEqual $state.schema 2 'explicit split roots use the versioned state schema'
+                Assert-GoldEqual (@($state.roles | Where-Object { $_.role -eq 'HOST' })[0].game_root) $hostRoot 'saved HOST root is the explicitly authorized C: destination'
+                Assert-GoldEqual (@($state.roles | Where-Object { $_.role -eq 'CLIENT' })[0].game_root) $clientRoot 'saved CLIENT root is the explicitly authorized D: destination'
+                Assert-GoldTrue (-not (Test-Path -LiteralPath (Join-Path $hostRoot 'Attila.exe'))) 'preflight cannot create a game copy'
+                Assert-GoldTrue (-not (Test-Path -LiteralPath (Join-Path $clientRoot 'Attila.exe'))) 'preflight cannot create a second game copy'
             }
             finally { if (Test-Path -LiteralPath $cliBase) { Remove-Item -LiteralPath $cliBase -Recurse -Force } }
         }

@@ -96,6 +96,9 @@ jobs:
       - name: Verify Goldberg package provenance and preservation contracts
         run: python -m unittest discover -s scripts/ci -p "test_goldberg_client_package.py" -v
 
+      - name: Verify Windows installer packaging contracts
+        run: python -m unittest discover -s scripts/ci -p "test_goldberg_installer.py" -v
+
   native_twdll:
     name: Native twdll Attila build
     runs-on: windows-latest
@@ -201,6 +204,43 @@ jobs:
           PACKAGE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         shell: pwsh
         run: python scripts/ci/build_goldberg_client_lab.py --source-sha $env:PACKAGE_SOURCE_SHA --archive build/goldberg-upstream.zip
+
+      - name: Compile exact-source Windows installer
+        env:
+          PACKAGE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: pwsh
+        run: |
+          $package = "build/goldberg-client-lab/mk1212-goldberg-client-lab-$env:PACKAGE_SOURCE_SHA/mk1212-goldberg-client-lab-$env:PACKAGE_SOURCE_SHA.zip"
+          python scripts/ci/build_goldberg_installer.py --source-sha $env:PACKAGE_SOURCE_SHA --package $package
+
+      - name: Test installed toolkit in Windows PowerShell 5.1
+        env:
+          PACKAGE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: powershell
+        run: ./scripts/ci/test_goldberg_setup.ps1 -PackageRootPath "build/goldberg-installer/$env:PACKAGE_SOURCE_SHA/payload"
+
+      - name: Test installed toolkit in PowerShell 7
+        env:
+          PACKAGE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: pwsh
+        run: ./scripts/ci/test_goldberg_setup.ps1 -PackageRootPath "build/goldberg-installer/$env:PACKAGE_SOURCE_SHA/payload"
+
+      - name: Exercise the compiled installer failure boundary
+        env:
+          PACKAGE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: pwsh
+        run: ./scripts/ci/test_goldberg_installer.ps1 -InstallerPath "build/goldberg-installer/$env:PACKAGE_SOURCE_SHA/MK1212-Setup-$($env:PACKAGE_SOURCE_SHA.Substring(0,12)).exe"
+
+      - name: Upload Windows installer and exact build identity
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mk1212-goldberg-installer-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            build/goldberg-installer/${{ github.event.pull_request.head.sha || github.sha }}/*.exe
+            build/goldberg-installer/${{ github.event.pull_request.head.sha || github.sha }}/installer-build.json
+            build/goldberg-installer/${{ github.event.pull_request.head.sha || github.sha }}/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload Goldberg lab package with upstream source and notices
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
