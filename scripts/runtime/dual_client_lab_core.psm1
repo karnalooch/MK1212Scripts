@@ -241,10 +241,15 @@ function Invoke-LabNative {
     param(
         [Parameter(Mandatory = $true)][string]$Executable,
         [string[]]$Arguments = @(),
+        [string]$WorkingDirectory,
         [ValidateRange(1, 120)][int]$TimeoutSeconds = 20
     )
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
     $startInfo.FileName = $Executable
+    if ($WorkingDirectory) {
+        if (-not (Test-Path -LiteralPath $WorkingDirectory -PathType Container)) { throw 'Command working directory is missing.' }
+        $startInfo.WorkingDirectory = [System.IO.Path]::GetFullPath($WorkingDirectory)
+    }
     $startInfo.Arguments = Join-LabWindowsArguments -Arguments $Arguments
     $startInfo.UseShellExecute = $false
     $startInfo.RedirectStandardOutput = $true

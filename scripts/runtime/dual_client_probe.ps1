@@ -3,7 +3,8 @@
 param(
     [Parameter(Mandatory = $true)][ValidatePattern('^[0-9a-fA-F]{32}$')][string]$Nonce,
     [Parameter(Mandatory = $true)][ValidateSet('HOST', 'CLIENT')][string]$Role,
-    [Parameter(Mandatory = $true)][ValidateSet('MK1212LabHost', 'MK1212LabClient')][string]$BoxName
+    [Parameter(Mandatory = $true)][ValidateSet('MK1212LabHost', 'MK1212LabClient', 'MK1212GoldHost', 'MK1212GoldClient')][string]$BoxName,
+    [ValidateSet('MK1212Scripts.dual-client-lab', 'MK1212Scripts.goldberg-client-lab')][string]$Owner = 'MK1212Scripts.dual-client-lab'
 )
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
@@ -14,7 +15,7 @@ try {
     [void][System.IO.Directory]::CreateDirectory($profile)
     $markerPath = Join-Path $profile ('mk1212-dual-probe-' + $Nonce + '.json')
     $marker = [ordered]@{
-        schema = 1; owner = 'MK1212Scripts.dual-client-lab'; nonce = $Nonce
+        schema = 1; owner = $Owner; nonce = $Nonce
         role = $Role; requested_box = $BoxName; process_id = $PID
         created_utc = [DateTime]::UtcNow.ToString('o')
         app_data = $appData; profile_logical = $profile
