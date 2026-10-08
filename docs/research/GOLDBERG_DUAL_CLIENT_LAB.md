@@ -135,6 +135,24 @@ nie nadpisuje ich w celu ukrycia błędu. Nowe wydanie instalatora nie przejmuje
 po cichu istniejącej instalacji innej wersji. Poprzednie laboratoria i nazwy
 piaskownic także mają przypisaną własność; przy takim konflikcie zachowaj raport.
 
+Wydanie **0.2.1** ma ograniczone odzyskiwanie ustawień po przerwanym wydaniu
+**0.2.0** z kodu `7f66f06afddc53fda220f22d1940242ebd87e4ab`. Dotyczy ono
+wyłącznie sytuacji, w której pozostał sam rozpoznany `installer-settings.json`
+(ewentualnie pusty plik blokady), a w folderach docelowych nie ma plików
+narzędzia, gry ani laboratorium. Instalator zachowuje kopię poprzednich
+ustawień przed ich zastąpieniem. Jeżeli zapisany folder launchera różni się od
+wskazanego, poprzednia lokalizacja musi być pusta lub nie istnieć. Pozostałe
+ścieżki muszą odpowiadać poprzedniemu wyborowi, a obie kopie i oba katalogi
+laboratorium muszą być puste lub nie istnieć. Istniejące dane zatrzymują tę
+naprawę. Nie jest to migracja gotowego laboratorium między folderami.
+
+Przy `Owned installation path differs: ToolkitRoot` ponów instalację wydaniem
+0.2.1, zachowując poprzedni wybór folderów. Szczegóły pokazują ścieżkę wybraną,
+zapisaną oraz etap sprawdzania. Jeśli naprawa nie jest możliwa, zachowaj pełny
+komunikat z tymi wartościami. Sam wiersz `Temp\\...\\payload` opisuje katalog
+rozpakowania EXE, a nie miejsce kopii gry. Pierwotny krótki komunikat nie
+wystarcza do rozstrzygnięcia, skąd wzięła się różnica ścieżek.
+
 Opcja **„Odinstaluj launcher”** usuwa zweryfikowane pliki narzędzia, jego skróty
 i wpis w aplikacjach Windowsa. **Kopie gier, mody w kopiach, profile, zapisy i
 raporty pozostają na dyskach.** To pozwala zachować eksperyment i własne zapisy.
@@ -147,6 +165,7 @@ raporty pozostają na dyskach.** To pozwala zachować eksperyment i własne zapi
 | Sprzeczna lista albo powtarzająca się nazwa | Zachowaj komunikat i istniejące manifesty; trzeba rozstrzygnąć konkretny wybór. |
 | Za mało miejsca | Sprawdź wskazany wolumin i liczbę wymaganych bajtów. |
 | Brak `Start.exe`, `SbieIni.exe` lub usługi Sandboxie | Zainstaluj Sandboxie-Plus, wskaż folder i wykonaj wymagany restart. |
+| `Owned installation path differs: ToolkitRoot` | Ponów wydaniem 0.2.1 z tymi samymi folderami; przy dalszej blokadzie zachowaj wartości zapisanej i wybranej ścieżki z komunikatu. |
 | Obcy katalog lub istniejąca inna wersja | Zachowaj dane oraz raport; nie kasuj na ślepo plików ani piaskownic. |
 | Brak menu MK1212 mimo przygotowania | Zbierz raport i podaj, co wyświetlają oba okna. |
 | Steam otwiera się zamiast gry albo proces znika | Zbierz raport z wersją gry i sumami plików. Zgodność konkretnego builda wymaga sprawdzenia. |
