@@ -31,6 +31,20 @@ class TurnObservationV1Tests(unittest.TestCase):
             self.assertNotIn(forbidden, tail)
         self.assertIn("pcall(", tail)
 
+    def test_product_probe_emits_read_only_turn_events_and_coverage(self):
+        harness = (ROOT / "scripts/runtime/RUN-MK1212-PR45-SP-TEST.ps1").read_text(encoding="utf-8")
+        self.assertIn('Probe_Turn("initializer", nil)', harness)
+        self.assertIn('Probe_Turn("faction_turn_start", context)', harness)
+        self.assertIn('if turn_samples >= 32 then return; end', harness)
+        self.assertIn('event_faction=', harness)
+        self.assertIn("coverage.json", harness)
+        self.assertIn("simultaneous_turns_proven = $false", harness)
+        self.assertIn("active_owner_proven = $false", harness)
+        self.assertIn("OBSERVED_CALLBACK_ONLY", harness)
+        self.assertLess(harness.index("# Coverage is evidence accounting"), harness.index("$Result | ConvertTo-Json"))
+        self.assertIn("finally {", harness)
+        self.assertIn("rollback_ok", harness)
+
     def test_lua_behavior_fixture(self):
         lua = next((shutil.which(x) for x in ("lua5.1", "lua", "luajit") if shutil.which(x)), None)
         if not lua:
