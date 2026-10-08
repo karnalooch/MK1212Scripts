@@ -83,6 +83,7 @@ Probe_Trace("bootstrap_enter");
 $Suffix = @'
 Probe_Trace("bootstrap_complete");
 local probe_world_samples = 0;
+local probe_listener_registered = false;
 local function Probe_World(phase)
     if probe_world_samples >= 5 then return; end
     probe_world_samples = probe_world_samples + 1;
@@ -122,12 +123,31 @@ function Common_Initializer(...)
         Probe_Trace("runtime_status available="..tostring(status.available).." reason_code="..reason_code.." luaopen_calls="..tostring(status.luaopen_calls));
         if reason_code ~= "ready" then Probe_Trace("runtime_error_detail text="..reason); end
         Probe_World("initializer");
-        if cm and cm.add_listener then
+        if not probe_listener_registered then
             Probe_Trace("listener_register_attempt");
-            cm:add_listener("PR45_World_Probe", "FactionTurnStart", true, function()
-                Probe_World("faction_turn_start");
-                if probe_world_samples >= 5 then cm:remove_listener("PR45_World_Probe"); end
-            end, true);
+            local receiver = cm;
+            if not receiver or type(receiver.add_listener) ~= "function" then
+                Probe_Trace("listener_register_result state=receiver_missing");
+            else
+                local registered, registration_error = pcall(function()
+                    receiver:add_listener("PR45_World_Probe", "FactionTurnStart", true, function(context)
+                        if probe_world_samples >= 5 then return; end
+                        Probe_Trace("listener_callback_enter phase=faction_turn_start");
+                        Probe_World("faction_turn_start");
+                        if probe_world_samples >= 5 then
+                            local removed, remove_error = pcall(function() receiver:remove_listener("PR45_World_Probe"); end);
+                            Probe_Trace("listener_remove_result state="..(removed and "ok" or "failed"));
+                            if not removed then Probe_Trace("listener_remove_detail text="..tostring(remove_error)); end
+                        end
+                    end, true);
+                end);
+                if registered then
+                    probe_listener_registered = true;
+                    Probe_Trace("listener_register_result state=registered");
+                else
+                    Probe_Trace("listener_register_result state=failed error="..tostring(registration_error));
+                end
+            end
         end
     end);
     if not ok then Probe_Trace("diagnostics_failed error="..tostring(err)); end
