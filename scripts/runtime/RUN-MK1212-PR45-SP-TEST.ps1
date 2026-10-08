@@ -249,13 +249,14 @@ try {
             try { Copy-Item $path (Join-Path $Evidence ([IO.Path]::GetFileName($path))) -Force } catch { $RunError = "Evidence copy failed: $_" }
         }
     }
-    # Evaluate copies from this run before restoring old logs.
+    # Never let an evidence/parser exception skip rollback.
+    try {
     $traceCopy = Join-Path $Evidence 'PR45_RUNTIME_TRACE.txt'
     if (Test-Path $traceCopy) {
         $txt = [string](Get-Content $traceCopy -Raw)
         $Result.bootstrap_enter = $txt.Contains("source_sha=$ExpectedSourceSha bootstrap_enter")
-        $Result.fallback_ready = @($txt -split "`n" | Where-Object {
-            $_.Contains("source_sha=$ExpectedSourceSha runtime_status available=false reason=dll_unavailable:") -and $_.Contains('luaopen_calls=0')
+        $Result.fallback_ready = @($txt -split "[`r`n]+" | Where-Object {
+            $_.Contains("schema=2 source_sha=$ExpectedSourceSha runtime_status available=false reason_code=dll_unavailable luaopen_calls=0")
         }).Count -gt 0
         $Result.initializer_enter = $txt.Contains("source_sha=$ExpectedSourceSha initializer_enter")
     }
@@ -264,6 +265,9 @@ try {
     $debugCopy = Join-Path $Evidence 'MK1212_mp_debug.log'
     if (Test-Path $debugCopy) {
         $Result.debug_ready = @((Get-Content $debugCopy) | Where-Object { $_.Contains('event=runtime') -and $_.Contains('available=true') -and $_.Contains('reason=ready') -and $_.Contains("twdll_sha=$ExpectedSourceSha") }).Count -gt 0
+    }
+    } catch {
+        $Result.evaluation_error = $_.Exception.Message
     }
     if ($Installed) {
         try {
@@ -303,7 +307,7 @@ try {
     $Result.restore_errors = $RestoreErrors
     $RuntimePass = $Result.native_ready -and $Result.debug_ready
     if ($NoDll) { $RuntimePass = $DllFilesAbsent -and $Result.fallback_ready -and -not $Result.native_ready -and -not (Test-Path $nativeCopy) }
-    $Result.pass = $Result.bootstrap_enter -and $Result.initializer_enter -and $RuntimePass -and $Result.pack_preserved -and $Result.rollback_ok -and -not $RunError
+    $Result.pass = $Result.bootstrap_enter -and $Result.initializer_enter -and $RuntimePass -and $Result.pack_preserved -and $Result.rollback_ok -and -not $RunError -and -not $Result.evaluation_error
     $Result | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'result.json')
     $zip = Join-Path $Here ('MK1212-PR45-SP-EVIDENCE-' + $Stamp + '.zip')
     Compress-Archive -Path "$Evidence\*" -DestinationPath $zip
