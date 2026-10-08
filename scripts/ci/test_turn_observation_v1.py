@@ -58,6 +58,16 @@ class TurnObservationV1Tests(unittest.TestCase):
         self.assertNotIn("SetActiveTurn", harness)
         self.assertNotIn("VirtualProtect", harness)
 
+    def test_attlia_v2_source_contract(self):
+        self.assertIn("function MKMP_Runtime_Get_Turn_Observation_V2()", self.source)
+        self.assertIn('MKMP_Turn_Observe_Protected(model, "is_player_turn")', self.source)
+        self.assertIn('model:faction_is_local(key)', self.source)
+        self.assertIn('MKMP_Turn_Observe_Protected(faction, "is_human")', self.source)
+        self.assertIn('active_faction = "unknown"', self.source)
+        harness = (ROOT / "scripts/runtime/RUN-MK1212-PR45-SP-TEST.ps1").read_text(encoding="utf-8")
+        self.assertIn('Probe_Trace("turn_v2 player_turn="', harness)
+        self.assertIn('Flight_Record("initializer", nil)', harness)
+
     def test_lua_behavior_fixture(self):
         lua = next((shutil.which(x) for x in ("lua5.1", "lua", "luajit") if shutil.which(x)), None)
         if not lua:
