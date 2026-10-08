@@ -81,3 +81,29 @@ Run native probe once, open a single-player campaign, perform ordinary commands 
 ### Coverage limitations
 
 This is **not yet a complete flight recorder for all game internals**: there is no universal Attila command bus or read-only network replication API established here. Do not claim that army movement, recruitment, diplomacy, saves, battles or every AI action are captured unless source-supported event probes and real runtime observations establish that. Expanding the allowlist requires an Attila-specific API check and independent tests. This release establishes a guarded instrumentation backbone, not simultaneous multiplayer turns.
+
+## Attila-first observation V2 / optional twdll comparison
+
+Additive `MKMP_Runtime_Get_Turn_Observation_V2()` makes a bounded (`<=1000` factions) **once-per-initializer** attempt to classify:
+- `model:is_player_turn()`: true/false only if the Attila Lua model method exists and succeeds;
+- `model:faction_is_local(faction_key)`: local factions; completeness is separately `complete/incomplete/unknown`;
+- `faction:is_human()`: human-controlled factions; also independently classified for completeness;
+- `FACTION_TURN`: the MK1212 script callback's last cached faction name, **never** the authoritative engine owner;
+- native `twdll.world.GetFactionCount()` parity, only via existing safe/optional wrapper; no new hooks or forced state.
+
+The V2 census logs `turn_v2` once per initialized Lua campaign segment, not at every AI faction turn, avoiding hundreds of scans. Per-event V1 flight trace is unchanged and still bounded. `active_faction` stays `unknown`. A native getter may depend on invasive hook installation: optional parity is *corroboration*, not an alternative owner API.
+
+**Source authority:** Attila Extra Scripting Guides/Assembly Kit for the target model/faction interface; current MK1212's `FactionTurnStart_Global` and `FACTION_TURN` for script-local context; monorepo native `faction.cpp`, `character.cpp`, `military_force.cpp` for diagnostic possibilities. WH2/WH3 pages are comparative only and do not establish Attila availability. Mocked Lua tests are not engine runtime proof.
+
+### Comparison before expanding the native adapter
+
+| Question | First choice | Native optional candidate | Limits |
+| --- | --- | --- | --- |
+| Local player identity | `model:faction_is_local(key)` | none needed | API must be runtime-proven on our build |
+| Human/AI classification | `faction:is_human()` | none needed | doesn't identify active owner |
+| Player turn flag | `model:is_player_turn()` | none needed | no specific owner |
+| Number of factions | `world:faction_list():num_items()` | `world.GetFactionCount()` | count parity is not ownership proof |
+| Research, treasury, AP, queue | inspect current Attila scripting interface first | `GetTechnologyStatus`, `GetTreasury`, `GetActionPoints`, `GetRecruitmentQueueSize` | not wired until semantic and safety proof |
+| True active turn owner / command permissions | unknown | no proven safe API | **BLOCKED** pending evidence; don't inject writes |
+
+No direct call to `grant_faction_handover`, `SetActionPoints`, `SetTreasury` or other mutator belongs in this observational work.
