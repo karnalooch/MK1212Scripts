@@ -275,9 +275,9 @@ try {
     if (Test-Path $traceCopy) {
         $txt = [string](Get-Content $traceCopy -Raw)
         $Result.bootstrap_enter = $txt.Contains("source_sha=$ExpectedSourceSha bootstrap_enter")
-        $Result.fallback_ready = @($txt -split "[`r`n]+" | Where-Object {
-            $_.Contains("schema=2 source_sha=$ExpectedSourceSha runtime_status available=false reason_code=dll_unavailable luaopen_calls=0")
-        }).Count -gt 0
+        $statusLines = @($txt -split "[`r`n]+" | Where-Object { $_.StartsWith("schema=2 source_sha=$ExpectedSourceSha runtime_status ") })
+        $expectedFallback = "schema=2 source_sha=$ExpectedSourceSha runtime_status available=false reason_code=dll_unavailable luaopen_calls=0"
+        $Result.fallback_ready = ($statusLines.Count -gt 0) -and (@($statusLines | Where-Object { $_ -ne $expectedFallback }).Count -eq 0)
         $Result.initializer_enter = $txt.Contains("source_sha=$ExpectedSourceSha initializer_enter")
         $Result.gameplay_initializer_complete = $txt.Contains("source_sha=$ExpectedSourceSha gameplay_initializer_complete")
         $Result.trace_status_count = @($txt -split "[`r`n]+" | Where-Object { $_.Contains("schema=2 source_sha=$ExpectedSourceSha runtime_status ") }).Count
