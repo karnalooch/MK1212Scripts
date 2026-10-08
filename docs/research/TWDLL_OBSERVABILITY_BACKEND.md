@@ -706,3 +706,13 @@ Owner actions: native mode: campaign battle -> return to campaign -> save/load,
 and pass one turn for world observation; fallback mode: start SP, move an army,
 end turn and save/load, then exit. Return both mode-labelled evidence archives.
 Previously accepted UI smoke steps need not be repeated. PR remains unmerged.
+
+## WORLD capture instrumentation — PR #45, 2026-10-08
+
+The SP trace confirmed the diagnostic `FactionTurnStart` callback path but reported `world_not_captured` in five bounded observations. This does **not** by itself distinguish a constructor that already executed before loading twdll from a resolver that hooked an unrelated function, or lifecycle clearing the cached world pointer.
+
+The native `twdll.world.GetCaptureStatus()` function now returns read-only metadata: `generation` (installation attempts), `constructor_hits` (cumulative times the WORLD hook was invoked), `clear_count` (cache cleanup calls), `hook_enabled`, and `world_cached`. It does not return a raw pointer, and its fields must never drive gameplay or shared multiplayer decisions. The Workshop-preserving SP probe records these fields as `world_capture` alongside bounded `world` samples.
+
+**Interpretation:** `hook_enabled=true, constructor_hits=0` is consistent with late installation or an incorrect hook location; it is not definitive proof of either. A hit followed by `clear_count>0` suggests a lifecycle transition but not pointer validity. Only an exact-build runtime observation can prove capture, and semantic faction-count parity after load is a separate check. No engine addresses, signature constants, DRM or executable integrity behavior were changed as part of this instrumentation.
+
+**Proof status:** Source-level instrumentation implemented; Windows native CI and actual Attila runtime evidence must be checked separately. WORLD access and simultaneous turns remain NOT PROVEN.
