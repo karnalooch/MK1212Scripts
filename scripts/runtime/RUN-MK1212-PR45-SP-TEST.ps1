@@ -571,6 +571,39 @@ try {
                 }
             }
         }
+        $coverage | Add-Member -NotePropertyName flight_recorder -NotePropertyValue ([ordered]@{
+            schema = 1; samples = 0; observed_events = @{}; sequence_valid = $true
+            last_seq = 0; capped_at = 48
+        })
+        if (Test-Path -LiteralPath $traceCopy) {
+            foreach ($line in @(Get-Content -LiteralPath $traceCopy)) {
+                if ($line -match ' flight_v1 seq=([0-9]+) event=([A-Za-z0-9_]+) turn=([0-9]+|unknown) multiplayer=(true|false|unknown) faction=([A-Za-z0-9_]+) owner=unknown phase=unknown { $coverage.statuses.ai_turn_callback = 'OBSERVED_CALLBACK_ONLY' }
+        $coverage | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'coverage.json')
+    } catch {
+        $Result.coverage_error = $_.Exception.Message
+    }
+    $Result | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'result.json')
+    $zip = Join-Path $Here ('MK1212-PR45-SP-EVIDENCE-' + $Stamp + '.zip')
+    Compress-Archive -Path "$Evidence\*" -DestinationPath $zip
+    Write-Host "Evidence: $zip"
+    Write-Host "PASS: $($Result.pass); rollback: $($Result.rollback_ok)"
+    if ($RestoreErrors.Count -gt 0) { Write-Warning "Restore errors: $RestoreErrors. Backups retained at $Backup" }
+}
+if (-not $Result.pass) { exit 1 }
+) {
+                    $n = [int]$Matches[1]; $kind = $Matches[2]
+                    if ($n -ne ($coverage.flight_recorder.last_seq + 1)) {
+                        $coverage.flight_recorder.sequence_valid = $false
+                    }
+                    $coverage.flight_recorder.last_seq = $n
+                    $coverage.flight_recorder.samples++
+                    if (-not $coverage.flight_recorder.observed_events.ContainsKey($kind)) {
+                        $coverage.flight_recorder.observed_events[$kind] = 0
+                    }
+                    $coverage.flight_recorder.observed_events[$kind]++
+                }
+            }
+        }
         if ($coverage.turn_events.faction_turn_start -gt 0) { $coverage.statuses.ai_turn_callback = 'OBSERVED_CALLBACK_ONLY' }
         $coverage | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'coverage.json')
     } catch {
