@@ -290,6 +290,7 @@ try {
         $sequence = 0
         $bootstraps = 0
         $totalSegments = 0
+        $sessionHasInitializer = $false
         $pending = $false
         $seenStatus = $false
         $segmentGameplayComplete = $false
@@ -297,10 +298,11 @@ try {
         $validNative = $true
         foreach ($ev in $events) {
             if ($ev -ceq 'bootstrap_enter') {
-                if ($pending -or ($sequence -gt 0 -and -not $seenStatus)) {
+                if ($pending -or ($bootstraps -gt 0 -and -not $sessionHasInitializer)) {
                     $validFallback = $false; $validNative = $false
                 }
                 $bootstraps++
+                $sessionHasInitializer = $false
                 $sequence = 0
                 $seenStatus = $false
                 $segmentGameplayComplete = $false
@@ -308,6 +310,7 @@ try {
                 if ($pending -or [int]$Matches[1] -ne ($sequence + 1)) { $validFallback = $false; $validNative = $false }
                 $sequence = [int]$Matches[1]
                 $totalSegments++
+                $sessionHasInitializer = $true
                 $pending = $true
                 $seenStatus = $false
                 $segmentGameplayComplete = $false
@@ -338,7 +341,7 @@ try {
                 $validFallback = $false; $validNative = $false
             }
         }
-        if ($pending -or $sequence -eq 0 -or $Result.trace_status_count -ne $totalSegments -or -not $prefixValid) {
+        if ($pending -or -not $sessionHasInitializer -or $totalSegments -eq 0 -or $Result.trace_status_count -ne $totalSegments -or -not $prefixValid) {
             $validFallback = $false; $validNative = $false
         }
         $Result.fallback_ready = $validFallback -and $Result.bootstrap_enter
