@@ -37,6 +37,7 @@ $oldProbes = @(Get-ChildItem -LiteralPath $Data -File | Where-Object {
     $_.Name -eq 'mk1212_pr45_runtime_scripts.pack'
 })
 $Stamp = $Mode + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff')
+$RunId = [guid]::NewGuid().ToString('N')
 $Backup = Join-Path $Here ('backup-' + $Stamp)
 $Evidence = Join-Path $Here ('evidence-' + $Stamp)
 New-Item -ItemType Directory -Path $Backup,$Evidence | Out-Null
@@ -73,7 +74,7 @@ local function Probe_Trace(message)
         if not f then return; end
         local size = f:seek("end");
         local safe = string.sub(tostring(message),1,512):gsub("[\r\n\t]", " "):gsub("%c", "?");
-        local line = "schema=2 source_sha=SOURCE_SHA "..safe.."\n";
+        local line = "schema=2 source_sha=SOURCE_SHA run_id=RUN_ID "..safe.."\n";
         if size and size + #line <= 65536 then f:write(line); end
         f:close();
     end);
@@ -84,6 +85,7 @@ $Suffix = @'
 Probe_Trace("bootstrap_complete");
 local probe_world_samples = 0;
 local probe_listener_registered = false;
+local probe_init_seq = 0;
 local function Probe_World(phase)
     if probe_world_samples >= 5 then return; end
     probe_world_samples = probe_world_samples + 1;
@@ -106,9 +108,10 @@ local function Probe_World(phase)
 end
 local Probe_Original_Initializer = Common_Initializer;
 function Common_Initializer(...)
-    Probe_Trace("initializer_enter");
+    probe_init_seq = probe_init_seq + 1;
+    Probe_Trace("initializer_enter seq="..probe_init_seq);
     Probe_Original_Initializer(...);
-    Probe_Trace("gameplay_initializer_complete");
+    Probe_Trace("gameplay_initializer_complete seq="..probe_init_seq);
     local ok, err = pcall(function()
         require("common/mkmp_debug");
         require("common/mkmp_runtime");
@@ -120,7 +123,7 @@ function Common_Initializer(...)
         local reason_code = "unknown";
         if status.available == true and reason == "ready" then reason_code = "ready";
         elseif status.available == false and reason:sub(1, 15) == "dll_unavailable" then reason_code = "dll_unavailable"; end
-        Probe_Trace("runtime_status available="..tostring(status.available).." reason_code="..reason_code.." luaopen_calls="..tostring(status.luaopen_calls));
+        Probe_Trace("runtime_status seq="..probe_init_seq.." available="..tostring(status.available).." reason_code="..reason_code.." luaopen_calls="..tostring(status.luaopen_calls));
         if reason_code ~= "ready" then Probe_Trace("runtime_error_detail text="..reason); end
         Probe_World("initializer");
         if not probe_listener_registered then
@@ -156,7 +159,7 @@ end
 $OverlayCommon = Join-Path $Overlay 'campaigns/main_attila/common'
 New-Item -ItemType Directory -Path $OverlayCommon -Force | Out-Null
 [IO.File]::WriteAllText((Join-Path $Overlay $MainRelative),
-    $Prefix.Replace('SOURCE_SHA', $ExpectedSourceSha) + "`n" + $Main + "`n" + $Suffix + "`n", $Utf8)
+    $Prefix.Replace('SOURCE_SHA', $ExpectedSourceSha).Replace('RUN_ID', $RunId) + "`n" + $Main + "`n" + $Suffix + "`n", $Utf8)
 $Allowed = @($MainRelative,'campaigns/main_attila/common/mkmp_debug.lua','campaigns/main_attila/common/mkmp_runtime.lua')
 foreach ($relative in $Allowed[1..2]) {
     if (Test-Path (Join-Path $Baseline $relative)) { throw "Workshop already contains $relative; game unchanged" }
@@ -216,7 +219,7 @@ $WorkshopAttributes = (Get-Item $Workshop).Attributes
 $Installed = $false
 $RunError = $null
 $RestoreErrors = @()
-$Result = [ordered]@{ schema=1; mode=$Mode; source_sha=$ExpectedSourceSha; fallback_ready=$false; bootstrap_enter=$false; initializer_enter=$false; native_ready=$false; debug_ready=$false; pack_preserved=$false; rollback_ok=$false; run_error=$null }
+$Result = [ordered]@{ schema=1; mode=$Mode; source_sha=$ExpectedSourceSha; run_id=$RunId; fallback_ready=$false; bootstrap_enter=$false; initializer_enter=$false; native_ready=$false; debug_ready=$false; pack_preserved=$false; rollback_ok=$false; run_error=$null }
 try {
     if ((Hash $Workshop) -ne $OriginalHash) { throw 'Workshop pack changed during preparation' }
     foreach ($state in $ProbeStates) {
@@ -240,7 +243,7 @@ try {
     $InstalledDllHash = if ($NoDll) { $null } else { Hash $Dll }
     $DllFilesAbsent = -not ((Test-Path $Dll) -or (Test-Path $DllAttila) -or (Test-Path $DllBare))
     $provenance = [ordered]@{
-        schema=1; source_sha=$ExpectedSourceSha; started_at=(Get-Date).ToString('o')
+        schema=1; source_sha=$ExpectedSourceSha; run_id=$RunId; started_at=(Get-Date).ToString('o')
         game_root=$GameRoot; workshop_scripts_pack=$Workshop
         workshop_scripts_original_sha256=$OriginalHash; workshop_scripts_patched_sha256=$PatchedHash
         attila_sha256=(Hash $Exe); empire_retail_sha256=(Hash (Join-Path $GameRoot 'empire.retail.dll'))
@@ -273,15 +276,62 @@ try {
     try {
     $traceCopy = Join-Path $Evidence 'PR45_RUNTIME_TRACE.txt'
     if (Test-Path $traceCopy) {
-        $txt = [string](Get-Content $traceCopy -Raw)
-        $Result.bootstrap_enter = $txt.Contains("source_sha=$ExpectedSourceSha bootstrap_enter")
-        $statusLines = @($txt -split "[`r`n]+" | Where-Object { $_.StartsWith("schema=2 source_sha=$ExpectedSourceSha runtime_status ") })
-        $expectedFallback = "schema=2 source_sha=$ExpectedSourceSha runtime_status available=false reason_code=dll_unavailable luaopen_calls=0"
-        $Result.fallback_ready = ($statusLines.Count -gt 0) -and (@($statusLines | Where-Object { $_ -ne $expectedFallback }).Count -eq 0)
-        $Result.initializer_enter = $txt.Contains("source_sha=$ExpectedSourceSha initializer_enter")
-        $Result.gameplay_initializer_complete = $txt.Contains("source_sha=$ExpectedSourceSha gameplay_initializer_complete")
-        $Result.trace_status_count = @($txt -split "[`r`n]+" | Where-Object { $_.Contains("schema=2 source_sha=$ExpectedSourceSha runtime_status ") }).Count
-        if ($Result.trace_status_count -eq 0) { $Result.fallback_ready = $false }
+        $txt = [string](Get-Content -LiteralPath $traceCopy -Raw)
+        $prefix = "schema=2 source_sha=$ExpectedSourceSha run_id=$RunId "
+        $records = @($txt -split "[`r`n]+" | Where-Object { $_.Length -gt 0 })
+        $prefixValid = @($records | Where-Object { -not $_.StartsWith($prefix) }).Count -eq 0
+        $events = @($records | Where-Object { $_.StartsWith($prefix) } | ForEach-Object { $_.Substring($prefix.Length) })
+        $Result.bootstrap_enter = @($events | Where-Object { $_ -ceq 'bootstrap_enter' }).Count -eq 1
+        $Result.trace_status_count = 0
+        $Result.trace_invalid_status_count = 0
+        $Result.fallback_ready = $false
+        $Result.initializer_enter = $false
+        $Result.gameplay_initializer_complete = $false
+        $sequence = 0
+        $pending = $false
+        $seenStatus = $false
+        $validFallback = $true
+        $validNative = $true
+        foreach ($ev in $events) {
+            if ($ev -match '^initializer_enter seq=([0-9]+)$') {
+                if ($pending -or $seenStatus -or [int]$Matches[1] -ne ($sequence + 1)) { $validFallback = $false; $validNative = $false }
+                $sequence = [int]$Matches[1]
+                $pending = $true
+                $seenStatus = $false
+                $Result.initializer_enter = $true
+            } elseif ($ev -match '^gameplay_initializer_complete seq=([0-9]+)$') {
+                if (-not $pending -or [int]$Matches[1] -ne $sequence) { $validFallback = $false; $validNative = $false }
+                else { $Result.gameplay_initializer_complete = $true }
+            } elseif ($ev -match '^runtime_status(?: |$)') {
+                $Result.trace_status_count++
+                if ($ev -cnotmatch '^runtime_status seq=([0-9]+) available=(true|false) reason_code=([a-z_]+) luaopen_calls=([0-9]+)$') {
+                    $Result.trace_invalid_status_count++
+                    $validFallback = $false
+                    $validNative = $false
+                } else {
+                    $seq = [int]$Matches[1]
+                    $available = $Matches[2]
+                    $reason = $Matches[3]
+                    $calls = [int]$Matches[4]
+                    if (-not $pending -or $seenStatus -or $seq -ne $sequence -or -not $Result.gameplay_initializer_complete) {
+                        $validFallback = $false; $validNative = $false
+                    }
+                    if ($available -cne 'false' -or $reason -cne 'dll_unavailable' -or $calls -ne 0) { $validFallback = $false }
+                    if ($available -cne 'true' -or $reason -cne 'ready' -or $calls -ne 1) { $validNative = $false }
+                    $pending = $false
+                    $seenStatus = $true
+                }
+            } elseif ($ev -match '^diagnostics_failed(?: |$)') {
+                $validFallback = $false; $validNative = $false
+            }
+        }
+        if ($pending -or $sequence -eq 0 -or $Result.trace_status_count -ne $sequence -or -not $prefixValid) {
+            $validFallback = $false; $validNative = $false
+        }
+        $Result.fallback_ready = $validFallback -and $Result.bootstrap_enter
+        $Result.trace_native_ready = $validNative -and $Result.bootstrap_enter
+        $Result.trace_segments = $sequence
+        $Result.trace_prefix_valid = $prefixValid
     }
     $nativeCopy = Join-Path $Evidence 'twdll.log'
     if (Test-Path $nativeCopy) { $Result.native_ready = ([string](Get-Content $nativeCopy -Raw)).Contains("[MKMP][RUNTIME] ready game=Attila twdll_sha=$ExpectedSourceSha") }
@@ -328,7 +378,7 @@ try {
     $Result.rollback_ok = $RestoreErrors.Count -eq 0
     $Result.run_error = $RunError
     $Result.restore_errors = $RestoreErrors
-    $RuntimePass = $Result.native_ready -and $Result.debug_ready
+    $RuntimePass = $Result.native_ready -and $Result.debug_ready -and $Result.trace_native_ready
     if ($NoDll) { $RuntimePass = $DllFilesAbsent -and $Result.fallback_ready -and -not $Result.native_ready -and -not (Test-Path $nativeCopy) }
     $Result.pass = $Result.bootstrap_enter -and $Result.initializer_enter -and $Result.gameplay_initializer_complete -and $RuntimePass -and $Result.pack_preserved -and $Result.rollback_ok -and -not $RunError -and -not $Result.evaluation_error
     $Result | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $Evidence 'result.json')
