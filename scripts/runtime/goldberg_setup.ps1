@@ -20,6 +20,10 @@ $script:GoldSetupFiles = @(
 $script:GoldSetupPathKeys = @('GameRoot', 'HostGameRoot', 'ClientGameRoot', 'ModsRoot', 'ToolkitRoot', 'LabRoot', 'SandboxieRoot')
 $script:GoldSetupLegacySource = '7f66f06afddc53fda220f22d1940242ebd87e4ab'
 $script:GoldSetupLegacyManifest = '6437e64419ff4337bf43ae2f62976f503e3878571f876ba09a4ec4d4c744f435'
+$script:GoldSetupUpgradePins = @{
+    '7f66f06afddc53fda220f22d1940242ebd87e4ab' = '6437e64419ff4337bf43ae2f62976f503e3878571f876ba09a4ec4d4c744f435'
+    'f5158fa52138d87ef00fa154b3fb50b636dabc23' = '58dda3727415324429da1f5eccd11ae9d2674570d6198bda367bb51f3cff5837'
+}
 
 function Assert-GoldbergSetupNoReparse {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -202,7 +206,7 @@ function Assert-GoldbergSetupOwnership {
         return $null
     }
     $marker = Read-GoldbergSetupJson -Path $markerPath
-    if ($marker.schema -ne 1 -or $marker.owner -cne $script:GoldSetupOwner -or $marker.installation_id -cnotmatch '^[0-9a-f]{32}$' -or $marker.source_sha -cne $Package.source_sha -or $marker.package_manifest_sha256 -cne $Package.manifest_sha256) { throw 'Installer ownership/package identity does not match; changing an existing installation in place is not supported.' }
+    if ($marker.schema -ne 1 -or $marker.owner -cne $script:GoldSetupOwner -or $marker.installation_id -cnotmatch '^[0-9a-f]{32}$' -or $marker.source_sha -cne $Package.source_sha -or $marker.package_manifest_sha256 -cne $Package.manifest_sha256) { throw 'Installer ownership/package identity does not match a recognized installation or supported update.' }
     foreach ($key in $script:GoldSetupPathKeys) {
         if ([string]$marker.$key -ine [string]$Paths.$key) {
             $details = [ordered]@{ path_key = $key; saved_value = [string]$marker.$key; requested_value = [string]$Paths.$key; marker_path = $markerPath }
@@ -262,6 +266,167 @@ function Write-GoldbergSetupExclusiveBytes {
     Assert-GoldbergSetupNoReparse -Path $Path
     $stream = New-Object IO.FileStream -ArgumentList $Path, ([IO.FileMode]::CreateNew), ([IO.FileAccess]::Write), ([IO.FileShare]::None)
     try { $stream.Write($Bytes, 0, $Bytes.Length); $stream.Flush() } finally { $stream.Dispose() }
+}
+
+function Assert-GoldbergSetupUpgradeEmpty {
+    param($Paths)
+    foreach ($root in @($Paths.LabRoot, $Paths.HostGameRoot, $Paths.ClientGameRoot)) {
+        if (-not (Test-GoldbergSetupEmpty -Path $root)) { throw ('Automatic toolkit update is limited to installations without lab/game state; preserved: ' + $root) }
+    }
+}
+
+function Assert-GoldbergSetupUpgradeIdentity {
+    param([string]$Path, $Identity)
+    $actual = Get-GoldbergSetupDigest -Path $Path
+    if ($actual.bytes -ne $Identity.bytes -or $actual.sha256 -cne $Identity.sha256) { throw ('Update file changed; preserved: ' + $Path) }
+}
+
+function Write-GoldbergSetupUpgradeMetadata {
+    param([string]$Path, [byte[]]$Bytes)
+    Assert-GoldbergSetupNoReparse -Path $Path
+    $temporary = $Path + '.new-' + [guid]::NewGuid().ToString('N')
+    try {
+        Write-GoldbergSetupExclusiveBytes -Path $temporary -Bytes $Bytes
+        # A stopped process may leave its temporary file, never a half-valid journal/backup.
+        [IO.File]::Move($temporary, $Path)
+    } finally { if ([IO.File]::Exists($temporary)) { [IO.File]::Delete($temporary) } }
+}
+
+function Set-GoldbergSetupUpgradeFile {
+    param([string]$SourceRoot, [string]$StagedRoot, [string]$DestinationRoot, $OldRecord, $NewRecord)
+    if ($NewRecord.path -cne $OldRecord.path -or ($script:GoldSetupFiles -cnotcontains $NewRecord.path -and @('package_manifest.json', 'installer-settings.json') -cnotcontains $NewRecord.path)) { throw 'Update file is outside the fixed toolkit allowlist.' }
+    $destination = Join-Path $DestinationRoot $NewRecord.path
+    $current = Get-GoldbergSetupDigest -Path $destination
+    if ($current.bytes -eq $NewRecord.bytes -and $current.sha256 -ceq $NewRecord.sha256) { return $false }
+    if ($current.bytes -ne $OldRecord.bytes -or $current.sha256 -cne $OldRecord.sha256) { throw ('Update accepts only exact previous or target bytes; preserved: ' + $destination) }
+    if ($NewRecord.path -cne 'installer-settings.json') { Copy-GoldbergSetupFile -SourceRoot $SourceRoot -DestinationRoot $StagedRoot -Record $NewRecord }
+    $staged = Join-Path $StagedRoot $NewRecord.path
+    Assert-GoldbergSetupUpgradeIdentity -Path $staged -Identity $NewRecord
+    Assert-GoldbergSetupUpgradeIdentity -Path $destination -Identity $OldRecord
+    [IO.File]::Replace($staged, $destination, [System.Management.Automation.Language.NullString]::Value)
+    Assert-GoldbergSetupUpgradeIdentity -Path $destination -Identity $NewRecord
+    return $true
+}
+
+function Invoke-GoldbergSetupKnownUpgrade {
+    param($Paths, $Package)
+    $markerPath = Join-Path $Paths.ToolkitRoot 'installer-settings.json'
+    $manifestPath = Join-Path $Paths.ToolkitRoot 'package_manifest.json'
+    $journalPath = Join-Path $Paths.ToolkitRoot 'installer-upgrade.json'
+    if (-not (Test-Path -LiteralPath $journalPath -PathType Leaf)) {
+        if (-not (Test-Path -LiteralPath $markerPath -PathType Leaf) -or -not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { return $false }
+        $marker = Read-GoldbergSetupJson -Path $markerPath
+        if ($marker.source_sha -ceq $Package.source_sha) { return $false }
+        if (-not $script:GoldSetupUpgradePins.ContainsKey([string]$marker.source_sha) -or $marker.package_manifest_sha256 -cne $script:GoldSetupUpgradePins[[string]$marker.source_sha]) { return $false }
+        $oldPackage = Get-GoldbergSetupPackage -Root $Paths.ToolkitRoot
+        [void](Assert-GoldbergSetupOwnership -Paths $Paths -Package $oldPackage)
+        Assert-GoldbergSetupUpgradeEmpty -Paths $Paths
+    }
+    $lockPath = Join-Path $Paths.ToolkitRoot '.goldberg-setup.lock'
+    Assert-GoldbergSetupNoReparse -Path $lockPath
+    $upgradeLock = New-Object IO.FileStream -ArgumentList $lockPath, ([IO.FileMode]::OpenOrCreate), ([IO.FileAccess]::ReadWrite), ([IO.FileShare]::None)
+    try {
+        if (-not (Test-Path -LiteralPath $journalPath)) {
+            # The entire previous package is proved before recording any update intent.
+            $oldPackage = Get-GoldbergSetupPackage -Root $Paths.ToolkitRoot
+            $marker = Assert-GoldbergSetupOwnership -Paths $Paths -Package $oldPackage
+            if (-not $script:GoldSetupUpgradePins.ContainsKey($oldPackage.source_sha) -or $oldPackage.manifest_sha256 -cne $script:GoldSetupUpgradePins[$oldPackage.source_sha]) { throw 'Only the two known previous toolkit releases can be updated automatically.' }
+            Assert-GoldbergSetupUpgradeEmpty -Paths $Paths
+            $oldMarkerIdentity = Get-GoldbergSetupDigest -Path $markerPath -MaxBytes 131072
+            $journal = [ordered]@{
+                schema = 1; owner = 'MK1212Scripts.goldberg-installer-upgrade'; installation_id = $marker.installation_id
+                from_source_sha = $oldPackage.source_sha; from_manifest_sha256 = $oldPackage.manifest_sha256
+                to_source_sha = $Package.source_sha; to_manifest_sha256 = $Package.manifest_sha256
+                old_marker_bytes = $oldMarkerIdentity.bytes; old_marker_sha256 = $oldMarkerIdentity.sha256
+                backup_leaf = ('.installer-upgrade-' + $Package.source_sha + '.backup'); created_utc = [DateTime]::UtcNow.ToString('o')
+            }
+            foreach ($key in $script:GoldSetupPathKeys) { $journal[$key] = [string]$Paths.$key }
+            if (Test-Path -LiteralPath (Join-Path $Paths.ToolkitRoot $journal.backup_leaf)) { throw 'The intended update backup directory already exists without its journal; preserved.' }
+            $encoding = New-Object Text.UTF8Encoding -ArgumentList $false
+            Write-GoldbergSetupUpgradeMetadata -Path $journalPath -Bytes $encoding.GetBytes(($journal | ConvertTo-Json -Depth 6) + [Environment]::NewLine)
+        }
+        $journal = Read-GoldbergSetupJson -Path $journalPath
+        if ($journal.schema -ne 1 -or $journal.owner -cne 'MK1212Scripts.goldberg-installer-upgrade' -or $journal.installation_id -cnotmatch '^[0-9a-f]{32}$' -or -not $script:GoldSetupUpgradePins.ContainsKey([string]$journal.from_source_sha) -or $journal.from_manifest_sha256 -cne $script:GoldSetupUpgradePins[[string]$journal.from_source_sha] -or $journal.to_source_sha -cne $Package.source_sha -or $journal.to_manifest_sha256 -cne $Package.manifest_sha256 -or $journal.backup_leaf -cne ('.installer-upgrade-' + $Package.source_sha + '.backup') -or $journal.old_marker_sha256 -cnotmatch '^[0-9a-f]{64}$' -or $journal.old_marker_bytes -lt 1 -or $journal.old_marker_bytes -gt 131072) { throw 'The pending update journal does not match this installation and target package.' }
+        foreach ($key in $script:GoldSetupPathKeys) { if ([string]$journal.$key -ine [string]$Paths.$key) { throw ('Pending update path differs: ' + $key) } }
+        $journalIdentity = Get-GoldbergSetupDigest -Path $journalPath -MaxBytes 131072
+        $backupRoot = Join-Path $Paths.ToolkitRoot $journal.backup_leaf
+        Assert-GoldbergSetupNoReparse -Path $backupRoot
+        $oldMarkerRecord = [pscustomobject]@{ path = 'installer-settings.json'; bytes = $journal.old_marker_bytes; sha256 = $journal.old_marker_sha256 }
+        $marker = Read-GoldbergSetupJson -Path $markerPath
+        $committed = $marker.source_sha -ceq $Package.source_sha -and $marker.package_manifest_sha256 -ceq $Package.manifest_sha256
+        if (-not $committed) {
+            Assert-GoldbergSetupUpgradeEmpty -Paths $Paths
+            Assert-GoldbergSetupUpgradeIdentity -Path $markerPath -Identity $oldMarkerRecord
+        }
+        # Copying the old manifest first makes an interrupted backup self-describing.
+        $backupManifest = Join-Path $backupRoot 'package_manifest.json'
+        if (-not (Test-Path -LiteralPath $backupManifest)) {
+            $oldPackage = Get-GoldbergSetupPackage -Root $Paths.ToolkitRoot
+            if ($oldPackage.source_sha -cne $journal.from_source_sha -or $oldPackage.manifest_sha256 -cne $journal.from_manifest_sha256) { throw 'The original update backup is missing and cannot be reconstructed.' }
+            Copy-GoldbergSetupFile -SourceRoot $Paths.ToolkitRoot -DestinationRoot $backupRoot -Record ([pscustomobject]@{ path = 'package_manifest.json'; bytes = $oldPackage.manifest_bytes; sha256 = $oldPackage.manifest_sha256 })
+        }
+        $oldPackage = Get-GoldbergSetupPackage -Root $backupRoot -AllowMissing
+        if ($oldPackage.source_sha -cne $journal.from_source_sha -or $oldPackage.manifest_sha256 -cne $journal.from_manifest_sha256) { throw 'The prior package backup does not match its pinned release.' }
+        foreach ($record in $oldPackage.records) {
+            $backupFile = Join-Path $backupRoot $record.path
+            if (-not (Test-Path -LiteralPath $backupFile)) { Copy-GoldbergSetupFile -SourceRoot $Paths.ToolkitRoot -DestinationRoot $backupRoot -Record $record }
+        }
+        [void](Get-GoldbergSetupPackage -Root $backupRoot)
+        $backupMarker = Join-Path $backupRoot 'installer-settings.json'
+        if (-not (Test-Path -LiteralPath $backupMarker)) {
+            Assert-GoldbergSetupUpgradeIdentity -Path $markerPath -Identity $oldMarkerRecord
+            Write-GoldbergSetupUpgradeMetadata -Path $backupMarker -Bytes (Read-GoldbergSetupBytes -Path $markerPath)
+        }
+        Assert-GoldbergSetupUpgradeIdentity -Path $backupMarker -Identity $oldMarkerRecord
+        $oldMarker = Read-GoldbergSetupJson -Path $backupMarker
+        if ($oldMarker.schema -ne 1 -or $oldMarker.owner -cne $script:GoldSetupOwner -or $oldMarker.installation_id -cne $journal.installation_id -or $oldMarker.source_sha -cne $journal.from_source_sha -or $oldMarker.package_manifest_sha256 -cne $journal.from_manifest_sha256) { throw 'The prior settings backup has an unexpected owner or release.' }
+        foreach ($key in $script:GoldSetupPathKeys) { if ([string]$oldMarker.$key -ine [string]$Paths.$key) { throw ('Previous toolkit path differs: ' + $key) } }
+        $backupJournal = Join-Path $backupRoot 'upgrade-journal.json'
+        if (-not (Test-Path -LiteralPath $backupJournal)) { Write-GoldbergSetupUpgradeMetadata -Path $backupJournal -Bytes (Read-GoldbergSetupBytes -Path $journalPath) }
+        Assert-GoldbergSetupUpgradeIdentity -Path $backupJournal -Identity $journalIdentity
+        if (-not $committed) {
+            Assert-GoldbergSetupUpgradeEmpty -Paths $Paths
+            # Before changing anything, every destination must still be exactly old or exactly new.
+            foreach ($newRecord in $Package.records) {
+                $oldRecord = @($oldPackage.records | Where-Object { $_.path -ceq $newRecord.path })[0]
+                $actual = Get-GoldbergSetupDigest -Path (Join-Path $Paths.ToolkitRoot $newRecord.path)
+                if (-not (($actual.bytes -eq $oldRecord.bytes -and $actual.sha256 -ceq $oldRecord.sha256) -or ($actual.bytes -eq $newRecord.bytes -and $actual.sha256 -ceq $newRecord.sha256))) { throw ('Update file is neither prior nor target content; preserved: ' + $newRecord.path) }
+            }
+            $stagedRoot = Join-Path $backupRoot '.target'
+            foreach ($newRecord in $Package.records) {
+                $oldRecord = @($oldPackage.records | Where-Object { $_.path -ceq $newRecord.path })[0]
+                [void](Set-GoldbergSetupUpgradeFile -SourceRoot $Package.root -StagedRoot $stagedRoot -DestinationRoot $Paths.ToolkitRoot -OldRecord $oldRecord -NewRecord $newRecord)
+            }
+            $oldManifestRecord = [pscustomobject]@{ path = 'package_manifest.json'; bytes = $oldPackage.manifest_bytes; sha256 = $oldPackage.manifest_sha256 }
+            $newManifestRecord = [pscustomobject]@{ path = 'package_manifest.json'; bytes = $Package.manifest_bytes; sha256 = $Package.manifest_sha256 }
+            [void](Set-GoldbergSetupUpgradeFile -SourceRoot $Package.root -StagedRoot $stagedRoot -DestinationRoot $Paths.ToolkitRoot -OldRecord $oldManifestRecord -NewRecord $newManifestRecord)
+            [void](Get-GoldbergSetupPackage -Root $Paths.ToolkitRoot)
+            $encoding = New-Object Text.UTF8Encoding -ArgumentList $false, $true
+            $oldText = $encoding.GetString((Read-GoldbergSetupBytes -Path $backupMarker)).TrimStart([char]0xFEFF)
+            $created = [regex]::Matches($oldText, '"created_utc"\s*:\s*"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{7}Z)"')
+            if ($created.Count -ne 1) { throw 'The previous settings creation timestamp is ambiguous.' }
+            [void][DateTime]::ParseExact($created[0].Groups[1].Value, 'o', [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind)
+            $oldMarker.created_utc = $created[0].Groups[1].Value
+            $oldMarker.source_sha = $Package.source_sha; $oldMarker.package_manifest_sha256 = $Package.manifest_sha256
+            $oldMarker | Add-Member -NotePropertyName upgrade -NotePropertyValue ([ordered]@{ from_source_sha = $journal.from_source_sha; from_manifest_sha256 = $journal.from_manifest_sha256; backup_directory = $journal.backup_leaf; journal_sha256 = $journalIdentity.sha256; completed_utc = [DateTime]::UtcNow.ToString('o') }) -Force
+            $markerStage = Join-Path $backupRoot ('.marker-' + [guid]::NewGuid().ToString('N'))
+            [void][IO.Directory]::CreateDirectory($markerStage)
+            $stagedMarker = Join-Path $markerStage 'installer-settings.json'
+            Write-GoldbergSetupUpgradeMetadata -Path $stagedMarker -Bytes $encoding.GetBytes(($oldMarker | ConvertTo-Json -Depth 8) + [Environment]::NewLine)
+            $newMarkerIdentity = Get-GoldbergSetupDigest -Path $stagedMarker -MaxBytes 131072
+            $newMarkerRecord = [pscustomobject]@{ path = 'installer-settings.json'; bytes = $newMarkerIdentity.bytes; sha256 = $newMarkerIdentity.sha256 }
+            Assert-GoldbergSetupUpgradeEmpty -Paths $Paths
+            Assert-GoldbergSetupUpgradeIdentity -Path $journalPath -Identity $journalIdentity
+            [void](Set-GoldbergSetupUpgradeFile -SourceRoot $markerStage -StagedRoot $markerStage -DestinationRoot $Paths.ToolkitRoot -OldRecord $oldMarkerRecord -NewRecord $newMarkerRecord)
+        }
+        [void](Get-GoldbergSetupPackage -Root $Paths.ToolkitRoot)
+        $marker = Assert-GoldbergSetupOwnership -Paths $Paths -Package $Package
+        if ($marker.installation_id -cne $journal.installation_id -or $marker.upgrade.journal_sha256 -cne $journalIdentity.sha256 -or $marker.upgrade.backup_directory -cne $journal.backup_leaf) { throw 'Updated settings do not identify this exact backed-up transaction.' }
+        Assert-GoldbergSetupUpgradeIdentity -Path $journalPath -Identity $journalIdentity
+        [IO.File]::Delete($journalPath)
+        [Console]::Out.WriteLine('MK1212_SETUP_UPDATE=KNOWN_PRELAB_TOOLKIT; previous files retained in: ' + $backupRoot)
+        return $true
+    } finally { $upgradeLock.Dispose() }
 }
 
 function Repair-GoldbergSetupLegacyMarker {
@@ -462,6 +627,8 @@ function Invoke-GoldbergSetup {
         if ($isIni -and (Test-GoldbergSetupOverlap -Left $packageRoot.TrimEnd('\') -Right $paths.ToolkitRoot)) { throw 'The private payload and installed toolkit must not overlap.' }
         $setupStage = 'ResolveSandboxie'
         if ($Mode -ne 'Uninstall') { Resolve-GoldbergSetupSandboxie -Paths $paths -VerifiedRoot $packageRoot }
+        $setupStage = 'UpdateKnownPrelabToolkit'
+        if ($Mode -eq 'Install') { [void](Invoke-GoldbergSetupKnownUpgrade -Paths $paths -Package $package) }
         $setupStage = 'RecoverPreviousPartialMarker'
         if ($Mode -eq 'Install') { [void](Repair-GoldbergSetupLegacyMarker -Paths $paths -Package $package) }
         $setupStage = 'CheckOwnership'

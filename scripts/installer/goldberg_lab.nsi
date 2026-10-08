@@ -25,14 +25,16 @@ CRCCheck on
   !error "SOURCE_SHA is required"
 !endif
 
-Name "MK1212 — dwie Attile"
+!define MK1212_SETUP_VERSION "0.2.2"
+
+Name "MK1212 — dwie Attile ${MK1212_SETUP_VERSION}"
 OutFile "${OUTPUT}"
 InstallDir "D:\MK1212\Launcher"
-BrandingText "MK1212 · HOST + CLIENT"
-VIProductVersion "0.2.1.0"
+BrandingText "MK1212 · HOST + CLIENT · ${MK1212_SETUP_VERSION}"
+VIProductVersion "${MK1212_SETUP_VERSION}.0"
 VIAddVersionKey /LANG=1045 "ProductName" "MK1212 — dwie Attile"
 VIAddVersionKey /LANG=1045 "FileDescription" "Instalator dwóch klientów Attili i wybranych modów"
-VIAddVersionKey /LANG=1045 "FileVersion" "0.2.1"
+VIAddVersionKey /LANG=1045 "FileVersion" "${MK1212_SETUP_VERSION}"
 VIAddVersionKey /LANG=1045 "LegalCopyright" "MK1212Scripts contributors; upstream notices included"
 VIAddVersionKey /LANG=1045 "Comments" "Source ${SOURCE_SHA}; actual ATTILA multiplayer NOT_RUN"
 
@@ -119,6 +121,10 @@ Function .onInit
   StrCpy $SandboxieRoot ""
   IfFileExists "$PROGRAMFILES64\Sandboxie-Plus\Start.exe" 0 +2
     StrCpy $SandboxieRoot "$PROGRAMFILES64\Sandboxie-Plus"
+  ${If} $SandboxieRoot == ""
+    IfFileExists "D:\Sandboxie-Plus\Start.exe" 0 +2
+      StrCpy $SandboxieRoot "D:\Sandboxie-Plus"
+  ${EndIf}
   InitPluginsDir
   SetOutPath "$PLUGINSDIR\payload"
   !include "${PAYLOAD_INCLUDE}"
@@ -235,7 +241,7 @@ Section "Przygotuj obie kopie"
     WriteINIStr "$InputFile" "MK1212" "SandboxieRoot" "$SandboxieRoot"
     FlushINI "$InputFile"
   ${EndIf}
-  DetailPrint "MK1212 — instalator 0.2.1"
+  DetailPrint "MK1212 — instalator ${MK1212_SETUP_VERSION}"
   DetailPrint "Program uruchamiający: $INSTDIR"
   DetailPrint "Gra Steam: $GameRoot"
   DetailPrint "Źródło modów: $ModsRoot"
@@ -258,7 +264,7 @@ Section "Przygotuj obie kopie"
   CreateShortcut "$SMPROGRAMS\MK1212 — dwie Attile\Zbierz raport.lnk" "$INSTDIR\RUN-INSTALLED-GOLDBERG.cmd" "Collect"
   CreateShortcut "$SMPROGRAMS\MK1212 — dwie Attile\Odinstaluj launcher.lnk" "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MK1212GoldbergLab" "DisplayName" "MK1212 — dwie Attile"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MK1212GoldbergLab" "DisplayVersion" "0.2.1"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MK1212GoldbergLab" "DisplayVersion" "${MK1212_SETUP_VERSION}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MK1212GoldbergLab" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MK1212GoldbergLab" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\MK1212GoldbergLab" "NoModify" 1

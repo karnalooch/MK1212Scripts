@@ -1,6 +1,6 @@
 # Instalator dwóch Attili — MK1212, HOST na C: i CLIENT na D:
 
-**Uruchom `MK1212-Setup.exe`, wskaż grę oraz folder z modami i wybierz miejsca
+**Uruchom `MK1212-Setup-0.2.2.exe`, wskaż grę oraz folder z modami i wybierz miejsca
 na obie kopie.** Instalator przygotuje osobne katalogi gry, skopiuje wybrane
 paczki oraz utworzy skrót do uruchamiania obu klientów. Nie musisz pobierać
 ponownie Attili ani ręcznie podmieniać plików.
@@ -15,7 +15,8 @@ plików i testy instalatora nie dowodzą działania konkretnej kampanii MK1212.
 1. Poczekaj na zakończenie pobierania gry i modów przez Steam. Jeżeli zmieniałeś
    ostatnio wybór modów, uruchom raz zwykłą Attilę z działającym MK1212, sprawdź
    menu i zamknij grę. Dzięki temu istniejąca lista modów odpowiada Twojemu wyborowi.
-2. Uruchom **`MK1212-Setup.exe`**. Wybierz folder launchera; domyślnie jest to
+2. Uruchom **`MK1212-Setup-0.2.2.exe`**. Numer **0.2.2** jest widoczny w oknie
+   instalatora. Wybierz folder launchera; domyślnie jest to
    **`D:\MK1212\Launcher`**. Sam launcher jest mały, ale jego podfolder `lab`
    mieści także osobne profile, zapisy oraz raporty.
 3. W kroku **„Gra Steam i mody”** wskaż folder z `Attila.exe`, a niżej
@@ -43,7 +44,7 @@ Dla instalacji znanej z wcześniejszych logów operatora:
 | Kopia HOST | `C:\MK1212\HOST` |
 | Kopia CLIENT | `D:\MK1212\CLIENT` |
 | Launcher | `D:\MK1212\Launcher` |
-| Sandboxie-Plus | Zwykle `C:\Program Files\Sandboxie-Plus`; wybierz faktyczny folder |
+| Sandboxie-Plus | `D:\Sandboxie-Plus`, zgodnie z ostatnim raportem operatora |
 
 Folder Workshop powyżej wynika ze wskazanej biblioteki Steam; jego istnienie
 jest sprawdzane na komputerze. Jeżeli paczki trzymasz gdzie indziej, wybierz ten
@@ -126,16 +127,24 @@ zobaczył HOST i na jakim kroku wystąpił problem.
 ## 5. Ponowienie instalacji i usuwanie launchera
 
 Instalator zapisuje ścieżki w `installer-settings.json`. Normalne uruchamianie
-ze skrótu korzysta z tego pliku. Jeżeli ponawiasz przerwaną instalację, podaj
-te same foldery i użyj tego samego wydania instalatora. Kompletny plik jest
-wykorzystywany ponownie dopiero po sprawdzeniu zawartości.
+ze skrótu korzysta z tego pliku. Przy ponowieniu podaj te same foldery.
+Kompletne pliki są wykorzystywane ponownie po sprawdzeniu zawartości.
 
-Nieznane katalogi, zmienione pliki i częściowe kopie są zachowywane. Program
-nie nadpisuje ich w celu ukrycia błędu. Nowe wydanie instalatora nie przejmuje
-po cichu istniejącej instalacji innej wersji. Poprzednie laboratoria i nazwy
-piaskownic także mają przypisaną własność; przy takim konflikcie zachowaj raport.
+Wydanie **0.2.2** aktualizuje pliki launchera po nieudanym przygotowaniu
+wydaniem **0.2.0** (`7f66f06a`) lub **0.2.1** (`f5158fa5`). Obejmuje to błąd
+`Conflicting original Steam interface versions: SteamClient`, występujący
+przed utworzeniem laboratorium i obu kopii gry. Instalator rozpoznaje poprzednią
+paczkę, zachowuje kopię jej plików i ustawień, aktualizuje launcher i kontynuuje
+przygotowanie. Wszystkie zapisane ścieżki muszą być zgodne, a katalogi laboratorium,
+HOST i CLIENT muszą być puste lub nie istnieć. Nie trzeba ręcznie kasować launchera.
 
-Wydanie **0.2.1** ma ograniczone odzyskiwanie ustawień po przerwanym wydaniu
+Przerwaną aktualizację ponów tym samym wydaniem **0.2.2**. Zapisany postęp pozwala
+wykorzystać już wymienione pliki, a ustawienia wskazujące nowe wydanie są zatwierdzane
+po wymianie całej paczki. Poprzednie pliki pozostają w kopii zapasowej. Aktualizacja
+nie przenosi gotowych laboratoriów, profili ani zapisów. Nieznane wersje i zmienione
+pliki są zachowywane wraz z komunikatem wskazującym przeszkodę.
+
+Wydanie **0.2.2** zachowuje także odzyskiwanie samych ustawień po przerwanym wydaniu
 **0.2.0** z kodu `7f66f06afddc53fda220f22d1940242ebd87e4ab`. Dotyczy ono
 wyłącznie sytuacji, w której pozostał sam rozpoznany `installer-settings.json`
 (ewentualnie pusty plik blokady), a w folderach docelowych nie ma plików
@@ -147,11 +156,20 @@ laboratorium muszą być puste lub nie istnieć. Istniejące dane zatrzymują t�
 naprawę. Nie jest to migracja gotowego laboratorium między folderami.
 
 Przy `Owned installation path differs: ToolkitRoot` ponów instalację wydaniem
-0.2.1, zachowując poprzedni wybór folderów. Szczegóły pokazują ścieżkę wybraną,
+0.2.2, zachowując poprzedni wybór folderów. Szczegóły pokazują ścieżkę wybraną,
 zapisaną oraz etap sprawdzania. Jeśli naprawa nie jest możliwa, zachowaj pełny
 komunikat z tymi wartościami. Sam wiersz `Temp\\...\\payload` opisuje katalog
 rozpakowania EXE, a nie miejsce kopii gry. Pierwotny krótki komunikat nie
 wystarcza do rozstrzygnięcia, skąd wzięła się różnica ścieżek.
+
+W **0.2.2** skaner interfejsów odpowiada przypiętemu generatorowi Goldberga:
+zapisuje wszystkie dopasowania w kolejności rodzin i wystąpień w oryginalnym
+pliku, również powtórzenia. Kilka wersji `SteamClient` nie zatrzymuje instalacji.
+To zachowanie jest określone przez
+[generator upstream](https://gitlab.com/Mr_Goldberg/goldberg_emulator/-/blob/475342f0d8b2bd7eb0d93bd7cfdd61e3ae7cda24/generate_interfaces_file.cpp)
+i [odczyt konfiguracji](https://gitlab.com/Mr_Goldberg/goldberg_emulator/-/blob/475342f0d8b2bd7eb0d93bd7cfdd61e3ae7cda24/dll/dll.cpp),
+który stosuje ostatnią linię danej rodziny. Odczyt źródłowej DLL pozostaje
+pasywny. Zgodność generatora nie stanowi jeszcze dowodu uruchomienia Attili.
 
 Opcja **„Odinstaluj launcher”** usuwa zweryfikowane pliki narzędzia, jego skróty
 i wpis w aplikacjach Windowsa. **Kopie gier, mody w kopiach, profile, zapisy i
@@ -165,7 +183,8 @@ raporty pozostają na dyskach.** To pozwala zachować eksperyment i własne zapi
 | Sprzeczna lista albo powtarzająca się nazwa | Zachowaj komunikat i istniejące manifesty; trzeba rozstrzygnąć konkretny wybór. |
 | Za mało miejsca | Sprawdź wskazany wolumin i liczbę wymaganych bajtów. |
 | Brak `Start.exe`, `SbieIni.exe` lub usługi Sandboxie | Zainstaluj Sandboxie-Plus, wskaż folder i wykonaj wymagany restart. |
-| `Owned installation path differs: ToolkitRoot` | Ponów wydaniem 0.2.1 z tymi samymi folderami; przy dalszej blokadzie zachowaj wartości zapisanej i wybranej ścieżki z komunikatu. |
+| `Conflicting original Steam interface versions: SteamClient` | Uruchom wydanie 0.2.2 i zachowaj te same foldery. Skaner poprawiono zgodnie z generatorem Goldberga. |
+| `Owned installation path differs: ToolkitRoot` | Ponów wydaniem 0.2.2 z tymi samymi folderami; przy dalszej blokadzie zachowaj wartości zapisanej i wybranej ścieżki z komunikatu. |
 | Obcy katalog lub istniejąca inna wersja | Zachowaj dane oraz raport; nie kasuj na ślepo plików ani piaskownic. |
 | Brak menu MK1212 mimo przygotowania | Zbierz raport i podaj, co wyświetlają oba okna. |
 | Steam otwiera się zamiast gry albo proces znika | Zbierz raport z wersją gry i sumami plików. Zgodność konkretnego builda wymaga sprawdzenia. |

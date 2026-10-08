@@ -1,5 +1,8 @@
 [CmdletBinding()]
-param([Parameter(Mandatory = $true)][string]$PackageRootPath)
+param(
+    [Parameter(Mandatory = $true)][string]$PackageRootPath,
+    [Parameter(Mandatory = $true)][string[]]$PreviousPackageRoots
+)
 
 # Actual delivered installer helpers and package bytes. No Attila/Sandboxie launch.
 Set-StrictMode -Version Latest
@@ -107,6 +110,17 @@ function New-SetupInstalledFixture {
     return (Get-GoldbergSetupPackage -Root $Paths.ToolkitRoot)
 }
 
+function New-SetupPreviousInstalledFixture {
+    param($Fixture, $PreviousPackage)
+    New-GoldbergSetupMarker -Paths $Fixture.paths -Package $PreviousPackage | Out-Null
+    $manifestRecord = [pscustomobject]@{ path = 'package_manifest.json'; bytes = $PreviousPackage.manifest_bytes; sha256 = $PreviousPackage.manifest_sha256 }
+    Copy-GoldbergSetupFile -SourceRoot $PreviousPackage.root -DestinationRoot $Fixture.paths.ToolkitRoot -Record $manifestRecord
+    foreach ($record in $PreviousPackage.records) { Copy-GoldbergSetupFile -SourceRoot $PreviousPackage.root -DestinationRoot $Fixture.paths.ToolkitRoot -Record $record }
+    # A real previous Install acquired this lock before copying and invoking Prepare.
+    Write-SetupFixture (Join-Path $Fixture.paths.ToolkitRoot '.goldberg-setup.lock') ''
+    return (Assert-GoldbergSetupOwnership -Paths $Fixture.paths -Package $PreviousPackage)
+}
+
 function Add-SetupSandboxieFixture {
     param($Fixture)
     $root = Join-Path $Fixture.source_base 'Sandboxie [resolver only]'
@@ -119,7 +133,7 @@ function Add-SetupSandboxieFixture {
 
 function Invoke-SetupInstallFixture {
     param($Fixture, [string]$InputPath, [int]$PreparationExitCode = 0,
-        [ValidateSet('None', 'AfterBackup', 'AfterStagingData')][string]$RecoveryFault = 'None', [string]$LateFilePath)
+        [ValidateSet('None', 'AfterBackup', 'AfterStagingData', 'AfterUpgradeFile')][string]$RecoveryFault = 'None', [string]$LateFilePath)
     $token = [Guid]::NewGuid().ToString('N')
     $driverPath = Join-Path $Fixture.source_base ('test-only-install-driver-' + $token + '.ps1')
     $tracePath = Join-Path $Fixture.source_base ('test-only-preparation-boundary-' + $token + '.json')
@@ -132,7 +146,7 @@ function Invoke-SetupInstallFixture {
 param([string]$ExactPackageRoot, [string]$FixtureInputPath, [string]$FixtureTracePath, [int]$FixturePreparationExit,
     [string]$FixtureRecoveryFault = 'None', [string]$FixtureLateFilePath)
 . (Join-Path $ExactPackageRoot 'scripts/runtime/goldberg_setup.ps1')
-if ($FixtureRecoveryFault -ne 'None') {
+if (@('AfterBackup', 'AfterStagingData') -contains $FixtureRecoveryFault) {
     $script:FixtureOriginalExclusiveWrite = (Get-Command Write-GoldbergSetupExclusiveBytes -CommandType Function).ScriptBlock
     function Write-GoldbergSetupExclusiveBytes {
         param([string]$Path, [byte[]]$Bytes)
@@ -151,6 +165,17 @@ if ($FixtureRecoveryFault -ne 'None') {
             } finally { $late.Dispose() }
             [Console]::Out.WriteLine('TEST_ONLY_NEW_DESTINATION_DATA_AFTER_STAGING')
         }
+    }
+}
+if ($FixtureRecoveryFault -eq 'AfterUpgradeFile') {
+    $script:FixtureOriginalUpgradeWrite = (Get-Command Set-GoldbergSetupUpgradeFile -CommandType Function).ScriptBlock
+    function Set-GoldbergSetupUpgradeFile {
+        param($SourceRoot, $StagedRoot, $DestinationRoot, $OldRecord, $NewRecord)
+        $changed = & $script:FixtureOriginalUpgradeWrite -SourceRoot $SourceRoot -StagedRoot $StagedRoot -DestinationRoot $DestinationRoot -OldRecord $OldRecord -NewRecord $NewRecord
+        if ($changed -and $NewRecord.path -ceq 'scripts/runtime/goldberg_client_lab_core.psm1') {
+            throw 'TEST_ONLY_UPGRADE_FAILURE_AFTER_RUNTIME_REPLACEMENT'
+        }
+        return $changed
     }
 }
 function Invoke-GoldbergSetupMain {
@@ -207,6 +232,19 @@ function New-SetupLegacyMarkerFixture {
 $setupPackage = Get-GoldbergSetupPackage -Root $PackageRootPath
 Import-Module (Join-Path $PackageRootPath 'scripts/runtime/dual_client_lab_core.psm1') -Force -DisableNameChecking
 $packageBefore = Get-SetupHashes -Root $PackageRootPath
+$previousIdentities = @{
+    '7f66f06afddc53fda220f22d1940242ebd87e4ab' = '6437e64419ff4337bf43ae2f62976f503e3878571f876ba09a4ec4d4c744f435'
+    'f5158fa52138d87ef00fa154b3fb50b636dabc23' = '58dda3727415324429da1f5eccd11ae9d2674570d6198bda367bb51f3cff5837'
+}
+$previousPackages = @{}
+$previousPackageHashes = @{}
+foreach ($previousRoot in $PreviousPackageRoots) {
+    $previous = Get-GoldbergSetupPackage -Root ([IO.Path]::GetFullPath($previousRoot).TrimEnd('\'))
+    if (-not $previousIdentities.ContainsKey($previous.source_sha) -or $previous.manifest_sha256 -cne $previousIdentities[$previous.source_sha] -or $previousPackages.ContainsKey($previous.source_sha)) { throw 'Historical fixtures must be the two distinct authentic released payloads.' }
+    $previousPackages[$previous.source_sha] = $previous
+    $previousPackageHashes[$previous.source_sha] = Get-SetupHashes -Root $previous.root
+}
+if ($previousPackages.Count -ne 2) { throw 'Both historical released packages are required; upgrade checks may not skip.' }
 $setupTemp = Join-Path ([System.IO.Path]::GetTempPath()) ('mk1212-installer-tests-' + [Guid]::NewGuid().ToString('N'))
 $setupDriveTemp = Join-Path ([System.IO.Path]::GetDirectoryName($PackageRootPath)) ('synthetic-installer-tests-' + [Guid]::NewGuid().ToString('N'))
 if ([System.IO.Path]::GetPathRoot($setupDriveTemp).TrimEnd('\') -ieq [Environment]::GetEnvironmentVariable('SystemDrive')) { throw 'The exact package fixture must be on the non-system Windows CI drive.' }
@@ -365,6 +403,112 @@ try {
         Assert-SetupHashes (Get-SetupHashes -Root $fixture.paths.SandboxieRoot) $sandboxieBefore 'resolution never executes or modifies inert Sandboxie fixtures'
         Assert-SetupEqual ((Get-FileHash -LiteralPath $inputPath -Algorithm SHA256).Hash) $inputBefore 'Install and retry preserve the input INI'
         foreach ($path in @($fixture.paths.HostGameRoot, $fixture.paths.ClientGameRoot, $fixture.paths.LabRoot)) { Assert-SetupTrue (-not (Test-Path -LiteralPath $path)) 'test boundary does not fabricate game copies or lab readiness' }
+    }
+
+    Invoke-SetupCheck 'Public Install upgrades both authentic previous toolkits, retaining exact backups, sources and matching retries' {
+        foreach ($sha in @($previousIdentities.Keys | Sort-Object)) {
+            $previous = $previousPackages[$sha]
+            $fixture = New-SetupFixture ('full-upgrade-' + $sha.Substring(0, 8))
+            Add-SetupSandboxieFixture -Fixture $fixture
+            $oldMarker = New-SetupPreviousInstalledFixture -Fixture $fixture -PreviousPackage $previous
+            $markerPath = Join-Path $fixture.paths.ToolkitRoot 'installer-settings.json'
+            $oldMarkerBytes = [Convert]::ToBase64String([IO.File]::ReadAllBytes($markerPath))
+            $notePath = Join-Path $fixture.paths.ToolkitRoot 'user-notes.txt'
+            Write-SetupFixture $notePath 'USER-NOTES-OUTSIDE-THE-TOOLKIT-FILE-LIST'
+            $sourceBefore = Get-SetupHashes -Root $fixture.paths.GameRoot
+            $modsBefore = Get-SetupHashes -Root $fixture.paths.ModsRoot
+            $inputPath = Join-Path $fixture.source_base 'upgrade.ini'
+            Write-SetupIni -Path $inputPath -Values $fixture.values
+            $result = Invoke-SetupInstallFixture -Fixture $fixture -InputPath $inputPath
+            Assert-SetupEqual $result.process.ExitCode 0 ('authentic prior toolkit upgrade: ' + $sha + '; ' + $result.process.Output)
+            Assert-SetupTrue ($null -ne $result.trace) 'completed upgrade reaches the explicit test-only preparation boundary'
+            Assert-SetupEqual $result.trace.attila_and_sandboxie_execution 'NOT_RUN' 'toolkit upgrade cannot claim game execution'
+            Assert-SetupEqual (Get-GoldbergSetupPackage -Root $fixture.paths.ToolkitRoot).manifest_sha256 $setupPackage.manifest_sha256 'all installed current package files match delivery'
+            $marker = Assert-GoldbergSetupOwnership -Paths $fixture.paths -Package $setupPackage
+            Assert-SetupEqual $marker.installation_id $oldMarker.installation_id 'upgrade preserves installation identity'
+            Assert-SetupEqual (([DateTimeOffset]$marker.created_utc).UtcDateTime.Ticks) (([DateTimeOffset]$oldMarker.created_utc).UtcDateTime.Ticks) 'upgrade preserves the original creation instant'
+            Assert-SetupEqual $marker.upgrade.from_source_sha $sha 'marker identifies the authentic previous release'
+            Assert-SetupEqual $marker.upgrade.from_manifest_sha256 $previous.manifest_sha256 'marker identifies the authentic previous manifest'
+            $backupRoot = Join-Path $fixture.paths.ToolkitRoot ('.installer-upgrade-' + $setupPackage.source_sha + '.backup')
+            Assert-SetupEqual (Get-GoldbergSetupPackage -Root $backupRoot).manifest_sha256 $previous.manifest_sha256 'backup retains every exact previous toolkit file'
+            Assert-SetupEqual ([Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $backupRoot 'installer-settings.json')))) $oldMarkerBytes 'upgrade preserves the exact original settings bytes'
+            Assert-SetupTrue (-not (Test-Path -LiteralPath (Join-Path $fixture.paths.ToolkitRoot 'installer-upgrade.json'))) 'completed upgrade leaves no active transaction journal'
+            Assert-SetupEqual ([IO.File]::ReadAllText($notePath)) 'USER-NOTES-OUTSIDE-THE-TOOLKIT-FILE-LIST' 'upgrade preserves unrelated user notes'
+            Assert-SetupHashes (Get-SetupHashes -Root $fixture.paths.GameRoot) $sourceBefore 'upgrade preserves source game bytes'
+            Assert-SetupHashes (Get-SetupHashes -Root $fixture.paths.ModsRoot) $modsBefore 'upgrade preserves Workshop bytes'
+            $installedBefore = Get-SetupHashes -Root $fixture.paths.ToolkitRoot
+            $repeat = Invoke-SetupInstallFixture -Fixture $fixture -InputPath $inputPath
+            Assert-SetupEqual $repeat.process.ExitCode 0 ('current-version retry after upgrade: ' + $repeat.process.Output)
+            Assert-SetupHashes (Get-SetupHashes -Root $fixture.paths.ToolkitRoot) $installedBefore 'matching retry preserves current files, original backup and user notes'
+            foreach ($path in @($fixture.paths.HostGameRoot, $fixture.paths.ClientGameRoot, $fixture.paths.LabRoot)) { Assert-SetupTrue (-not (Test-Path -LiteralPath $path)) 'toolkit upgrade at the stub boundary creates no game copy or lab' }
+        }
+    }
+
+    Invoke-SetupCheck 'An interrupted real toolkit replacement resumes its fixed journal without manual cleanup or source changes' {
+        $previous = $previousPackages['7f66f06afddc53fda220f22d1940242ebd87e4ab']
+        $fixture = New-SetupFixture 'full-upgrade-interruption'
+        Add-SetupSandboxieFixture -Fixture $fixture
+        $oldMarker = New-SetupPreviousInstalledFixture -Fixture $fixture -PreviousPackage $previous
+        $markerPath = Join-Path $fixture.paths.ToolkitRoot 'installer-settings.json'
+        $oldMarkerBytes = [Convert]::ToBase64String([IO.File]::ReadAllBytes($markerPath))
+        $sourceBefore = Get-SetupHashes -Root $fixture.paths.GameRoot
+        $modsBefore = Get-SetupHashes -Root $fixture.paths.ModsRoot
+        $inputPath = Join-Path $fixture.source_base 'interrupted-upgrade.ini'
+        Write-SetupIni -Path $inputPath -Values $fixture.values
+        $failed = Invoke-SetupInstallFixture -Fixture $fixture -InputPath $inputPath -RecoveryFault AfterUpgradeFile
+        Assert-SetupEqual $failed.process.ExitCode 2 ('injected toolkit replacement failure: ' + $failed.process.Output)
+        Assert-SetupTrue ($failed.process.Output -match 'TEST_ONLY_UPGRADE_FAILURE_AFTER_RUNTIME_REPLACEMENT') 'failure occurs after the real changed runtime file replacement'
+        Assert-SetupTrue ($null -eq $failed.trace) 'interrupted toolkit update never invokes preparation'
+        $newRecord = @($setupPackage.records | Where-Object { $_.path -ceq 'scripts/runtime/goldberg_client_lab_core.psm1' })[0]
+        Assert-SetupEqual ((Get-FileHash -LiteralPath (Join-Path $fixture.paths.ToolkitRoot $newRecord.path) -Algorithm SHA256).Hash.ToLowerInvariant()) $newRecord.sha256 'interrupted destination contains a genuinely replaced current runtime file'
+        Assert-SetupEqual ([Convert]::ToBase64String([IO.File]::ReadAllBytes($markerPath))) $oldMarkerBytes 'ownership marker commits only after toolkit files succeed'
+        $journalPath = Join-Path $fixture.paths.ToolkitRoot 'installer-upgrade.json'
+        $journal = Read-GoldbergSetupJson -Path $journalPath
+        Assert-SetupEqual $journal.from_source_sha $previous.source_sha 'retained journal binds the exact old release'
+        Assert-SetupEqual $journal.to_source_sha $setupPackage.source_sha 'retained journal binds the exact update target'
+        $backupRoot = Join-Path $fixture.paths.ToolkitRoot $journal.backup_leaf
+        Assert-SetupEqual (Get-GoldbergSetupPackage -Root $backupRoot).manifest_sha256 $previous.manifest_sha256 'all prior toolkit files are backed up before the first replacement'
+        Assert-SetupEqual ([Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path $backupRoot 'installer-settings.json')))) $oldMarkerBytes 'interrupted update retains the exact previous marker backup'
+        # Do not delete journals, rewrite markers or reset any file before retry.
+        $retry = Invoke-SetupInstallFixture -Fixture $fixture -InputPath $inputPath
+        Assert-SetupEqual $retry.process.ExitCode 0 ('interrupted upgrade resumes without cleanup: ' + $retry.process.Output)
+        Assert-SetupTrue ($null -ne $retry.trace) 'verified resume reaches the test-only preparation boundary'
+        Assert-SetupEqual (Get-GoldbergSetupPackage -Root $fixture.paths.ToolkitRoot).manifest_sha256 $setupPackage.manifest_sha256 'resume finishes the complete current payload'
+        Assert-SetupEqual (Assert-GoldbergSetupOwnership -Paths $fixture.paths -Package $setupPackage).installation_id $oldMarker.installation_id 'resumed update retains installation identity'
+        Assert-SetupTrue (-not (Test-Path -LiteralPath $journalPath)) 'successful resume finalizes the active journal'
+        Assert-SetupEqual (Get-GoldbergSetupPackage -Root $backupRoot).manifest_sha256 $previous.manifest_sha256 'resume preserves the complete previous payload backup'
+        Assert-SetupHashes (Get-SetupHashes -Root $fixture.paths.GameRoot) $sourceBefore 'interruption and resume preserve original game'
+        Assert-SetupHashes (Get-SetupHashes -Root $fixture.paths.ModsRoot) $modsBefore 'interruption and resume preserve Workshop'
+    }
+
+    Invoke-SetupCheck 'Full toolkit upgrades refuse changed old files, populated destinations and changed paths while preserving existing data' {
+        foreach ($case in @('changed-runtime', 'populated-lab', 'populated-host', 'changed-path')) {
+            $previous = $previousPackages['f5158fa52138d87ef00fa154b3fb50b636dabc23']
+            $fixture = New-SetupFixture ('full-upgrade-refused-' + $case)
+            Add-SetupSandboxieFixture -Fixture $fixture
+            $marker = New-SetupPreviousInstalledFixture -Fixture $fixture -PreviousPackage $previous
+            switch ($case) {
+                'changed-runtime' { Write-SetupFixture (Join-Path $fixture.paths.ToolkitRoot 'scripts/runtime/goldberg_client_lab_core.psm1') 'USER-CHANGED-RUNTIME-MUST-SURVIVE' }
+                'populated-lab' { Write-SetupFixture (Join-Path $fixture.paths.LabRoot 'save_games/keep.save') 'KEEP-CAMPAIGN' }
+                'populated-host' { Write-SetupFixture (Join-Path $fixture.paths.HostGameRoot 'data/keep.pack') 'KEEP-HOST-COPY' }
+                'changed-path' { $marker.GameRoot = Join-Path $fixture.source_base 'Different source'; Write-SetupJson (Join-Path $fixture.paths.ToolkitRoot 'installer-settings.json') $marker }
+            }
+            $inputPath = Join-Path $fixture.source_base 'refused-upgrade.ini'
+            Write-SetupIni -Path $inputPath -Values $fixture.values
+            $destinationBefore = Get-SetupHashes -Root $fixture.destination_base
+            $sourceBefore = Get-SetupHashes -Root $fixture.paths.GameRoot
+            $modsBefore = Get-SetupHashes -Root $fixture.paths.ModsRoot
+            $hostBefore = $null
+            if (Test-Path -LiteralPath $fixture.paths.HostGameRoot) { $hostBefore = Get-SetupHashes -Root $fixture.paths.HostGameRoot }
+            $result = Invoke-SetupInstallFixture -Fixture $fixture -InputPath $inputPath
+            Assert-SetupEqual $result.process.ExitCode 2 ('ineligible full update must block: ' + $case + '; ' + $result.process.Output)
+            Assert-SetupTrue ($null -eq $result.trace) ('ineligible update never reaches preparation: ' + $case)
+            Assert-SetupHashes (Get-SetupHashes -Root $fixture.destination_base) $destinationBefore ('rejected update preserves all existing toolkit and lab bytes: ' + $case)
+            Assert-SetupHashes (Get-SetupHashes -Root $fixture.paths.GameRoot) $sourceBefore ('rejected update preserves source game: ' + $case)
+            Assert-SetupHashes (Get-SetupHashes -Root $fixture.paths.ModsRoot) $modsBefore ('rejected update preserves Workshop: ' + $case)
+            if ($null -ne $hostBefore) { Assert-SetupHashes (Get-SetupHashes -Root $fixture.paths.HostGameRoot) $hostBefore 'rejected update preserves existing HOST data' }
+            else { Assert-SetupTrue (-not (Test-Path -LiteralPath $fixture.paths.HostGameRoot)) 'rejected update creates no HOST copy' }
+        }
     }
 
     Invoke-SetupCheck 'Public Install safely recovers only the exact previous marker and preserves its bytes on same-folder and moved retries' {
@@ -627,6 +771,7 @@ try {
 
     Invoke-SetupCheck 'All installer checks preserve the original delivered package' {
         Assert-SetupHashes (Get-SetupHashes -Root $PackageRootPath) $packageBefore 'delivered package remains unchanged'
+        foreach ($sha in $previousPackages.Keys) { Assert-SetupHashes (Get-SetupHashes -Root $previousPackages[$sha].root) $previousPackageHashes[$sha] ('authentic historical fixture remains unchanged: ' + $sha) }
     }
 }
 finally {

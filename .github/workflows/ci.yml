@@ -110,6 +110,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Assert exact checked-out revision
@@ -213,17 +214,21 @@ jobs:
           $package = "build/goldberg-client-lab/mk1212-goldberg-client-lab-$env:PACKAGE_SOURCE_SHA/mk1212-goldberg-client-lab-$env:PACKAGE_SOURCE_SHA.zip"
           python scripts/ci/build_goldberg_installer.py --source-sha $env:PACKAGE_SOURCE_SHA --package $package
 
+      - name: Rebuild delivered payloads for installer upgrade regression
+        shell: pwsh
+        run: python scripts/ci/build_goldberg_upgrade_fixtures.py --archive build/goldberg-upstream.zip
+
       - name: Test installed toolkit in Windows PowerShell 5.1
         env:
           PACKAGE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         shell: powershell
-        run: ./scripts/ci/test_goldberg_setup.ps1 -PackageRootPath "build/goldberg-installer/$env:PACKAGE_SOURCE_SHA/payload"
+        run: ./scripts/ci/test_goldberg_setup.ps1 -PackageRootPath "build/goldberg-installer/$env:PACKAGE_SOURCE_SHA/payload" -PreviousPackageRoots @("build/goldberg-upgrade-fixtures/7f66f06afddc53fda220f22d1940242ebd87e4ab", "build/goldberg-upgrade-fixtures/f5158fa52138d87ef00fa154b3fb50b636dabc23")
 
       - name: Test installed toolkit in PowerShell 7
         env:
           PACKAGE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         shell: pwsh
-        run: ./scripts/ci/test_goldberg_setup.ps1 -PackageRootPath "build/goldberg-installer/$env:PACKAGE_SOURCE_SHA/payload"
+        run: ./scripts/ci/test_goldberg_setup.ps1 -PackageRootPath "build/goldberg-installer/$env:PACKAGE_SOURCE_SHA/payload" -PreviousPackageRoots @("build/goldberg-upgrade-fixtures/7f66f06afddc53fda220f22d1940242ebd87e4ab", "build/goldberg-upgrade-fixtures/f5158fa52138d87ef00fa154b3fb50b636dabc23")
 
       - name: Exercise the compiled installer failure boundary
         env:

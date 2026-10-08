@@ -220,18 +220,37 @@ try {
         Assert-GoldThrows { Get-GoldbergPeMachine -Path $bad } 'PE offset past file bounds'
     }
 
-    Invoke-GoldCheck 'Original interface scan deduplicates versions and rejects ambiguous interfaces' {
+    Invoke-GoldCheck 'Original interface scan follows the pinned generator order including repeated and multiple SteamClient versions' {
         $path = Join-Path $goldTemp 'interfaces/original.dll'
-        New-GoldPeFixture -Path $path -Payload "SteamUser017`0SteamUser017`0SteamUtils007`0STEAMAPPS_INTERFACE_VERSION006`0"
+        # Upstream emits prefix groups, retaining every match in its byte order.
+        # Its loader applies the last matching line, not the numerically highest.
+        New-GoldPeFixture -Path $path -Payload "SteamUser017`0SteamClient020`0SteamUtils007`0SteamClient006`0SteamUser018`0SteamClient006`0STEAMAPPS_INTERFACE_VERSION006`0"
         $before = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
         $interfaces = Get-GoldbergInterfaces -OriginalDll $path
-        Assert-GoldTrue ($interfaces -contains 'SteamUser017') 'original SteamUser interface retained'
-        Assert-GoldTrue ($interfaces -contains 'SteamUtils007') 'original SteamUtils interface retained'
-        Assert-GoldTrue ($interfaces -contains 'STEAMAPPS_INTERFACE_VERSION006') 'original SteamApps interface retained'
-        Assert-GoldEqual (@($interfaces | Where-Object { $_ -eq 'SteamUser017' }).Count) 1 'identical duplicates collapse'
+        $expected = @('SteamClient020', 'SteamClient006', 'SteamClient006', 'SteamUser017', 'SteamUser018', 'SteamUtils007', 'STEAMAPPS_INTERFACE_VERSION006')
+        Assert-GoldEqual ($interfaces -join '|') ($expected -join '|') 'original generator prefix grouping, byte order and duplicates are retained exactly'
+        $clientLines = @($interfaces | Where-Object { $_ -like 'SteamClient*' })
+        Assert-GoldEqual $clientLines[-1] 'SteamClient006' 'last loader assignment remains lower than the largest observed version'
+        $settings = Get-GoldbergPeerSettings -Role HOST -InterfaceLines $interfaces
+        Assert-GoldEqual $settings['steam_settings/steam_interfaces.txt'] ($expected -join [Environment]::NewLine) 'generated configuration preserves upstream loader precedence'
         Assert-GoldEqual ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash) $before 'interface scan cannot modify original DLL'
-        New-GoldPeFixture -Path $path -Payload "SteamUser017`0SteamUser018`0"
-        Assert-GoldThrows { Get-GoldbergInterfaces -OriginalDll $path } 'two distinct versions of one interface'
+        New-GoldPeFixture -Path $path -Payload 'No supported Steam interface strings are present.'
+        Assert-GoldThrows { Get-GoldbergInterfaces -OriginalDll $path } 'absent interface evidence still blocks rather than inventing versions'
+    }
+
+    Invoke-GoldCheck 'Controller interface precedence and unversioned fallback match the pinned upstream byte-string generator' {
+        $path = Join-Path $goldTemp 'interfaces/controller.dll'
+        New-GoldPeFixture -Path $path -Payload "STEAMCONTROLLER_INTERFACE_VERSION003`0SteamController005`0SteamClient0198`0STEAMCONTROLLER_INTERFACE_VERSION001`0STEAMCONTROLLER_INTERFACE_VERSION`0"
+        $before = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+        $interfaces = Get-GoldbergInterfaces -OriginalDll $path
+        $expected = @('SteamClient019', 'SteamController005', 'STEAMCONTROLLER_INTERFACE_VERSION003', 'STEAMCONTROLLER_INTERFACE_VERSION001')
+        Assert-GoldEqual ($interfaces -join '|') ($expected -join '|') 'numbered uppercase controllers follow legacy controllers and suppress unversioned fallback'
+        Assert-GoldEqual ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash) $before 'numbered controller scan preserves original bytes'
+        New-GoldPeFixture -Path $path -Payload "STEAMCONTROLLER_INTERFACE_VERSION`0SteamController005`0STEAMCONTROLLER_INTERFACE_VERSION`0"
+        $before = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+        $fallback = Get-GoldbergInterfaces -OriginalDll $path
+        Assert-GoldEqual ($fallback -join '|') 'SteamController005|STEAMCONTROLLER_INTERFACE_VERSION|STEAMCONTROLLER_INTERFACE_VERSION' 'all unversioned uppercase matches are emitted even when a legacy controller exists'
+        Assert-GoldEqual ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash) $before 'fallback scan preserves original bytes'
     }
 
     Invoke-GoldCheck 'Peer configuration has distinct forced identities and explicit reciprocal TCP/UDP discovery ports' {

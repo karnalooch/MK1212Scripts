@@ -121,19 +121,18 @@ function Get-GoldbergInterfaces {
     $item = Get-Item -LiteralPath $OriginalDll -ErrorAction Stop
     if ($item.PSIsContainer -or $item.Length -gt 67108864) { throw 'Original Steam API is outside the interface-scanning limit.' }
     $ascii = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($item.FullName))
-    $prefixes = @('SteamClient', 'SteamGameServer', 'SteamGameServerStats', 'SteamUser', 'SteamFriends', 'SteamUtils', 'SteamMatchMaking', 'SteamMatchMakingServers', 'STEAMUSERSTATS_INTERFACE_VERSION', 'STEAMAPPS_INTERFACE_VERSION', 'SteamNetworking', 'STEAMREMOTESTORAGE_INTERFACE_VERSION', 'STEAMSCREENSHOTS_INTERFACE_VERSION', 'STEAMHTTP_INTERFACE_VERSION', 'STEAMUNIFIEDMESSAGES_INTERFACE_VERSION', 'STEAMUGC_INTERFACE_VERSION', 'STEAMAPPLIST_INTERFACE_VERSION', 'STEAMMUSIC_INTERFACE_VERSION', 'STEAMMUSICREMOTE_INTERFACE_VERSION', 'STEAMHTMLSURFACE_INTERFACE_VERSION_', 'STEAMINVENTORY_INTERFACE_V', 'SteamController', 'SteamMasterServerUpdater', 'STEAMVIDEO_INTERFACE_V', 'STEAMCONTROLLER_INTERFACE_VERSION')
+    # Match generate_interfaces_file.cpp at Goldberg 475342f0 exactly: emit every
+    # match, in family order and then DLL byte order. The loader in dll/dll.cpp
+    # applies each line, so the last match for a family wins; sorting or choosing
+    # the numerically highest version changes the upstream compatibility choice.
+    $prefixes = @('SteamClient', 'SteamGameServer', 'SteamGameServerStats', 'SteamUser', 'SteamFriends', 'SteamUtils', 'SteamMatchMaking', 'SteamMatchMakingServers', 'STEAMUSERSTATS_INTERFACE_VERSION', 'STEAMAPPS_INTERFACE_VERSION', 'SteamNetworking', 'STEAMREMOTESTORAGE_INTERFACE_VERSION', 'STEAMSCREENSHOTS_INTERFACE_VERSION', 'STEAMHTTP_INTERFACE_VERSION', 'STEAMUNIFIEDMESSAGES_INTERFACE_VERSION', 'STEAMUGC_INTERFACE_VERSION', 'STEAMAPPLIST_INTERFACE_VERSION', 'STEAMMUSIC_INTERFACE_VERSION', 'STEAMMUSICREMOTE_INTERFACE_VERSION', 'STEAMHTMLSURFACE_INTERFACE_VERSION_', 'STEAMINVENTORY_INTERFACE_V', 'SteamController', 'SteamMasterServerUpdater', 'STEAMVIDEO_INTERFACE_V')
     $found = New-Object 'System.Collections.Generic.List[string]'
-    $controller = New-Object 'System.Collections.Generic.List[string]'
     foreach ($prefix in $prefixes) {
-        $versions = @([regex]::Matches($ascii, ([regex]::Escape($prefix) + '[0-9]{3}(?![0-9])')) | ForEach-Object { $_.Value } | Sort-Object -Unique)
-        if ($versions.Count -gt 1) { throw ('Conflicting original Steam interface versions: ' + $prefix) }
-        if ($versions.Count -eq 1) {
-            if ($prefix -eq 'SteamController' -or $prefix -eq 'STEAMCONTROLLER_INTERFACE_VERSION') { $controller.Add($versions[0]) }
-            $found.Add($versions[0])
-        }
+        foreach ($match in [regex]::Matches($ascii, ([regex]::Escape($prefix) + '[0-9]{3}'))) { $found.Add($match.Value) }
     }
-    if ($controller.Count -gt 1) { throw 'Conflicting controller interface families in original Steam API.' }
-    if ($controller.Count -eq 0 -and $ascii.Contains('STEAMCONTROLLER_INTERFACE_VERSION')) { $found.Add('STEAMCONTROLLER_INTERFACE_VERSION') }
+    $controllerMatches = [regex]::Matches($ascii, 'STEAMCONTROLLER_INTERFACE_VERSION[0-9]{3}')
+    if ($controllerMatches.Count -eq 0) { $controllerMatches = [regex]::Matches($ascii, 'STEAMCONTROLLER_INTERFACE_VERSION') }
+    foreach ($match in $controllerMatches) { $found.Add($match.Value) }
     if ($found.Count -eq 0) { throw 'No supported original Steam interface strings were observed; do not guess versions.' }
     return ,($found.ToArray())
 }
