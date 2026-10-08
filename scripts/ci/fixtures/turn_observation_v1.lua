@@ -55,3 +55,38 @@ cm.model = function() return {turn_number = function() return 1 end} end;
 eq(observe().turn_number, 1, "save/load recreation resets observed turn");
 eq(event(123).event, "unknown", "invalid event");
 print("TurnObservationV1 Lua fixtures: PASS");
+
+-- V2 Attila surface mocked independently of WH APIs.
+FACTION_TURN = "mk_fact_poland";
+local function makef(key, human)
+    return { name = function() return key end, is_human = function() return human end };
+end
+local factions = {makef("mk_fact_poland", true), makef("mk_fact_france", false)};
+cm = {
+    model = function() return {
+        turn_number = function() return 2 end,
+        is_player_turn = function() return true end,
+        faction_is_local = function(self, key) return key == "mk_fact_poland" end,
+        world = function() return {faction_list = function() return {
+            num_items = function() return 2 end,
+            item_at = function(self, i) return factions[i+1] end
+        } end} end
+    } end,
+    is_multiplayer = function() return false end
+};
+local v2 = MKMP_Runtime_Get_Turn_Observation_V2();
+eq(v2.schema, 2);
+eq(v2.player_turn, true);
+eq(v2.local_factions_state, "complete");
+eq(v2.human_factions_state, "complete");
+eq(v2.local_factions[1], "mk_fact_poland");
+eq(v2.human_factions[1], "mk_fact_poland");
+eq(v2.script_faction_turn, "mk_fact_poland");
+eq(v2.active_faction, "unknown");
+eq(v2.faction_count_parity, "not_comparable");
+cm.model = function() return {turn_number = function() return 4 end, world = function() error("no world") end} end;
+local unavailable = MKMP_Runtime_Get_Turn_Observation_V2();
+eq(unavailable.active_faction, "unknown");
+eq(unavailable.local_factions_state, "unknown");
+eq(unavailable.player_turn, "unknown");
+print("TurnObservationV2 Lua fixtures: PASS");
