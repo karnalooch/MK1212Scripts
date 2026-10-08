@@ -64,6 +64,8 @@ The current design principle is simple:
 
 Native/runtime data is initially for **read-only telemetry and diagnostics**. Raw pointers, timing, local UI state and other process-local values must never directly drive shared multiplayer gameplay.
 
+Canonical real-game proof now exists for the recorded Steam Attila executable pair and native SHA `7c6f5b6d691313f128e9212e37c87c2292e79504`: **23/23 Lua ABI**, **33/33 game signatures**, **224/224 in-game assertions**, and a successful **save -> load -> teardown -> reinitialize** lifecycle. That is exact-build single-player runtime proof only; direct MK1212 product integration and two-peer determinism remain separate gates.
+
 ## Why twdll matters
 
 The vendored `native/twdll/` source (imported from the evaluated twdll baseline) demonstrates that Attila Lua can load a custom native module:

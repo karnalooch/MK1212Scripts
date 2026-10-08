@@ -379,20 +379,70 @@ class NativeAdapterProbe:
     manager_address: str = "0x00000000"
     cap: int | None = 40
     size: int | None = 0
+    game_build: str = "Attila"
+    twdll_sha: str = "7c6f5b6d691313f128e9212e37c87c2292e79504"
+    initialized: bool = False
+    available: bool = False
+    runtime_reason: str = "not_initialized"
+    initialize_calls: int = 0
+    luaopen_calls: int = 0
+    multiplayer: bool | None = None
+
+    def initialize(self, *, multiplayer: bool) -> bool:
+        self.initialize_calls += 1
+        self.multiplayer = multiplayer
+
+        if self.initialized:
+            return self.available
+
+        self.initialized = True
+
+        if self.mode != "ready":
+            self.runtime_reason = self.mode
+            self.available = False
+            return False
+
+        self.luaopen_calls += 1
+
+        if self.game_build != "Attila":
+            self.runtime_reason = f"game_build_mismatch:{self.game_build}"
+            self.available = False
+            return False
+
+        if len(self.twdll_sha) != 40:
+            self.runtime_reason = f"invalid_build_sha:{self.twdll_sha}"
+            self.available = False
+            return False
+
+        self.runtime_reason = "ready"
+        self.available = True
+        return True
 
     def status(self) -> dict[str, Any]:
+        if self.initialized:
+            return {
+                "available": self.available,
+                "reason": self.runtime_reason,
+                "initialize_calls": self.initialize_calls,
+                "luaopen_calls": self.luaopen_calls,
+                "multiplayer": self.multiplayer,
+            }
+
         if self.mode != "ready":
             return {
                 "available": False,
                 "reason": self.mode,
             }
+
         return {
             "available": True,
             "reason": "ready",
         }
 
     def sanitized_battle_telemetry(self) -> dict[str, int | None] | None:
-        if self.mode != "ready":
+        if self.initialized and not self.available:
+            return None
+        if not self.initialized and self.mode != "ready":
             return None
         return {
             "cap": self.cap,

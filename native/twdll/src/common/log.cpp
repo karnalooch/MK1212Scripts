@@ -37,7 +37,7 @@ void Log(const char* format, ...) {
     const size_t line_len = strlen(line);
     std::lock_guard<std::mutex> lock(g_log_mutex);
 
-    FILE* f = _fsopen(LOG_FILE, "a+", _SH_DENYNO);
+    FILE* f = _fsopen(LOG_FILE, "a+b", _SH_DENYNO);
     if (!f) {
         return;
     }

@@ -1,7 +1,7 @@
 # twdll as the MK1212 runtime observability backend
 
-Status: implementation-ready / runtime proof pending  
-Issue: #7  
+Status: **canonical Attila runtime proven; MK1212 direct integration in progress; two-peer proof pending**  
+Issues: #7, #44  
 Last reviewed: 2026-10-07
 
 ## Links and provenance
@@ -389,7 +389,7 @@ Repository CI now has a separate proof boundary:
 - verify the resulting `twdll.dll` is an x86 PE image;
 - verify the built image contains the `luaopen_twdll` export marker.
 
-These are repository/build proofs only. They do **not** prove that the current Attila executable can load or safely run the DLL.
+Those checks are repository/build proofs only. They do not by themselves prove runtime compatibility; that boundary was later crossed by the canonical real-game proof recorded below.
 
 ## Runtime safety contract after issue #40
 
@@ -404,27 +404,63 @@ The source-level runtime audit in `TWDLL_RUNTIME_AUDIT.md` hardens the native bo
 - diagnostics budget exhaustion is fail-soft and never cancels, retries or changes a gameplay mutation;
 - the host guard requires the actual executable basename `attila.exe` plus `empire.retail.dll`.
 
-This improves failure semantics but is still **REPO-OBSERVED** until an exact current Attila build loads and exercises the DLL.
+Issue #42 / PR #43 adds a heavier native proof around that boundary: Release+Debug x86 builds under `/W4 /WX`, deterministic scanner fuzzing, logger concurrency/exact-byte-budget tests, host-guard tests and source-contract checks for the audit fixes. That stress proof found and fixed a Windows text-mode newline expansion bug in the logger budget.
+
+## Canonical real-game Attila proof — 2026-10-07
+
+The repository-native proof is now backed by a real Steam Attila run using the canonical upstream-style test harness and native source SHA:
+
+`7c6f5b6d691313f128e9212e37c87c2292e79504`
+
+Evidence bundle: `TWDLL-RUNTIME-EVIDENCE-20261007-213219.zip`.
+
+Runtime fingerprints recorded by the harness:
+
+- `Attila.exe` SHA-256: `51b833d5b8fd8505a7cd035fd92f68cace681d62ea74d9ad8fbae26326635bf5`;
+- `empire.retail.dll` SHA-256: `8a40cbcff108e1cba14cc7eb6c7f4dfb054c7745b236d1bfc0fde5c85e2a353d`;
+- tested `twdll.dll` SHA-256: `e34da1c67b13d3a30695f1d2fdfc01d02e215017257e7cc1c6918680ebf46189`.
+
+Observed runtime result:
+
+- required Lua ABI resolution: **23/23**;
+- game signatures: **33/33**;
+- native in-game assertions: **224 passed / 0 failed / 0 skipped**;
+- `twdll.core.GetBuildSha()` returned the exact expected repository SHA;
+- WORLD, CAMPAIGN_UI, settlement-slot, CAMPAIGN_MODEL, BATTLE and CAI occupation hooks installed successfully;
+- save -> load executed successfully;
+- final Lua-state teardown restored **3740 tweakers** and **714 campaign variables**, removed hooks, then a fresh Lua state re-resolved **23/23 + 33/33** and reinstalled hooks;
+- lifecycle ended with `All tests and save/load cycle PASSED.`.
+
+This proves **single-player canonical Attila runtime compatibility for that exact executable pair and native SHA**. It does **not** yet prove that the direct MK1212 bootstrap works in-product, nor that two peers observe identical native semantics.
+
+Issue #44 moves from the canonical harness into the real MK1212 bootstrap. The product adapter now initializes from `Common_Initializer()` in both SP and MP, remains optional/fail-closed, validates `GameBuild == "Attila"` and a 40-character native build SHA, and allows only one `luaopen_twdll` per Lua state.
 
 ## Validation plan
 
-### Stage 1 — load proof
+### Stage 1 — canonical load proof — **PASS**
 
-- current 2026 Attila build;
-- exact twdll SHA;
-- load from campaign script;
-- log `GameBuild`;
-- query one read-only world value;
-- unload/exit cleanly.
+- current 2026 Attila build fingerprinted;
+- exact twdll SHA recorded;
+- native module loaded in the real process;
+- `GameBuild` / `GetBuildSha` observed;
+- 23/23 Lua ABI + 33/33 game signatures resolved;
+- clean teardown observed.
 
-### Stage 2 — save/load proof
+### Stage 2 — canonical save/load proof — **PASS**
 
-- new campaign;
-- save;
-- quit;
-- reload;
-- verify native adapter reinitializes cleanly;
-- no duplicate hooks/listeners.
+- canonical test campaign loaded;
+- full native suite passed 224/224;
+- save executed;
+- load executed;
+- hooks/tweakers/campaign variables restored on teardown;
+- fresh Lua state reinitialized cleanly.
+
+### Stage 2b — direct MK1212 product bootstrap — **IN PROGRESS (#44)**
+
+- initialize the same adapter from the canonical MK1212 script path;
+- prove SP product startup with and without the DLL;
+- prove product save/load with no duplicate `luaopen_twdll` in one Lua state;
+- preserve Lua-only gameplay when native observability is unavailable.
 
 ### Stage 3 — two-peer passive proof
 
@@ -466,22 +502,233 @@ Until then:
 
 ## Current implementation state
 
-Implemented without claiming runtime proof:
+RUNTIME-PROVEN in the canonical single-player Attila harness:
 
-- optional `package.loadlib` under `pcall`;
-- missing DLL -> Lua-only gameplay continues;
-- failed `luaopen_twdll` -> Lua-only gameplay continues;
-- campaign singleton query occurs only from `Common_Initializer` after the campaign world exists;
-- native build SHA and faction count are diagnostic only;
+- current tested Attila executable pair loads the exact native SHA;
+- required Lua ABI resolves 23/23;
+- game signatures resolve 33/33;
+- native in-game suite passes 224/224;
+- save/load reinitialization works with clean teardown and re-hooking.
+
+Implemented for direct MK1212 integration on issue #44:
+
+- `Common_Initializer()` initializes runtime observability in **both SP and MP**;
+- repeated initialization in one Lua state is idempotent;
+- loader candidates cover `twdll_attila.dll`, canonical `twdll`, and `twdll.dll`;
+- wrong game identity or invalid build SHA fails closed;
+- missing DLL / failed `luaopen_twdll` leaves normal Lua gameplay running;
+- campaign singleton query remains after the campaign world exists;
+- native build SHA and faction count remain diagnostic only;
 - battle memory addresses are filtered;
-- deterministic Lua-side semantic campaign snapshot is available for later comparison.
+- deterministic Lua-side semantic campaign snapshot remains available for later comparison.
 
-Still intentionally unproven until the final runtime pass:
+Still intentionally unproven:
 
-- current 2026 Attila binary compatibility;
-- save/load reinitialization;
+- direct MK1212 product runtime proof after #44 is packaged;
 - two-peer passive behavior;
 - exact host/client equality of semantic snapshots;
-- whether loading twdll itself changes any MP engine behavior.
+- whether merely loading twdll on both peers changes multiplayer engine behavior.
 
-Those items remain open because they require running Attila, not because the adapter lacks an implementation path.
+The remaining multiplayer items require real host/client Attila sessions and stay tracked separately from repository simulation.
+
+## Product probe packaging correction — 2026-10-07 (#44 / PR #45)
+
+**REPO-OBSERVED:** the archived product-SP artifact at `13ba7dc5965c43b252de88f7fd4cefe75f1f82b1`
+contained only `common/main.lua` and `common/mkmp_runtime.lua` in its patch payload.
+The former also requires `common/mkmp_debug.lua`. Depending on the Workshop version,
+that omitted dependency can abort Lua bootstrap before any native marker.
+This is a **HYPOTHESIS** for the failed launch, not a runtime-proven root cause.
+
+Evidence `MK1212-PR45-SP-EVIDENCE-20261007-222514.zip` records preserved patched
+Workshop content and `native_ready=false`, `debug_ready=false`; it contains no native,
+MP-debug or bootstrap trace log. It proves neither runtime readiness nor the failure location.
+The earlier native 224/224 proof remains specific to its separate canonical harness.
+
+The repository now owns the product probe builder and launcher under `scripts/runtime/`:
+
+- compute the full static `common/main` require closure (currently 14 Lua files,
+  including SP-only occupation decisions and nested UI lists); reject missing dependencies;
+- instrument only the test copy of `main.lua`, before the first require, recording
+  module begin/success/failure, initializer entry and runtime identity;
+- keep the original require exception semantics and bound trace output to 128 records
+  per Lua state, a 64 KiB file budget and 512 message characters;
+- require committed source, tracked payload files and a native DLL embedding the same SHA;
+- publish a SHA-pinned CI artifact with payload/binary hash manifest;
+- prove a real RPFM create/add/extract round-trip in CI and verify all patched file hashes
+  again by extracting the Workshop clone before touching installed files;
+- temporarily replace that same active Workshop pack, preserving launcher identity/load order;
+- retain original backups, put all installed-file mutations and launch waiting inside
+  `try/finally`, capture evidence before restoration and verify the original pack hash;
+- preserve an externally updated Workshop pack and report restoration failure rather
+  than silently overwriting concurrent changes;
+- require bootstrap/initializer markers, exact-SHA native/debug readiness, pack preservation
+  and successful rollback for PASS. Prior logs cannot satisfy a new run.
+
+The harness does not change launcher metadata or user scripts. Exit Attila and the CA
+Launcher before running; keep Steam running. Old MK1212 probe packs in `data` are automatically backed up, verified and temporarily
+removed for the isolated run, then restored with their original hashes and attributes. Backups remain beside the harness.
+
+Build manually from a clean committed checkout with the exact-SHA Release DLL:
+
+```powershell
+python scripts/runtime/build_product_probe.py --dll build/twdll-attila/Release/twdll.dll --rpfm <path-to-rpfm_cli.exe> --output <outside-checkout-output>
+```
+
+CI uses RPFM v4.6.3 with the official release archive SHA-256 pinned in `ci.yml`.
+Unzip the generated probe, run `RUN-MK1212-PR45-SP-TEST.cmd`, reach the single-player
+campaign map, wait ten seconds and exit normally. Inspect `result.json` and
+`PR45_RUNTIME_TRACE.txt` in the returned evidence ZIP before proposing another experiment.
+
+**Local validation:** four packaging tests PASS; all 14 closure files compile under Lua
+5.1; actual instrumented bootstrap plus production runtime adapter PASS with native-ready,
+missing-DLL, missing-debug-module and trace-I/O-failure mocks. The missing-debug case records
+the failing require and preserves the exception; absent DLL/trace I/O do not stop gameplay
+initializers. MP simulation 38/38 and native source contracts 11/11 PASS. These are repository
+proofs with mocked engine/dependency services, not Attila runtime proof.
+
+**Remaining gate:** Windows CI syntax/native/artifact build and synthetic rollback checks and a fresh real MK1212 SP run,
+then separate save/load and no-DLL product proof. Two-peer multiplayer remains unproven.
+
+### Windows PowerShell 5.1 launcher-array regression
+
+The 23:18 user output showed that filtering the launcher JSON retained every mod.
+In Windows PowerShell 5.1, wrapping `Get-Content | ConvertFrom-Json` in `@(...)`
+can retain the decoded JSON array as a single nested pipeline object. Array member
+access made the UUID predicate truthy for that whole object and concatenated all
+`packfile` paths into one invalid path. This failed before any installed-file mutation.
+Assign the decoded JSON directly, then enumerate it through the UUID filter.
+The Windows rollback fixture now uses three launcher entries (including unrelated
+active/inactive mods), forward-slash paths and both `powershell.exe` (5.1) and
+`pwsh.exe` (7), with existing/absent prior files in each engine. Each case must create
+fresh evidence naming its exact synthetic game root; old test evidence cannot pass it.
+
+### Automatic isolation of previous probe packs
+
+The launcher no longer stops when old MK1212 probe packs remain in `data`.
+It copies matching MK1212 probe packs and `mk1212_pr45_runtime_scripts.pack` into
+`backup-*/previous-probes/`, verifies hashes before removing originals, and records
+paths/hashes in `previous-probes.json`. All removals occur inside the rollback scope.
+Restoration runs even if installation fails part-way through, preserves attributes,
+and reports conflicts rather than overwriting externally changed files. Backups remain.
+The Windows fixture covers four stale packs (read-only), no stale packs, and an unrelated
+mod that must remain unchanged, in both Windows PowerShell 5.1 and PowerShell 7.
+
+### Workshop-preserving probe after campaign-load crash
+
+The owner reports a crash loading a **new campaign**, and unavailable Papal/menu
+controls during earlier probing. The prior trace reached all bootstrap requires
+but not Common_Initializer. Neither symptom establishes a native-DLL root cause.
+The 14-file overlay also replaced Workshop gameplay/UI modules, confounding the test.
+
+The launcher now extracts the installed Workshop bootstrap and preserves its body,
+wrapping Common_Initializer to run original gameplay initialization first. It adds
+only mkmp_debug and mkmp_runtime; optional diagnostics errors remain fail-soft.
+Existing copies of these modules or an already instrumented bootstrap are rejected
+before installation. All other extracted Lua files are hash-compared before installation.
+The original Workshop asset pack is never redistributed. overlay.json records original
+main identity, three actual applied hashes, preserved count and harness identity.
+The payload manifest still identifies the supplied native/module source; the generated
+bootstrap derives from the user's Workshop, not the repository gameplay version.
+
+Windows 5.1/7 synthetic fixtures seed a distinct Workshop bootstrap and unrelated
+frontend/library sentinel files. Real campaign load, Papal controls and DLL readiness
+remain NOT PROVEN until a new game evidence run; PR #45 must remain unmerged.
+
+### Product SP acceptance evidence — 2026-10-08
+
+Evidence: [MK1212-PR45-SP-EVIDENCE-20261008-002134-869.zip](evidence/MK1212-PR45-SP-EVIDENCE-20261008-002134-869.zip).
+ZIP SHA-256: `708a897f56287bef57f9cb810055764343ea9613562daa79f116bb6ef65e9f3a`.
+The uploaded archive is preserved byte-for-byte, including its original local paths and mod list.
+
+Identity: Lua/native payload `ae020ecb4ba30eebffa48ec731d7f603974dfd9d`;
+Workshop-preserving harness from `1b0e7a3a9020f2f2c5c39e1ebb2f691f5bf998a9`,
+SHA-256 `a41a049ba7d5b720691425c337e45136d10d4f47e3819c371c8caecda0f7870b`.
+This is a mixed-provenance probe, NOT whole-repository exact-HEAD gameplay proof.
+The installed Workshop supplies gameplay; only its main bootstrap is wrapped and
+mkmp_debug/mkmp_runtime added. 153 other Lua files were hash-preserved.
+
+**RUNTIME-PROVEN within the harness scope:** bootstrap and original gameplay
+initializer complete; DLL ready; 23/23 Lua ABI entries and 33/33 game signatures
+resolved in both observed Lua-state cycles; hooks removed between cycles;
+patched pack preserved; rollback successful, no run/restore errors; result.pass=true.
+
+**Owner-confirmed manual SP acceptance (00:31 CEST):** all requested checklist
+steps passed: Papal panel and available tabs, other available MK1212 panels,
+diplomacy, army/unit details and movement, construction/recruitment, AI turn,
+save/load with retained army position and construction/recruitment state,
+Papal panel after loading, and another end turn. These interactions are reported
+by the owner; the current diagnostic logs do not individually instrument them.
+
+The earlier 00:07 evidence was clarified by the owner: one new SP campaign,
+then save and load, not two new campaigns. Two Lua initialization cycles alone
+do not establish two campaigns. The lobby screenshot shows the existing
+multiplayer disclaimer; it is not multiplayer execution evidence.
+
+**Remaining:** battle to campaign return, product no-DLL fail-soft run, native
+world/faction observation, and separate two-peer multiplayer proof. factions=nil
+means no faction-count value was obtained by the optional initialization-time
+query. It does not mean zero factions; the adapter does not repeat that query
+on end turn. Root cause is unproven. Do not infer world-state readiness from DLL
+identity readiness or lift MP feature gates based on this SP result.
+
+PR #45 remains unmerged; this evidence does not authorize merge.
+
+### Final SP probes: bounded world observation and no-DLL fallback
+
+Source inspection confirms GetFactionCount is the correct Attila binding. Its
+GlobalGetter reads g_world, which starts null, is set by LogWorldHook from the
+WORLD constructor hook, and is cleared at teardown. Prior product logs show hook
+installation but no WORLD constructor capture. A missed constructor due to late
+loading is a hypothesis; native pointer acquisition is not changed by this probe.
+
+The test-only bootstrap now reports world state separately from DLL readiness:
+module_unavailable, capability_missing, world_not_captured, count_unavailable,
+query_failed or ready. It samples at initialization and up to four FactionTurnStart
+events per Lua state, then removes its listener. Raw addresses are never emitted
+or used for gameplay. A nil initialization sample no longer stands in for later
+world readiness. No production gameplay code or native hook behavior is changed.
+
+RUN-MK1212-PR45-NO-DLL-TEST.cmd selects -NoDll. The harness backs up and temporarily
+isolates twdll.dll, twdll_attila.dll and extensionless twdll in the game directory.
+It requires a fresh dll_unavailable trace with luaopen_calls=0, no native log,
+completed gameplay initialization, preserved pack and successful rollback. A DLL
+found through another search location cannot satisfy fallback PASS. Normal mode
+still requires exact-payload native/debug ready markers. Result and provenance
+record the mode; synthetic preparation alone never counts as runtime PASS.
+
+Windows rollback fixtures cover both modes, both PowerShell engines, existing
+read-only versus absent files, stale probe packs and unrelated Workshop scripts.
+Local Lua 5.1 mock proof covers ready/missing-world/missing-DLL/query-error paths,
+the five-sample bound and unchanged gameplay initializer execution. These are
+code-level tests, not new runtime acceptance.
+
+Owner actions: native mode: campaign battle -> return to campaign -> save/load,
+and pass one turn for world observation; fallback mode: start SP, move an army,
+end turn and save/load, then exit. Return both mode-labelled evidence archives.
+Previously accepted UI smoke steps need not be repeated. PR remains unmerged.
+
+## WORLD capture instrumentation — PR #45, 2026-10-08
+
+The SP trace confirmed the diagnostic `FactionTurnStart` callback path but reported `world_not_captured` in five bounded observations. This does **not** by itself distinguish a constructor that already executed before loading twdll from a resolver that hooked an unrelated function, or lifecycle clearing the cached world pointer.
+
+The native `twdll.world.GetCaptureStatus()` function now returns read-only metadata: `generation` (installation attempts), `constructor_hits` (cumulative times the WORLD hook was invoked), `clear_count` (cache cleanup calls), `hook_enabled`, and `world_cached`. It does not return a raw pointer, and its fields must never drive gameplay or shared multiplayer decisions. The Workshop-preserving SP probe records these fields as `world_capture` alongside bounded `world` samples.
+
+**Interpretation:** `hook_enabled=true, constructor_hits=0` is consistent with late installation or an incorrect hook location; it is not definitive proof of either. A hit followed by `clear_count>0` suggests a lifecycle transition but not pointer validity. Only an exact-build runtime observation can prove capture, and semantic faction-count parity after load is a separate check. No engine addresses, signature constants, DRM or executable integrity behavior were changed as part of this instrumentation.
+
+**Proof status:** Source-level instrumentation implemented; Windows native CI and actual Attila runtime evidence must be checked separately. WORLD access and simultaneous turns remain NOT PROVEN.
+
+### Early-load A/B investigation (2026-10-08)
+
+The preceding SP evidence reported `generation=1`, `constructor_hits=0`, `clear_count=0`, `hook_enabled=true`, and `world_cached=false` across the five bounded observations. These values are compatible with both a late hook installation and an incorrect resolver target; they do not decide between the two.
+
+The PR45 **Workshop-preserving test harness** now attempts `require("common/mkmp_runtime")` and `MKMP_Runtime_Initialize()` inside a protected `pcall` at the beginning of its injected `main.lua` prefix, before executing the original Workshop main body. The later initializer still initializes the debug logger, publishes the runtime status, and performs bounded WORLD observations. This is strictly an experiment: no gameplay logic, WORLD signature offsets or native hook implementation was changed. The early attempt fails soft and cannot gate ordinary gameplay.
+
+Acceptance must compare `world_capture` telemetry from an exact-SHA game run. A newly observed constructor hit would support the installation-timing hypothesis; no hit would leave both timing and resolver hypotheses open. Source-level and GitHub CI checks are not runtime proof. No manual testing is required from the user for repository CI; Attila runtime remains `NOT PROVEN` until real evidence is obtained.
+
+### Lua/native observation without relying on WORLD capture (2026-10-08)
+
+The optional MK1212 adapter now exposes `MKMP_Runtime_Diagnostic_Campaign_Count()` and `MKMP_Runtime_Diagnostic_Parity()`. These functions are diagnostic-only: a guarded Lua `cm:model():world():faction_list():num_items()` read is compared with `twdll.world.GetFactionCount()` **only when both return validated nonnegative integers**. Otherwise the result is `not_comparable`, never a fabricated match. Errors/missing interfaces fail closed (`lua_count_unavailable`, `native_unavailable`, or `native_count_unavailable`).
+
+The bounded Workshop-preserving probe emits `faction_parity` at the same initial and `FactionTurnStart` observation points as WORLD telemetry (maximum five observations per Lua state). It does not write campaign state, and the diagnostic record is never fed into game decisions. This separates **whether Lua exposes faction counts** from **whether native WORLD capture succeeded**.
+
+**Validation scope:** source contract tests are included under `scripts/ci/test_product_probe.py`. They check instrumentation presence and fail-closed intent, *not* real Lua execution, Attila semantics or two-peer determinism. Runtime parity, accurate WORLD constructor interception and simultaneous turns remain **NOT PROVEN** until exact-build observations demonstrate them. When the runtime is unavailable, report **NOT RUN**, not PASS.

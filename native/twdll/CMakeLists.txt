@@ -78,20 +78,48 @@ set_target_properties(twdll PROPERTIES
     DEBUG_INFORMATION_RELEASE TRUE
 )
 
+option(TWDLL_WARNINGS_AS_ERRORS "Treat twdll warnings as errors" OFF)
+
 target_compile_options(twdll PRIVATE /Zi /utf-8 /W4)
+if(TWDLL_WARNINGS_AS_ERRORS)
+    target_compile_options(twdll PRIVATE /WX)
+endif()
 target_link_options(twdll PRIVATE /DEBUG)
 target_compile_definitions(twdll PRIVATE _CRT_SECURE_NO_WARNINGS)
 
 # ── Native unit tests ─────────────────────────────────────────────────────────
 include(CTest)
 if(BUILD_TESTING)
+    function(twdll_configure_native_test target)
+        target_include_directories(${target} PRIVATE src)
+        target_compile_options(${target} PRIVATE /W4 /utf-8)
+        if(TWDLL_WARNINGS_AS_ERRORS)
+            target_compile_options(${target} PRIVATE /WX)
+        endif()
+    endfunction()
+
     add_executable(twdll_signature_scanner_tests
         tests/unit/signature_scanner_tests.cpp
         src/common/signature_scanner.cpp
     )
-    target_include_directories(twdll_signature_scanner_tests PRIVATE src)
-    target_compile_options(twdll_signature_scanner_tests PRIVATE /W4 /utf-8)
+    twdll_configure_native_test(twdll_signature_scanner_tests)
     add_test(NAME twdll_signature_scanner COMMAND twdll_signature_scanner_tests)
+
+    add_executable(twdll_log_tests
+        tests/unit/log_tests.cpp
+        src/common/log.cpp
+    )
+    twdll_configure_native_test(twdll_log_tests)
+    add_test(NAME twdll_log_budget COMMAND twdll_log_tests)
+
+    if(TW_GAME STREQUAL "attila")
+        add_executable(twdll_security_tests
+            tests/unit/security_tests.cpp
+            src/attila/security.cpp
+        )
+        twdll_configure_native_test(twdll_security_tests)
+        add_test(NAME twdll_security_guard COMMAND twdll_security_tests)
+    endif()
 endif()
 
 # ── Game preprocessor define ──────────────────────────────────────────────────

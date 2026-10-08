@@ -9,6 +9,7 @@ This is the documentation router and authority map for this fork.
 - [twdll observability backend](research/TWDLL_OBSERVABILITY_BACKEND.md) — native Lua↔C++↔Attila architecture, safety boundaries, fallback contract and MP fingerprint plan.
 - [twdll monorepo migration audit](research/TWDLL_MONOREPO_AUDIT.md) — post-merge import integrity, CI proof semantics, build identity and security-exception evidence.
 - [twdll runtime/code audit](research/TWDLL_RUNTIME_AUDIT.md) — active Attila C++/hook/Lua-ABI safety findings, fixes, remaining runtime risks and MP boundaries.
+- [MK1212 UI vs native SEGA compliance audit](research/TWDLL_FUNCTION_COMPLIANCE_AUDIT.md) — EULA/modding terms, ordinary Lua/DB/UI versus native hooks, Polish-law caveats and release gates.
 - [`native/twdll/`](../native/twdll/) — canonical MK1212 native source; provenance is pinned in [`native/twdll/UPSTREAM.md`](../native/twdll/UPSTREAM.md).
 - [Dual-peer MP simulation harness](research/MP_DUAL_PEER_SIMULATION.md) — CI-only fake HOST/CLIENT determinism, persistence fuzzing, source contracts and fault injection.
 - [MP file debug logging](research/MP_DEBUG_LOGGING.md) — bounded `MK1212_mp_debug.log`, structured event schema and HOST/CLIENT comparator.

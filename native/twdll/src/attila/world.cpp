@@ -16,12 +16,17 @@ using twdll::TW_World;
 static TW_World* g_world = nullptr;
 static void* orig_world_ctor = nullptr;
 static uintptr_t world_ctor_addr = 0;
+static unsigned int g_world_hook_generation = 0;
+static unsigned int g_world_hook_hits = 0;
+static unsigned int g_world_hook_clears = 0;
+static bool g_world_hook_enabled = false;
 static int g_orig_max_units_army = -1;
 static int g_orig_max_units_navy = -1;
 static int g_orig_max_traits     = -1;
 
 
 static void LogWorldHook(void* ptr) {
+    ++g_world_hook_hits;
     g_world = static_cast<TW_World*>(ptr);
     Log("[twdll] WORLD ctor hooked — g_world = 0x%08X", reinterpret_cast<uintptr_t>(ptr));
 }
@@ -38,6 +43,8 @@ __declspec(naked) static void HookedWorldCtor() {
 }
 
 void install_world_hook(uintptr_t base, size_t size) {
+    ++g_world_hook_generation;
+    g_world_hook_enabled = false;
     // ---- Explicit, non‑abstracted hook installation -------------------------
     const char* anchor = "FACTION_ARRAY";
     const char* label  = "WORLD";
@@ -82,7 +89,8 @@ void install_world_hook(uintptr_t base, size_t size) {
         return;
     }
 
-    Log("[twdll] [%s] hook installed OK", label);
+    g_world_hook_enabled = true;
+    Log("[twdll] [%s] hook installed OK; generation=%u hits=%u", label, g_world_hook_generation, g_world_hook_hits);
     // ------------------------------------------------------------------------
 }
 
@@ -98,6 +106,22 @@ static int GetMemoryAddress(lua_State* L) {
     char buf[20];
     snprintf(buf, sizeof(buf), "0x%08X", reinterpret_cast<unsigned int>(g_world));
     l_pushstring(L, buf);
+    return 1;
+}
+
+// Read-only hook lifecycle diagnostics. No raw addresses or pointer dereferences.
+static int GetCaptureStatus(lua_State* L) {
+    l_createtable(L, 0, 5);
+    l_pushinteger(L, g_world_hook_generation);
+    l_setfield(L, -2, "generation");
+    l_pushinteger(L, g_world_hook_hits);
+    l_setfield(L, -2, "constructor_hits");
+    l_pushinteger(L, g_world_hook_clears);
+    l_setfield(L, -2, "clear_count");
+    l_pushboolean(L, g_world_hook_enabled ? 1 : 0);
+    l_setfield(L, -2, "hook_enabled");
+    l_pushboolean(L, g_world != nullptr ? 1 : 0);
+    l_setfield(L, -2, "world_cached");
     return 1;
 }
 
@@ -491,6 +515,7 @@ static int ExitGame(lua_State* L) {
 extern const luaL_Reg world_functions[] = {
     {"GetMemoryAddress",    GetMemoryAddress},
     {"GetFactionCount",     GetFactionCount},
+    {"GetCaptureStatus",   GetCaptureStatus},
     {"GetMaxUnitsInArmy",   GetMaxUnitsInArmy},
     {"SetMaxUnitsInArmy",   SetMaxUnitsInArmy},
     {"GetMaxUnitsInNavy",   GetMaxUnitsInNavy},
@@ -535,6 +560,9 @@ void uninstall_world_hook() {
         MH_RemoveHook(reinterpret_cast<void*>(world_ctor_addr));
         world_ctor_addr = 0;
     }
+    ++g_world_hook_clears;
+    g_world_hook_enabled = false;
+    Log("[twdll] WORLD cache cleared; generation=%u hits=%u clears=%u", g_world_hook_generation, g_world_hook_hits, g_world_hook_clears);
     g_world = nullptr;
     orig_world_ctor = nullptr;
 }

@@ -27,9 +27,10 @@ end
 function Common_Initializer()
 	MKMP_Debug_Initialize();
 
-	if cm:is_multiplayer() then
-		MKMP_Runtime_Initialize();
-	end
+	-- Runtime observability is optional in both single-player and multiplayer.
+	-- The adapter is fail-closed: missing/incompatible native code only disables
+	-- diagnostics and must never prevent normal MK1212 Lua initialization.
+	MKMP_Runtime_Initialize();
 
 	Add_MK1212_Common_Listeners();
 

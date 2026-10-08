@@ -3,8 +3,8 @@
 --
 -- MK1212 MULTIPLAYER RUNTIME OBSERVABILITY ADAPTER
 --
--- Optional, read-only-first bridge around twdll_attila.dll.
--- Gameplay must continue unchanged when the DLL is absent or incompatible.
+-- Optional, read-only-first bridge around twdll for both single-player diagnostics and multiplayer observability.
+-- Gameplay must continue unchanged when the DLL is absent, incompatible, or faults during initialization.
 --
 ------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------
@@ -16,19 +16,34 @@ MKMP_RUNTIME = {
 	module = nil,
 	game_build = "unknown",
 	twdll_sha = "unknown",
-	native_faction_count = nil
+	native_faction_count = nil,
+	load_candidate = "none",
+	load_attempts = 0,
+	luaopen_calls = 0,
+	initialize_calls = 0,
+	last_load_error = nil
+};
+
+local MKMP_RUNTIME_EXPECTED_GAME = "Attila";
+local MKMP_RUNTIME_LOAD_CANDIDATES = {
+	"twdll_attila.dll",
+	"twdll",
+	"twdll.dll"
 };
 
 local function MKMP_Runtime_Log_Internal(message)
 	local text = "[MKMP][RUNTIME] "..tostring(message);
 
 	if MKMP_Debug_Log then
-		MKMP_Debug_Log(
+		pcall(
+			MKMP_Debug_Log,
 			"runtime",
 			{
 				message = message,
 				available = MKMP_RUNTIME.available,
-				reason = MKMP_RUNTIME.reason
+				reason = MKMP_RUNTIME.reason,
+				load_candidate = MKMP_RUNTIME.load_candidate,
+				twdll_sha = MKMP_RUNTIME.twdll_sha
 			}
 		);
 	end
@@ -44,7 +59,7 @@ local function MKMP_Runtime_Log_Internal(message)
 	end
 
 	if dev and dev.log then
-		dev.log(text);
+		pcall(dev.log, text);
 	end
 end
 
@@ -62,63 +77,123 @@ local function MKMP_Runtime_Call(fn, ...)
 	return result, nil;
 end
 
-function MKMP_Runtime_Initialize()
-	if MKMP_RUNTIME.initialized then
-		return MKMP_RUNTIME.available;
-	end
+local function MKMP_Runtime_Set_Unavailable(reason)
+	MKMP_RUNTIME.available = false;
+	MKMP_RUNTIME.reason = tostring(reason or "unavailable");
+	MKMP_RUNTIME.module = nil;
 
-	MKMP_RUNTIME.initialized = true;
+	MKMP_Runtime_Log_Internal(MKMP_RUNTIME.reason);
 
+	return false;
+end
+
+local function MKMP_Runtime_Load_Module()
 	if not package or type(package.loadlib) ~= "function" then
-		MKMP_RUNTIME.reason = "package.loadlib_unavailable";
-		MKMP_Runtime_Log_Internal(MKMP_RUNTIME.reason);
-		return false;
+		return nil, "package.loadlib_unavailable";
 	end
 
-	local load_ok, loader, load_error = pcall(
-		package.loadlib,
-		"twdll_attila.dll",
-		"luaopen_twdll"
-	);
+	for i = 1, #MKMP_RUNTIME_LOAD_CANDIDATES do
+		local candidate = MKMP_RUNTIME_LOAD_CANDIDATES[i];
 
-	if not load_ok then
-		MKMP_RUNTIME.reason = "loadlib_error:"..tostring(loader);
-		MKMP_Runtime_Log_Internal(MKMP_RUNTIME.reason);
-		return false;
-	end
+		MKMP_RUNTIME.load_attempts = MKMP_RUNTIME.load_attempts + 1;
 
-	if type(loader) ~= "function" then
-		MKMP_RUNTIME.reason = "dll_unavailable:"..tostring(load_error);
-		MKMP_Runtime_Log_Internal(MKMP_RUNTIME.reason);
-		return false;
-	end
+		local load_ok, loader, load_error = pcall(
+			package.loadlib,
+			candidate,
+			"luaopen_twdll"
+		);
 
-	local open_ok, module_or_error = pcall(loader);
+		if not load_ok then
+			MKMP_RUNTIME.last_load_error =
+				"loadlib_error:"..candidate..":"..tostring(loader);
+		elseif type(loader) == "function" then
+			MKMP_RUNTIME.load_candidate = candidate;
+			MKMP_RUNTIME.luaopen_calls = MKMP_RUNTIME.luaopen_calls + 1;
 
-	if not open_ok or type(module_or_error) ~= "table" then
-		MKMP_RUNTIME.reason = "luaopen_failed:"..tostring(module_or_error);
-		MKMP_Runtime_Log_Internal(MKMP_RUNTIME.reason);
-		return false;
-	end
+			local open_ok, module_or_error = pcall(loader);
 
-	MKMP_RUNTIME.module = module_or_error;
+			if not open_ok then
+				return nil, "luaopen_failed:"..candidate..":"..tostring(module_or_error);
+			end
 
-	if MKMP_RUNTIME.module.core then
-		local game_build = MKMP_Runtime_Call(MKMP_RUNTIME.module.core.GameBuild);
+			if type(module_or_error) ~= "table" then
+				return nil, "luaopen_invalid_module:"..candidate;
+			end
 
-		if game_build then
-			MKMP_RUNTIME.game_build = tostring(game_build);
-		end
-
-		local twdll_sha = MKMP_Runtime_Call(MKMP_RUNTIME.module.core.GetBuildSha);
-
-		if twdll_sha then
-			MKMP_RUNTIME.twdll_sha = tostring(twdll_sha);
+			return module_or_error, nil;
+		else
+			MKMP_RUNTIME.last_load_error =
+				"dll_unavailable:"..candidate..":"..tostring(load_error or loader);
 		end
 	end
 
-	if MKMP_RUNTIME.module.world then
-		local faction_count = MKMP_Runtime_Call(MKMP_RUNTIME.module.world.GetFactionCount);
+	return nil, MKMP_RUNTIME.last_load_error or "dll_unavailable";
+end
+
+local function MKMP_Runtime_Validate_Core(module)
+	if type(module.core) ~= "table" then
+		return false, "capability_missing:core";
+	end
+
+	for _, capability in ipairs(
+		{
+			"Log",
+			"GameBuild",
+			"GetBuildSha"
+		}
+	) do
+		if type(module.core[capability]) ~= "function" then
+			return false, "capability_missing:core."..capability;
+		end
+	end
+
+	local game_build, game_error = MKMP_Runtime_Call(module.core.GameBuild);
+
+	if game_error or game_build == nil then
+		return false, "capability_error:core.GameBuild:"..tostring(game_error);
+	end
+
+	MKMP_RUNTIME.game_build = tostring(game_build);
+
+	if MKMP_RUNTIME.game_build ~= MKMP_RUNTIME_EXPECTED_GAME then
+		return false, "game_build_mismatch:"..MKMP_RUNTIME.game_build;
+	end
+
+	local twdll_sha, sha_error = MKMP_Runtime_Call(module.core.GetBuildSha);
+
+	if sha_error or twdll_sha == nil then
+		return false, "capability_error:core.GetBuildSha:"..tostring(sha_error);
+	end
+
+	MKMP_RUNTIME.twdll_sha = tostring(twdll_sha);
+
+	if string.len(MKMP_RUNTIME.twdll_sha) ~= 40
+	or not string.match(MKMP_RUNTIME.twdll_sha, "^[0-9a-fA-F]+$") then
+		return false, "invalid_build_sha:"..MKMP_RUNTIME.twdll_sha;
+	end
+
+	return true, nil;
+end
+
+local function MKMP_Runtime_Initialize_Internal()
+	local module, load_error = MKMP_Runtime_Load_Module();
+
+	if not module then
+		return MKMP_Runtime_Set_Unavailable(load_error);
+	end
+
+	-- Keep the module private until its identity contract is proven.
+	MKMP_RUNTIME.module = module;
+
+	local core_ok, core_error = MKMP_Runtime_Validate_Core(module);
+
+	if not core_ok then
+		return MKMP_Runtime_Set_Unavailable(core_error);
+	end
+
+	if module.world
+	and type(module.world.GetFactionCount) == "function" then
+		local faction_count = MKMP_Runtime_Call(module.world.GetFactionCount);
 
 		if faction_count ~= nil then
 			MKMP_RUNTIME.native_faction_count = tonumber(faction_count);
@@ -131,10 +206,31 @@ function MKMP_Runtime_Initialize()
 	MKMP_Runtime_Log_Internal(
 		"ready game="..MKMP_RUNTIME.game_build..
 		" twdll_sha="..MKMP_RUNTIME.twdll_sha..
-		" factions="..tostring(MKMP_RUNTIME.native_faction_count)
+		" factions="..tostring(MKMP_RUNTIME.native_faction_count)..
+		" load_candidate="..MKMP_RUNTIME.load_candidate
 	);
 
 	return true;
+end
+
+function MKMP_Runtime_Initialize()
+	MKMP_RUNTIME.initialize_calls = MKMP_RUNTIME.initialize_calls + 1;
+
+	-- One luaopen per Lua state. Save/load creates a fresh state and therefore a
+	-- fresh adapter table; repeated product initializers in one state are no-ops.
+	if MKMP_RUNTIME.initialized then
+		return MKMP_RUNTIME.available;
+	end
+
+	MKMP_RUNTIME.initialized = true;
+
+	local ok, result = pcall(MKMP_Runtime_Initialize_Internal);
+
+	if not ok then
+		return MKMP_Runtime_Set_Unavailable("initializer_error:"..tostring(result));
+	end
+
+	return result == true;
 end
 
 function MKMP_Runtime_Available()
@@ -198,6 +294,56 @@ function MKMP_Runtime_Get_Campaign_Snapshot()
 	return table.concat(parts, "|");
 end
 
+-- Read-only diagnostic bridge. Never use these observations as gameplay authority.
+-- Returning explicit unavailable states avoids claiming Lua/native parity when WORLD is nil.
+function MKMP_Runtime_Diagnostic_Campaign_Count()
+    local ok, count = pcall(function()
+        if not cm or type(cm.model) ~= "function" then return nil; end
+        local model = cm:model();
+        if not model or type(model.world) ~= "function" then return nil; end
+        local world = model:world();
+        if not world or type(world.faction_list) ~= "function" then return nil; end
+        local factions = world:faction_list();
+        if not factions or type(factions.num_items) ~= "function" then return nil; end
+        return factions:num_items();
+    end);
+    if not ok or type(count) ~= "number" or count < 0 or count ~= math.floor(count) then
+        return nil, "lua_count_unavailable";
+    end
+    return count, "ready";
+end
+
+function MKMP_Runtime_Diagnostic_Parity()
+    local lua_count, lua_state = MKMP_Runtime_Diagnostic_Campaign_Count();
+    local native_count = nil;
+    local native_state = "native_unavailable";
+    local module = MKMP_RUNTIME.module;
+    if MKMP_RUNTIME.available and module and module.world
+    and type(module.world.GetFactionCount) == "function" then
+        local ok, result = pcall(module.world.GetFactionCount);
+        if ok and type(result) == "number" and result >= 0
+        and result == math.floor(result) then
+            native_count = result;
+            native_state = "ready";
+        else
+            native_state = "native_count_unavailable";
+        end
+    end
+
+    local parity = "not_comparable";
+    if lua_count ~= nil and native_count ~= nil then
+        parity = (lua_count == native_count) and "match" or "mismatch";
+    end
+    return {
+        schema = 1,
+        lua_count = lua_count,
+        lua_state = lua_state,
+        native_count = native_count,
+        native_state = native_state,
+        parity = parity
+    };
+end
+
 function MKMP_Runtime_Get_Battle_Telemetry()
 	if not MKMP_RUNTIME.available
 	or not MKMP_RUNTIME.module
@@ -234,6 +380,11 @@ function MKMP_Runtime_Status()
 		reason = MKMP_RUNTIME.reason,
 		game_build = MKMP_RUNTIME.game_build,
 		twdll_sha = MKMP_RUNTIME.twdll_sha,
-		native_faction_count = MKMP_RUNTIME.native_faction_count
+		native_faction_count = MKMP_RUNTIME.native_faction_count,
+		load_candidate = MKMP_RUNTIME.load_candidate,
+		load_attempts = MKMP_RUNTIME.load_attempts,
+		luaopen_calls = MKMP_RUNTIME.luaopen_calls,
+		initialize_calls = MKMP_RUNTIME.initialize_calls,
+		last_load_error = MKMP_RUNTIME.last_load_error
 	};
 end

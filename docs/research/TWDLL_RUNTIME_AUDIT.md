@@ -1,6 +1,6 @@
 # twdll runtime/code audit
 
-Status: **REPO-OBSERVED + repository/native CI PASS**; Attila runtime proof pending  
+Status: **REPO-OBSERVED + repository/native CI PASS + canonical Attila runtime PASS**; two-peer proof pending  
 Audit issue: #40  
 Audit PR: #41  
 Audit date: 2026-10-07  
@@ -13,7 +13,7 @@ The previous monorepo audit proved that twdll had been imported faithfully. This
 
 The answer is:
 
-> **Repository-level hardening is substantially improved, but current-build Attila runtime compatibility is still not proven.**
+> **Repository-level hardening is substantially improved, and the exact tested Steam Attila build now has canonical single-player runtime proof. Two-peer multiplayer behavior remains unproven.**
 
 The audit found several real implementation defects rather than only documentation gaps:
 
@@ -81,24 +81,33 @@ Vendored MinHook remains pinned to `TsudaKageyu/minhook@d94c64d32ea37bc4f5ee47d5
 | TWD-A16 | MEDIUM | x86 `FindPushRef` used `uintptr_t` width and unaligned pointer dereference for a 4-byte x86 immediate. | **FIXED**; reads a `uint32_t` via `memcpy`. |
 | TWD-A17 | MEDIUM | `FindString` could read one byte beyond the supplied range at the final loop position. | **FIXED**; the scan now reserves a byte for the required NUL terminator. |
 | TWD-A18 | MEDIUM | `FindPrologue` could wrap an unsigned address when asked to scan to address zero. | **FIXED**; invalid origins fail closed and the loop has an explicit terminal condition. |
+| TWD-A19 | MEDIUM | The logger enforced byte ceilings while the file was opened in Windows text mode, so `\n` expanded to `\r\n` and could exceed the advertised 4096-byte line / 8 MiB file limits by one byte. | **FIXED** during stress testing in #42/#43; `twdll.log` is opened in binary append mode and the byte-budget regression test proves the exact ceiling. |
 
 ## Remaining risks — not papered over
 
-### R1 — runtime build compatibility is still unproven
+### R1 — exact tested Attila build compatibility
 
-**State: BLOCKED on an exact Attila runtime pass.**
+**State: RUNTIME-PROVEN for the canonical single-player harness on 2026-10-07.**
 
-The code contains extensive `TW_ASSERT_OFFSET` checks. Those assertions prove that the C++ declarations match the offsets the source expects; they do **not** prove that the current installed Attila executable uses those offsets.
+The code still contains extensive `TW_ASSERT_OFFSET` checks, but this risk is no longer supported only by compile-time layout assumptions for the tested executable pair.
 
-Required evidence remains:
+Canonical runtime evidence bundle: `TWDLL-RUNTIME-EVIDENCE-20261007-213219.zip`.
 
-- exact `Attila.exe` / `empire.retail.dll` build identity;
-- successful module load;
-- 23/23 Lua signatures in the actual process;
-- observed game-signature resolution;
-- singleton construction/destruction;
-- save/load reinitialization;
-- clean exit/unload.
+Recorded identity and result:
+
+- native source SHA: `7c6f5b6d691313f128e9212e37c87c2292e79504`;
+- `Attila.exe` SHA-256: `51b833d5b8fd8505a7cd035fd92f68cace681d62ea74d9ad8fbae26326635bf5`;
+- `empire.retail.dll` SHA-256: `8a40cbcff108e1cba14cc7eb6c7f4dfb054c7745b236d1bfc0fde5c85e2a353d`;
+- tested `twdll.dll` SHA-256: `e34da1c67b13d3a30695f1d2fdfc01d02e215017257e7cc1c6918680ebf46189`;
+- Lua ABI: **23/23** required entry points resolved;
+- game API: **33/33** signatures resolved;
+- real in-game native suite: **224 passed / 0 failed / 0 skipped**;
+- `GetBuildSha()` returned the exact expected repository SHA;
+- WORLD, CAMPAIGN_UI, settlement-slot, CAMPAIGN_MODEL, BATTLE and CAI occupation hooks installed successfully;
+- save -> load completed;
+- final Lua-state teardown uninstalled hooks, restored 3740 tweakers and 714 campaign variables, and a fresh Lua state successfully re-resolved **23/23 + 33/33** and reinstalled hooks.
+
+This proof is exact-build evidence. It does not imply every future Attila executable or every multiplayer peer is compatible without re-running the proof.
 
 ### R2 — userdata type confusion
 
@@ -143,9 +152,18 @@ The project convention now requires engine data paths to be represented in `tw_t
 
 ### R6 — stale native object lifetime during teardown
 
-**State: HYPOTHESIS requiring runtime evidence.**
+**State: RUNTIME-PROVEN for the canonical save/load teardown path; broader lifetime assumptions remain scoped.**
 
-Tweaker snapshots store engine pointers for rollback. The new rollback semantics preserve the correct original values, but the lifetime of every pointed-to tweaker across campaign unload/reload still needs an in-game teardown test. A repository build cannot prove pointer lifetime.
+The canonical real-game run exercised the exact lifecycle that this risk required:
+
+- the first Lua state was destroyed;
+- twdll logged restoration of **3740 tweakers** and **714 campaign variables**;
+- campaign hooks were uninstalled;
+- max-units/max-traits runtime changes were restored;
+- a fresh Lua state loaded after save/load;
+- Lua ABI and game signatures re-resolved completely and hooks reinstalled.
+
+No failure was observed in that exact path. This does not generalize pointer lifetime to every native API or future build; any new snapshot-owning feature still requires its own lifecycle proof.
 
 ## Multiplayer / simultaneous-turn conclusions
 
@@ -223,6 +241,55 @@ That exact-head run proved:
 
 The follow-up commit that records this evidence is documentation-only and must itself retain a green exact-head gate before merge.
 
+## Stress follow-up — issue #42 / PR #43
+
+The post-audit stress pass deliberately tightened the proof boundary beyond the original #41 native build check.
+
+Exact stress head `dcc1284016b7f07b27575018eb1d8124aac3af4f` completed **Gumball CI run #47 / run ID 37630813021** successfully.
+
+The stress lane now proves on Windows x86:
+
+- active Attila C++ path compiles in **Release and Debug** with MSVC `/W4 /WX`;
+- signature scanner passes its boundary suite plus **5,000 deterministic randomized exact/wildcard cases per configuration**;
+- logger passes formatting, truncation-marker, **8-thread / 2,000-line concurrent write**, exact **8 MiB** cap and no-growth-at-cap tests;
+- host guard accepts only an exact case-insensitive `attila.exe` basename and rejects the CI test process;
+- all three native CTest executables pass in **Release and Debug**;
+- PE32/x86 and `luaopen_twdll` artifact contracts remain green;
+- Linux source-contract tests continuously guard the #40/#41 fail-closed and MinHook rollback invariants;
+- repository policy, governance, Trivy, deterministic MP repository simulation and Aggregate CI all remain green.
+
+The stress suite itself found **TWD-A19**, proving that the additional test layer is not ceremonial.
+
+## Canonical real-game proof — 2026-10-07
+
+The runtime boundary was crossed after the #42/#43 stress pass using the canonical Attila test harness rather than an MK1212 override pack.
+
+Evidence: `TWDLL-RUNTIME-EVIDENCE-20261007-213219.zip`.
+
+Observed sequence:
+
+1. `luaopen_twdll` executed in the real Attila process.
+2. Required Lua ABI resolved **23/23**.
+3. Game signatures resolved **33/33**.
+4. Campaign hooks installed.
+5. The in-game test suite completed **224/224** assertions with **0 failed / 0 skipped**.
+6. `world.SaveGame("twdll_lifecycle_test")` returned success.
+7. The campaign reloaded.
+8. Last-state teardown restored native mutations and uninstalled hooks.
+9. The fresh state reinitialized the native layer and again resolved **23/23 + 33/33**.
+10. The harness logged `All tests and save/load cycle PASSED.`.
+
+This upgrades canonical single-player compatibility and save/load lifecycle from **NOT RUN** to **RUNTIME-PROVEN for the recorded executable hashes**.
+
+It does not upgrade:
+
+- direct MK1212 product integration;
+- two-peer passive behavior;
+- host/client semantic equality;
+- simultaneous-turn feasibility.
+
+Those remain separate proof gates.
+
 ## Proof labels
 
 At this stage:
@@ -230,17 +297,22 @@ At this stage:
 - source/code review: **REPO-OBSERVED**;
 - exact functional-head native x86 compiler/link proof: **PASS**;
 - exact functional-head scanner regression suite: **PASS**;
+- Release + Debug `/W4 /WX` native stress suite: **PASS**;
+- logger concurrency/exact-budget stress: **PASS**;
+- host guard native regression suite: **PASS**;
+- source-contract guard for audit fixes: **PASS**;
 - repository policy/governance/Trivy/Aggregate proof: **PASS**;
-- current Attila load proof: **NOT RUN**;
-- save/load runtime proof: **NOT RUN**;
+- canonical current Attila load proof for the recorded executable pair: **RUNTIME-PROVEN**;
+- canonical save/load runtime proof: **RUNTIME-PROVEN**;
+- direct MK1212 product bootstrap: **IN PROGRESS (#44)**;
 - two-peer passive proof: **NOT RUN**;
 - simultaneous-turn feasibility proof: **NOT RUN**.
 
-Do not upgrade any runtime item to RUNTIME-PROVEN from CI alone.
+Runtime labels above come from the user-run evidence bundle, not CI. Do not generalize them to other executable hashes or to multiplayer.
 
 ## Decision
 
-The audited branch is suitable for repository/build validation and then for the staged Attila runtime proof in `TWDLL_OBSERVABILITY_BACKEND.md`.
+The audited native layer has now passed repository/build validation and the canonical single-player Attila runtime proof. Issue #44 is the next gate: wire that proven native layer through the real MK1212 bootstrap and repeat the product-level runtime proof before two-peer work.
 
 The current safety contract is:
 

@@ -1,0 +1,622 @@
+MK1212 / twdll — SZCZEGÓŁOWY RAPORT DIAGNOSTYCZNY
+Gdzie szukać problemu, co implementować i jak zweryfikować wynik
+Instrukcja dla wykonawcy korzystającego ze słabszego modelu
+
+Data: 8 października 2026
+Repozytorium: karnalooch/MK1212Scripts
+Zadanie: #44; PR: #45
+Branch: feat/44-mk1212-twdll-runtime-integration
+Zbadany HEAD: bf8b4ec9357dca56f9e71c3a5407c9db574de0fd
+Odczytana baza PR: master, 78178206edcb7aadb3d13754f7ac9c7880225382
+Status podczas analizy: PR otwarty, nie jest Draft, niescalony.
+CI #60 dla badanego HEAD: completed / success.
+
+WERDYKT
+
+FIX REQUIRED dla wiarygodności diagnostyki. Podstawowe działanie single-player jest zaakceptowane w zakresie opisanym przez użytkownika. Ładowanie biblioteki działa w sprawdzonym wariancie Workshop. Dostęp native do świata MK1212 oraz multiplayer pozostają niepotwierdzone.
+
+Najbardziej prawdopodobny mechanizm braku świata to zbyt późna instalacja hooka konstruktora WORLD. Kod daje mocne przesłanki: samodzielny harness ładuje DLL podczas wykonywania scripting.lua, a integracja MK1212 wywołuje loader dopiero z inicjalizatora uruchamianego w callbacku pierwszego ticka. Istnieją jednak dwie inne realne możliwości: heurystyka wybrała niewłaściwą funkcję albo sprzątanie instancji Lua wyzerowało przechwycony wskaźnik, którego potem nie odzyskano.
+
+Nie należy wybierać jednej z tych napraw na podstawie samego factions=nil. Najpierw naprawiamy pomiar: format śladu i klasyfikator, następnie sondę zdarzeń. Dopiero gdy poprawne pomiary nadal pokażą brak świata, dokładamy instrumentację native i wykonujemy rozstrzygające porównanie.
+
+Najważniejsze dodatkowe ustalenia z kodu:
+
+1. Błąd no-DLL ma dwa warianty: nowe linie rozbijają rekord, a długi komunikat może usunąć końcowe pola przez limit 512 bajtów.
+2. Aktywna sonda tur jest generowana w PowerShellu. Używa globalnego eh i milcząco pomija rejestrację, gdy go nie ma. Kod gameplay używa cm:add_listener.
+3. Wynik 33/33 nie obejmuje heurystycznego resolvera hooka WORLD.
+4. Hook zapisuje wskaźnik PRZED wykonaniem oryginalnego konstruktora. Nie wolno w nim od razu odczytywać liczby frakcji.
+5. native_faction_count w statusie adaptera jest wartością pobraną przy inicjalizacji; nie jest automatycznie aktualizowanym odczytem świata.
+6. Ewaluacja logów znajduje się przed rollbackiem wewnątrz finally. Nieobsłużony wyjątek nowego parsera mógłby ominąć przywracanie plików.
+7. Historyczny test WORLD porównuje native count z API Lua przy pierwszym uruchomieniu. Ścieżka po load nie powtarza tego testu, choć drukuje komunikat sukcesu cyklu.
+
+
+1. ZAKRES I WIARYGODNOŚĆ ŹRÓDEŁ
+
+Podstawą jest załączony „Wklejony tekst.txt” oraz odczyt kodu z przypiętego SHA, metadanych PR45 i CI #60. Sprawdzono też wybrane pliki historycznego testu na SHA 7c6f5b6d691313f128e9212e37c87c2292e79504. Pełne odnośniki znajdują się w sekcji 16.
+
+W tej rozmowie nie udostępniono surowych dwóch porannych ZIP-ów. Ich opis i wyniki runtime pochodzą z raportu użytkownika. Nie twierdzimy, że ponownie sprawdziliśmy bajty archiwów, obliczyliśmy ich SHA-256 albo odczytaliśmy dosłowny polski komunikat Windows. Nie uruchamialiśmy gry, nowych buildów ani testów poprawki; ten dokument jest analizą i projektem wykonania.
+
+Stosowane kategorie:
+
+• REPO-OBSERVED — potwierdzone w odczytanym kodzie.
+• ZGŁOSZONE RUNTIME — opisane w załączonym raporcie; bez ponownej analizy surowych ZIP-ów w tej rozmowie.
+• HYPOTHESIS — przyczyna do potwierdzenia eksperymentem.
+• PROJEKT — nowa funkcja, pole lub zachowanie proponowane do wdrożenia.
+
+Stan wejściowy:
+
+• Native mode: zgłoszone bootstrap_enter=true, initializer_enter=true, native_ready=true, debug_ready=true, pack_preserved=true, rollback_ok=true, pass=true.
+• No-DLL mode: zgłoszony funkcjonalny sukces gry, ale fallback_ready=false i pass=false przez wadliwą klasyfikację.
+• WORLD: w trzech zgłoszonych inicjalizacjach world_not_captured / factions=nil.
+• FactionTurnStart: brak próbek sondy mimo potwierdzonego przejścia tur.
+• Workshop: jeden opakowany main.lua i dwa dodane moduły; pozostałe 153 pliki Lua zachowano w sprawdzanej paczce.
+• MP: brak dowodu zgodności dwóch graczy. Żaden etap tego planu nie odblokowuje mechanik MP.
+
+Liczba 153 jest wynikiem konkretnej próby. Przyszła walidacja powinna porównać wszystkie nieobjęte zmianą pliki rzeczywistego baseline, zamiast zakładać na zawsze tę samą liczebność. [S0–S3]
+
+
+2. MAPA KODU — GDZIE ZACZĄĆ
+
+2.1. scripts/runtime/RUN-MK1212-PR45-SP-TEST.ps1
+
+Najważniejszy plik dla obecnego wariantu Workshop. Szukaj: $Prefix, $Suffix, Probe_Trace, Probe_World, runtime_status, PR45_World_Probe, fallback_ready, $RuntimePass, $Result.pass i finally.
+
+Tutaj powstaje rzeczywiście uruchamiana nakładka na Workshop. Tutaj także klasyfikowane są logi i wykonywane przywracanie plików. To pierwszy cel implementacji.
+
+2.2. scripts/runtime/build_product_probe.py
+
+Szukaj: instrument(), build(), payload-manifest.json, listy kopiowanych skryptów i kontroli czystego źródła. Ten builder ma drugi emiter Probe_Trace z podobnym błędem długości i nowych linii.
+
+Uwaga: instrumentowany repozytoryjny main.lua z buildera nie jest tym samym main.lua, który obecny harness ostatecznie konstruuje z Workshop. Poprawienie tylko instrument() nie naprawi aktywnego $Suffix w PowerShellu.
+
+2.3. campaigns/main_attila/common/mkmp_runtime.lua
+
+Szukaj: MKMP_Runtime_Load_Module, MKMP_Runtime_Initialize_Internal, MKMP_Runtime_Initialize, MKMP_Runtime_Status, MKMP_Runtime_Set_Unavailable, native_faction_count i last_load_error.
+
+Tu definiowane są kontrolowane prefiksy reason, idempotencja loadera, walidacja GameBuild/SHA oraz jednorazowy odczyt liczby frakcji.
+
+2.4. campaigns/main_attila/common/mkmp_debug.lua
+
+Szukaj: MKMP_Debug_Escape. Ten logger już escapuje znaki sterujące. Nie należy zaczynać od jego przebudowy: wadliwy dodatkowy emiter to Probe_Trace.
+
+2.5. campaigns/main_attila/common/mk1212_common.lua
+
+Add_MK1212_Common_Listeners() pokazuje wzorzec cm:add_listener dla FactionTurnStart. Plik jest źródłem wiedzy o API, a nie pretekstem do podmiany gameplay Workshop.
+
+2.6. campaigns/main_attila/scripting.lua oraz mk1212_start.lua
+
+register_first_tick_callback wywołuje start_game_all_factions(), a ta funkcja później wywołuje Common_Initializer(). To mapa rzeczywistej fazy ładowania adaptera w repo.
+
+2.7. native/twdll/src/attila/world.cpp
+
+Szukaj: g_world, LogWorldHook, HookedWorldCtor, install_world_hook, GetFactionCount, uninstall_world_hook. Tu znajdują się wszystkie kluczowe operacje przechwycenia i resetu WORLD.
+
+2.8. native/twdll/src/main.cpp i src/attila/campaign_hooks.cpp
+
+Szukaj: luaopen_twdll, l_twdll_gc_cleanup, __cleanup_proxy, g_active_lua_state_count, g_is_initialized, install_campaign_hooks i uninstall_campaign_hooks. To właściciel cyklu modułu i sprzątania hooków.
+
+2.9. native/twdll/src/common/signature_scanner.cpp, src/attila/game_sigs.cpp, src/common/tw.h oraz src/attila/tw_types.h
+
+Pierwsze dwa pliki służą do sprawdzenia, jak zidentyfikowano funkcję WORLD i czego dotyczy 33/33. Drugie dwa pokazują null-check gettera i zadeklarowany układ TW_World. Korekta układu struktury nie naprawi pustego g_world.
+
+2.10. native/twdll/tests/attila/pack/campaigns/main_attila/scripting.lua oraz native/twdll/tests/shared/testing.lua
+
+Punkt porównania wcześniejszej inicjalizacji i testu odczytu świata. Czytać ich kod. Nie uruchamiać pełnego testing.lua na kampanii użytkownika: suite używa własnego tests.save, konkretnych CQI i wykonuje mutacje gry.
+
+2.11. scripts/ci/test_product_probe.py oraz scripts/ci/test_product_probe_rollback.ps1
+
+Pierwszy sprawdza zależności i tekst instrumentacji. Drugi sprawdza rollback przez -PrepareOnly. Potrzebne są nowe testy rzeczywistego kontraktu emitera i parsera. [S4–S15]
+
+
+3. PROBLEM A — FAŁSZYWY FAIL W TRYBIE BEZ DLL
+
+3.1. Przyczyna
+
+W aktywnym $Suffix status składany jest tak:
+
+runtime_status available=<wartość> reason=<dowolny tekst> luaopen_calls=<liczba>
+
+Probe_Trace wykonuje string.sub(tostring(message),1,512), a następnie dopisuje znak końca linii. W Lua 5.1 jest to limit bajtów, nie gwarancja 512 pełnych znaków Unicode. Emiter nie escapuje CR/LF pochodzących z komunikatu systemowego.
+
+Parser rozcina plik po LF i wymaga, aby w jednej linii znajdowały się jednocześnie status dll_unavailable i luaopen_calls=0. Nowa linia wewnątrz reason rozdziela te warunki. Długi reason może ponadto całkowicie usunąć końcowy licznik, nawet po zastąpieniu nowych linii spacjami.
+
+Dlatego nie wystarczy rozszerzyć regexa o (?s), użyć globalnego .* ani szukać każdego wymaganego tekstu gdziekolwiek w pliku. Taki parser mógłby połączyć fragmenty różnych inicjalizacji w fałszywy PASS. Opcja Singleline rzeczywiście zmienia dopasowanie kropki do nowych linii; nie nadaje rekordom poprawnej struktury ani korelacji. [S4, S5, S19]
+
+3.2. Projekt formatu
+
+Wprowadzić schema=2 tylko dla nowego kontraktu śladu. Zachować stare evidence bez reinterpretowania jego schematu.
+
+Przykład projektowanego rekordu, nie wynik istniejącego testu:
+
+schema=2 run_id=<guid_hex> source_sha=<sha40> event=runtime_status init_seq=1 available=false reason_code=dll_unavailable luaopen_calls=0 load_attempts=3
+
+Szczegóły zapisać osobno:
+
+schema=2 run_id=<guid_hex> source_sha=<sha40> event=runtime_error_detail init_seq=1 detail=<escaped_text>
+
+Reguły implementacji:
+
+• Status zawiera wyłącznie kontrolowane pola o ustalonych typach i kolejności. Jego wymagane pola nie podlegają obcięciu dowolnym tekstem błędu.
+• reason_code wyprowadzać z zamkniętego katalogu prefiksów tworzonych przez adapter. Zachować obecne reason i last_load_error. Nie trzeba w pierwszym etapie zmieniać publicznego statusu adaptera.
+• Nieznanego powodu nie zamieniać na dll_unavailable. W szczególności luaopen_failed, game_build_mismatch i brak package.loadlib oznaczają inne sytuacje.
+• Tekst błędu escapować, ograniczać oddzielnym budżetem i nigdy nie interpretować jako statusu. Nawet literalne available=true albo cały fałszywy prefiks w detail ma pozostać tekstem.
+• Zachować ograniczenie liczby wpisów i rozmiaru pliku. Zapis jest jednoliniowy; brak miejsca lub awaria I/O nie przerywa gameplay. Niekompletne evidence nie daje PASS.
+• run_id generować w PowerShellu przed utworzeniem nakładki i umieścić w manifeście oraz śladzie. Nie generować go przez Lua RNG lub zegar kampanii.
+• run_id identyfikuje uruchomienie, nie zbudowaną paczkę. instrument() buildera powstaje przed przyszłym uruchomieniem: musi przyjmować jawne ID do testu albo mieć kontrolowane miejsce podstawienia przez harness przed ewentualnym użyciem runtime. Nie tworzyć ID podczas builda. Brak ID lub niepodstawiony placeholder nie może dawać poprawnego rekordu runtime. Nie trzeba wdrażać nowej ścieżki uruchamiania repo bootstrapu, którego aktywna nakładka Workshop nie używa.
+• init_seq jest licznikiem inicjalizacji w segmencie diagnostycznym. Nowy bootstrap rozpoczyna nowy segment. Nie nazywać tego udowodnionym identyfikatorem lua_State: licznik Lua po odtworzeniu środowiska może znów zaczynać od 1.
+
+3.3. Parser i warunki akceptacji
+
+Wyodrębnić czysty parser: dane wejściowe to zabezpieczone kopie logów, oczekiwany schemat/run_id/SHA i tryb. Wynik zawiera rozpoznane segmenty, powody odrzucenia oraz informacje potrzebne do końcowej oceny. Parser nie instaluje packów, nie uruchamia gry i nie wykonuje rollbacku.
+
+Dla świeżej próby no-DLL wymagać łącznie:
+
+1. Zgodnego schema, run_id i source_sha.
+2. Kompletnej sekwencji bootstrapu i inicjalizacji, w tym gameplay_initializer_complete.
+3. available=false, reason_code=dll_unavailable oraz luaopen_calls=0 we właściwym rekordzie danej inicjalizacji.
+4. Potwierdzonej izolacji kandydatów DLL i braku świeżego twdll.log, zgodnie z istniejącym kontraktem.
+5. Braku sprzecznych statusów, np. jakiegokolwiek native-ready z tej samej próby.
+6. Zachowania packa, udanego rollbacku i braku błędu wykonania albo ewaluacji.
+
+Nie można zaliczyć całej próby, jeśli pierwsza inicjalizacja jest poprawna, a druga rozpoczęła się i urwała. Oceniać wszystkie rozpoczęte segmenty; nie hardkodować trzech cykli.
+
+debug_ready=false w trybie no-DLL nie jest dodatkową awarią loggera. Obecna definicja tego pola szuka w debug logu available=true / reason=ready / właściwego twdll_sha. W poprawnym no-DLL taki rekord nie powinien wystąpić. Zachować znaczenie starego pola; ewentualny nowy status obecności loggera musi być osobno nazwany i udokumentowany. [S4, S6, S7]
+
+3.4. Rollback musi przeżyć błąd parsera
+
+Obecnie kopiowanie i analiza logów poprzedzają odtwarzanie plików wewnątrz finally. Nowy parser lub błąd odczytu nie może wydostać się z tego miejsca i ominąć rollbacku.
+
+Docelowa kolejność odpowiedzialności:
+
+1. Zabezpieczyć dostępne świeże logi, jawnie rejestrując błąd kopiowania.
+2. W gwarantowanej sekcji sprzątania odtworzyć pack, DLL, stare logi, atrybuty i odizolowane paczki.
+3. Oceniać wyłącznie zabezpieczone kopie, nigdy odtworzone stare logi.
+4. Przy błędzie ewaluacji zapisać evaluation_error i pass=false, zachowując prawdziwy rollback_ok i restore_errors.
+
+Nie nadpisywać packa zmienionego równolegle przez Workshop. Istniejący mechanizm wykrywania konfliktu i zachowania backupu pozostaje obowiązujący. Test musi wymusić wyjątek parsera po testowej instalacji i sprawdzić faktyczne odtworzenie plików oraz atrybutów. [S4]
+
+
+4. PROBLEM B — BRAK FACTION_TURN_START
+
+4.1. Przyczyna widoczna w kodzie
+
+Aktualny kod sondy jest w $Suffix PowerShella:
+
+if eh and eh.add_listener then
+    eh:add_listener("PR45_World_Probe", "FactionTurnStart", true, callback, true)
+end
+
+Gdy globalne eh jest nieobecne, rejestracja znika bez śladu. Tymczasem Add_MK1212_Common_Listeners() rejestruje ten sam event przez cm:add_listener. Biblioteka lib_event_handler.lua tworzy local eh wewnątrz konstruktora, przechowuje __event_handler i udostępnia get_eh(). Nie ustanawia w tym miejscu wymaganego przez sondę globalnego eh.
+
+Jest to potwierdzona luka diagnostyczna i mocny kandydat na przyczynę ciszy. Nie mamy runtime pomiaru type(eh), więc nie wolno opisać nieobecności eh w konkretnej próbie jako dowiedzionego faktu.
+
+Nie poprawiać globalnego dispatchera ani nie tworzyć nowego event_handler. Użyć receivera cm zgodnie ze wzorcem kampanii, sprawdzając dostępność metod. Nie importować core:add_listener z dokumentacji innego Total War. [S4, S8, S9]
+
+4.2. Co implementować w sondzie
+
+• Osobny wpis listener_register_attempt: nazwa, event, wybrany receiver, dostępność add_listener i remove_listener.
+• Osobny wynik: api_unavailable, call_completed, explicit_failure lub exception.
+• Po sprawdzeniu lokalnego budżetu zapisać listener_callback_enter przed sprawdzeniem DLL, odczytem context i zapytaniem o WORLD. Callback po wyczerpaniu budżetu ma od razu wrócić bez kolejnego wpisu.
+• Bezpiecznie pobrane turn, faction i is_human; błąd ich odczytu nie może usuwać dowodu wejścia callbacku.
+• Lokalna referencja do użytego receivera, aby usuwać listener z tego samego obiektu.
+• Odczyt i sprawdzenie typu metod receivera także wewnątrz pcall. Samo indeksowanie nieoczekiwanej wartości cm albo metatabeli może zgłosić błąd przed wywołaniem add_listener.
+• Własne flagi idempotencji sondy, niezależne od MKMP_RUNTIME.initialized.
+• Ochrona późniejszego callbacku i usuwania listenera przed błędem diagnostycznym. pcall rejestracji nie chroni funkcji wywołanej później przez silnik.
+• Osobne liczniki wejść callbacku i prób odczytu świata oraz jawny wpis o wyczerpaniu limitu.
+
+Nie wymagać, aby add_listener zwracało true. Odczytana implementacja event_handler może zakończyć się poprawnie z nil. Brak wyjątku oznacza zakończenie wywołania rejestracji, a wykonanie listenera potwierdza dopiero callback_enter.
+
+Sonda powinna rejestrować zdarzenia także bez DLL. Oczekiwany wynik to wtedy odebrany event i native state=module_unavailable.
+
+Obecny limit to jedna próbka init i cztery zdarzenia frakcji. Cztery zdarzenia AI mogą wystąpić w jednej kolejce tur. To nie są cztery pełne tury gracza. Gdy usunięcie listenera zawiedzie, lokalny limit nadal musi blokować dalsze odczyty i zalewanie logu.
+
+Nie zakładać obecności repozytoryjnego MKMP_Debug_Barrier w zachowanych plikach Workshop. Dodanie loggera nie dopisuje wywołań tego loggera do starego gameplay. [S4, S8, S9]
+
+4.3. Porównanie dwóch dróg odczytu
+
+Na tej samej bezpiecznej barierze odczytać osobno:
+
+• engine_faction_count przez cm:model():world():faction_list():num_items();
+• native_faction_count przez twdll.world.GetFactionCount(), jeśli capability jest dostępna i jej faza odczytu jest dopuszczona.
+
+Ten wzorzec API Lua występuje już w mk1212_start.lua i adapterze. Jeżeli interfejs Lua zwraca poprawną liczbę, a native wskazuje world_not_captured, silnikowy świat jest dostępny przez Lua, natomiast DLL nie posiada jego wskaźnika.
+
+Nie wpisywać liczby z Lua do pola native_faction_count jako obejścia. Zgodność danych oceniać dopiero wtedy, gdy oba niezależne odczyty rzeczywiście się powiodły. Nie tworzyć pełnego dumpu armii, regionów i wszystkich frakcji do rozstrzygnięcia problemu jednego wskaźnika. [S6, S10]
+
+
+5. PROBLEM C — BRAK PRZECHWYCONEGO G_WORLD
+
+5.1. Rzeczywisty mechanizm
+
+g_world zaczyna jako nullptr. LogWorldHook(ptr) zapisuje wskaźnik. HookedWorldCtor przekazuje do niego ECX, a dopiero potem skacze do oryginalnego konstruktora. GetFactionCount używa GlobalGetter i zwraca nil przy pustym wskaźniku. uninstall_world_hook usuwa przechwycenie i zeruje cache.
+
+Zatem factions=nil przy world_not_captured wskazuje najpierw na pozyskanie lub utratę wskaźnika. Zmiana offsetu pola faction_count niczego nie naprawi, jeśli getter kończy się wcześniej na nullptr. Układ TW_World deklaruje faction_count na 0x50 i ma asercję kompilacyjną. Ta asercja potwierdza układ struktury C++, nie semantyczną zgodność z dowolną wersją gry. [S11, S13]
+
+5.2. H1 — loader uruchamia się zbyt późno
+
+REPO-OBSERVED:
+
+• Kanoniczny harness wykonuje load_twdll() na poziomie wykonywanego scripting.lua. Same testy są odkładane do późniejszego zdarzenia gotowości.
+• Produkt rejestruje callback pierwszego ticka. Callback wywołuje start_game_all_factions(), a ta funkcja Common_Initializer().
+• start_game_all_factions() wcześniej korzysta już z cm:model():world():faction_list().
+• Wersja repo uruchamia runtime na początku Common_Initializer; nakładka Workshop robi to dopiero po całym oryginalnym initializerze.
+
+Jeżeli silnikowy constructor wykonał się przed instalacją hooka, jego późniejsze zainstalowanie nie odtworzy minionego wywołania. Czekanie dodatkowych 10 lub 30 sekund także nie zagwarantuje nowego konstruktora istniejącego świata.
+
+Przesunięcie loadera o kilka linii wewnątrz Common_Initializer może nadal pozostawić go w tej samej zbyt późnej fazie. Porównanie musi dotyczyć fazy wykonywania skryptu, a nie wyłącznie kolejności funkcji w initializerze.
+
+To obecnie pierwsza hipoteza do sprawdzenia. Nie jest jeszcze dowiedzioną przyczyną konkretnej próby. [S4, S10, S14]
+
+5.3. H2 — WORLD hook wskazuje niewłaściwą funkcję
+
+Resolver WORLD działa osobno od listy 33 sygnatur. Szuka pierwszego napisu FACTION_ARRAY, pierwszego bajtowego odwołania push do tego napisu, a potem heurystycznego prologu wstecz. Przeszukuje obraz modułu bez dowodu unikalności i semantyki wybranego konstruktora.
+
+hook installed OK dowodzi sukcesu MinHook dla wybranego adresu. Nie dowodzi, że wybrano prawdziwy constructor WORLD albo że silnik wywołał to miejsce.
+
+Jeśli DLL jest ładowana dostatecznie wcześnie, lecz hitów nadal nie ma, należy sprawdzić wybrany punkt na aktualnym binarium: kandydatów, sekcję kodu, odwołania, granicę funkcji, znaczenie ECX i zgodność ABI. Nie wybierać kolejnego adresu metodą prób i błędów. [S11, S12]
+
+5.4. H3 — sprzątanie Lua gubi obserwację żyjącego świata
+
+main.cpp tworzy userdata __cleanup_proxy z finalizerem l_twdll_gc_cleanup. Gdy licznik zarejestrowanych instancji osiąga zero, finalizer odpina hooki i zeruje stan inicjalizacji. Sprzątanie WORLD zeruje g_world.
+
+To nie jest hook destruktora WORLD. Nie jest to również osobny hook lua_close: log „Last Lua state destroyed” powstaje w finalizerze proxy. Z samego tego logu nie wynika, kiedy silnik zniszczył albo utworzył świat.
+
+Możliwy przebieg: wcześniej przechwycono świat, następnie cleanup adaptera wyzerował cache, a kolejna instancja Lua pojawiła się przy świecie, którego constructor już się nie wykonał pod aktywnym hookiem. Tę sekwencję trzeba zaobserwować.
+
+Nie usuwać g_world=nullptr jako szybkiej poprawki. Bez dowodu czasu życia mogłoby to pozostawić wskaźnik do zwolnionego obiektu. Późniejsza ponowna alokacja może nawet wykorzystać ten sam adres. [S11, S13]
+
+5.5. H4 — poprawny późniejszy odczyt istnieje, ale status pokazuje stary nil
+
+MKMP_Runtime_Initialize_Internal() pobiera native_faction_count podczas inicjalizacji. MKMP_Runtime_Status() zwraca zapisane pole, a nie ponawia getter. Ponowne MKMP_Runtime_Initialize() jest idempotentne i nie powinno otwierać modułu drugi raz.
+
+Naprawiona sonda ma wykonać świeży odczyt w późniejszej fazie. Jeżeli wtedy count działa, należy rozdzielić initial_native_faction_count od aktualnej próbki albo dodać jawnie wywoływaną, ograniczoną funkcję odświeżającą obserwację. Nie resetować initialized i nie wywoływać ponownie luaopen, aby „odświeżyć” liczbę. [S6]
+
+
+6. INSTRUMENTACJA NATIVE — TYLKO GDY PÓŹNIEJSZA SONDA NADAL NIE DZIAŁA
+
+Projekt nowego API: twdll.world.GetCaptureStatus(). Ta funkcja jeszcze nie istnieje.
+
+Powinna zwracać metadane należące do DLL, bez dereferencji silnikowego WORLD:
+
+• schema;
+• hook_state: unresolved / created / enabled / failed / uninstalled;
+• hook_generation — cykl instalacji;
+• ctor_hits_generation — trafienia obecnego cyklu;
+• ctor_hits_module — trafienia podczas bieżącego życia DLL;
+• world_cached — czy cache jest niepusty;
+• clear_count;
+• last_clear_reason, np. last_lua_proxy_finalized.
+
+world_cached=true nie jest dowodem ważności ani gotowości obiektu. Liczniki mogą się wyzerować po faktycznym unload DLL; trzeba korelować je z konkretną próbą procesu. Identyfikator proxy Lua, liczba zarejestrowanych proxy i registry_reuse powinny być obserwowane oddzielnie od generacji świata.
+
+W resolverze zapisać metodę wyszukiwania, liczbę kandydatów, lokalne RVA wybranego napisu/odwołania/funkcji oraz wyniki CreateHook i EnableHook. Surowe adresy i RVA mogą służyć lokalnej diagnozie, nie sterowaniu ani semantycznej synchronizacji MP.
+
+W LogWorldHook zwiększać jedynie licznik i zapisywać metadane przechwycenia. Ten kod działa przed oryginalnym konstruktorem. Nie odczytywać tam faction_count, nie dopisywać kodu „po jmp” i nie zmieniać stubu na zwykły call bez udowodnionego ABI.
+
+W późniejszym callbacku raportować osobno stan Lua świata, świeży native count, stan przechwycenia i wynik porównania. pcall w Lua jest ochroną przed błędami Lua; nie stanowi walidacji czasu życia obiektu C++ ani gwarancji obsługi błędnego dostępu do pamięci.
+
+Nie dodawać pętli ciągłego skanowania, wątku pollingu ani logowania każdego ticka. Istniejące ograniczenia liczby zdarzeń i rozmiaru plików pozostają obowiązujące. [S11–S13, S18, S20]
+
+
+7. DRZEWO DECYZJI — JAKA NAPRAWA WYNIKA Z DOWODU
+
+Wynik 1: Brak API rejestracji lub jawny wyjątek.
+Wniosek: problem po stronie sondy/handlera Lua.
+Działanie: poprawić wybór receivera i fazę rejestracji. Nie ruszać native.
+
+Wynik 2: Rejestracja kończy się bez wyjątku, callbacków brak.
+Wniosek: zakończenie rejestracji nie jest dowodem dispatchu.
+Działanie: sprawdzić aktywny handler, usuwanie/kolizję nazwy listenera, limit sondy i wcześniejszy wyjątek w dispatchu. Nie tworzyć alternatywnego dispatchera.
+
+Wynik 3: Callback działa, Lua count istnieje, native g_world pusty.
+Wniosek: odseparowany problem pozyskania native świata.
+Działanie: zbadać moment instalacji hooka i liczniki jego wykonań.
+
+Wynik 4: Wariant późny ma zero trafień; wariant wcześniejszy ma trafienie i count zgodny z Lua.
+Wniosek: silny dowód problemu fazy inicjalizacji dla testowanej konfiguracji.
+Działanie: wdrożyć wcześniejszą, minimalną fazę loadera i późniejsze odczyty. Sprawdzić load i powrót z bitwy.
+
+Wynik 5: Również wariant wcześniejszy ma zero trafień, a resolver jest niejednoznaczny.
+Wniosek: nadal otwarte H1/H2; nie znaleziono poprawnego punktu obserwacji.
+Działanie: zweryfikować rzeczywisty constructor na dokładnym binarium. Nie wybierać pierwszego/ostatniego kandydata bez semantycznego dowodu.
+
+Wynik 6: Było trafienie, potem clear_count wzrosło przy finalizerze, a nowa instancja nie przechwytuje świata.
+Wniosek: problem ponownego uzyskania wskaźnika/cyklu właściciela hooka.
+Działanie: udowodnić lifetime i zweryfikować sposób ponownego pobrania bieżącego świata. Nie zachowywać starego pointera w ciemno.
+
+Wynik 7: Wskaźnik przechwycono, lecz count jest niepoprawny lub zmienny.
+Wniosek: możliwa zła tożsamość obiektu, niegotowa faza albo niezgodne ABI.
+Działanie: sprawdzić kolejno constructor/ECX, gotowość świata, strukturę i pole. Sam test „liczba dodatnia” nie wystarcza.
+
+Wynik 8: Świeża próbka jest zgodna z Lua, a Status nadal pokazuje nil.
+Wniosek: nieaktualna wartość zapisana przy inicjalizacji.
+Działanie: wyraźnie oddzielić próbkę początkową od aktualnej. Nie przebudowywać hooka, który już działa.
+
+Wynik 9: Po load brak próbki.
+Wniosek: nie zaobserwowano bariery.
+Działanie: nadać wynik NOT OBSERVED i sprawdzić sondę. Brak próbki nie dowodzi niedostępności świata.
+
+
+8. WARUNKOWA IMPLEMENTACJA WCZEŚNIEJSZEGO LOADERA
+
+Jeżeli eksperyment potwierdzi H1, rozdzielić dwie odpowiedzialności:
+
+Faza wczesna: załadowanie biblioteki, wywołanie jej entrypointu, walidacja podstawowej tożsamości i instalacja obserwacji.
+Faza późna: odczyty świata i porównania semantyczne na potwierdzonej barierze kampanii.
+
+Samo package.loadlib zwraca funkcję otwierającą moduł. Hooki są inicjalizowane dopiero przez jej wykonanie. Przeniesienie samego wywołania package.loadlib bez wywołania zwróconego loadera nie realizuje wcześniejszej instalacji hooków. [S20]
+
+Nie przenosić bez zmian całego MKMP_Runtime_Initialize() na wcześniejszy etap. Dzisiejsza implementacja wywołuje również GetFactionCount, a dodatkowe logowanie może zależeć od gotowości cm. Wczesna ścieżka ma działać bez odczytów WORLD i bez przebudowy initializerów gameplay.
+
+Miejsce wybrać przez porównanie rzeczywistego entrypointu Workshop z kanonicznym scripting.lua. Nie zakładać, że uruchomienie prefixu main.lua następuje przed constructor; to też trzeba pomierzyć. Pierwszy eksperyment zmienia jedną zmienną: moment instalacji obserwacji.
+
+Zachować jedno luaopen na stan, fail-closed dla native i niezmieniony przebieg zwykłej kampanii bez DLL. Jeżeli wybrany punkt wymaga objęcia nakładką scripting.lua, jawnie rozszerzyć allowlistę w osobnym etapie, zachować jego oryginalną treść i hashami dowieść braku pozostałych zmian. To nie należy do pierwszej poprawki parsera.
+
+Nie ma obecnie potwierdzonego alternatywnego gettera aktualnego WORLD. Nie dopisywać fikcyjnego g_campaign_model->world, nieudokumentowanego GetWorld() ani offsetu ze starej tabeli Cheat Engine. Jeżeli poprawka wymaga nowego punktu native, potrzebny jest konkretny dowód i osobny przegląd. [S6, S10–S14, S18]
+
+
+9. CO NAPRAWDĘ DOWODZIŁ HISTORYCZNY TEST
+
+Test 1 w native/twdll/tests/shared/testing.lua pobiera GetMemoryAddress(), GetFactionCount() i engine_faction_count z interfejsu Lua, a potem sprawdza dokładną równość liczby frakcji. Ten fragment jest identyczny na historycznym SHA 7c6f5b6... i badanym HEAD. Nie ma w nim ścieżki skip.
+
+Dokumentacja zapisuje 224 passed / 0 failed / 0 skipped w kanonicznym przebiegu. To wartościowy punkt odniesienia dla pierwszego odczytu świata. Obecnie mamy kod testu i zapisany wynik, a nie ponownie odczytany surowy canonical ZIP.
+
+Natomiast gałąź is_reload sprawdza dostępność tabeli twdll.core i funkcji Log, drukuje sukces save/load i wykonuje return. Nie ponawia Testu 1. W nowym dowodzie należy wykonać małą sondę odczytową po load i po powrocie z bitwy. Nie uruchamiać całej mutującej suite na kampanii MK1212.
+
+Ręczne save/load użytkownika dowodzi zachowania gry w tej próbie. Nie dowodzi wywołania native twdll.world.SaveGame/LoadGame; są to odrębne funkcje korzystające z innego zestawu wskaźników. [S14, S15]
+
+
+10. KOLEJNOŚĆ PRAC DLA SŁABSZEGO MODELU
+
+ETAP 0 — potwierdzenie wejścia, bez implementacji.
+Odczytać AGENTS.md, instrukcje podrzędne, architekturę i dokumenty runtime. Sprawdzić branch, HEAD, status tracked/untracked i istniejące zmiany użytkownika. Odnaleźć realne poranne ZIP-y na stanowisku wykonawcy. Nie zmieniać ich zawartości.
+
+ETAP A — odporny ślad i klasyfikator, bez zmian eventów/native.
+Wdrożyć schema=2, stabilne pola, osobny detail, run_id, ocenę kompletnych segmentów i bezpieczny rollback przy błędzie ewaluacji. Objąć kontraktem oba emitery. Dodać trwałe regresje. Wynik końcowy A: wiarygodne narzędzie pomiaru, nie naprawiony WORLD.
+
+ETAP B — poprawna i ograniczona sonda zdarzeń.
+Naprawić receiver, logować próbę rejestracji i wejście callbacku, dodać idempotencję i dwa niezależne odczyty liczby frakcji. Nie zmieniać momentu ładowania DLL. Najpierw test offline, następnie krótka próba kampanii/końca tury.
+
+Jeżeli B pokaże działający późniejszy native count, zająć się semantyką próbki inicjalizacyjnej i walidacją przejść. Nie dodawać bez potrzeby instrumentacji ani nowego resolvera C++.
+
+ETAP C — instrumentacja native, jeśli problem pozostaje.
+Dodać liczniki instalacji/hitów/resetów i status przechwycenia. Bez zmiany algorytmu wyboru hooka, stubu, offsetów ani właściciela lifetime w tej samej transzy. Uzyskać ślad rozstrzygający H1/H2/H3.
+
+ETAP D — jedna poprawka wynikająca z obserwacji.
+Wybrać wcześniejszy loader, naprawę resolvera, ponowne uzyskanie wskaźnika albo odświeżenie obserwacji. Nie wdrażać wszystkich wariantów jednocześnie.
+
+ETAP E — dowód, dokumentacja, decyzja o zakresie PR.
+Zachować oryginalne evidence, udokumentować nowe wyniki na aktualnym źródle i rozdzielić bootstrap_ready, event_observation oraz native_world_access. Przygotować opis PR do aktualizacji. Publikacja i merge pozostają osobnymi operacjami właściciela.
+
+Każda transza kończy się raportem. Poniższy prompt uruchamia wyłącznie A, po sprawdzeniu wejścia. Kolejne transze są planem, nie poleceniem automatycznej implementacji.
+
+
+11. TESTY I KRYTERIA AKCEPTACJI
+
+11.1. Etap A: rzeczywisty emiter i parser
+
+• Poprawny no-DLL bez error detail daje zaliczenie bramki fallback przy spełnionych pozostałych warunkach.
+• Rzeczywisty polski komunikat z porannego ZIP-a nie zmienia klasyfikacji. Do czasu jego odzyskania użyć jawnie oznaczonej syntetycznej fixture CRLF; nie nazywać jej dosłownym reproducerem.
+• CRLF, LF, CR, tabulatory, backslash, nie-ASCII oraz detail dłuższy niż 512 bajtów nie usuwają wymaganych pól.
+• Detail zawierający available=true, reason=ready lub prefiks innego rekordu nie wpływa na status.
+• W no-DLL luaopen_calls=1 wyklucza PASS. W native pojedyncze luaopen_calls=1 przy available=true, reason_code=ready i pozostałych spełnionych wymaganiach jest poprawne: dodać pozytywną regresję native.
+• Zły SHA/run_id, nieznany schemat, brak pola, pusty plik i uszkodzony rekord nie dają PASS.
+• Dwa różne segmenty nie mogą dostarczyć po połowie dowodu jednej inicjalizacji.
+• Poprawna inicjalizacja, po której następuje niekompletna, nie daje globalnego PASS.
+• Status native-ready w próbie no-DLL jest konfliktem, nawet jeśli istnieje też status fallback.
+• Świeży twdll.log w no-DLL nie daje PASS.
+• Wymuszony wyjątek ewaluatora nie omija rollbacku i zachowania atrybutów.
+• Dotychczasowe osiem przypadków rollbacku nadal przechodzi.
+• Test wykonuje rzeczywiście wygenerowany Lua obu ścieżek, a nie kopię logiki przepisaną w teście.
+
+Parser sprawdzić pod Windows PowerShell 5.1 i PowerShell 7. Wygenerowany kod wykonać pod Lua 5.1. Nie wprowadzać składni PS7 do skryptu wymagającego PS5.1.
+
+Przed commitem testy robocze rollbacku można uruchomić w tymczasowym katalogu fixture: istniejący zweryfikowany payload/DLL/RPFM oraz bieżący harness i helper. Jednoznacznie opisać mieszaną wersję tej fixture. Nie uruchamiać z niej gry ani jej publikować. To test syntetyczny, nie paczka produktu i nie nowy dowód exact-SHA. Produkcyjny build() nadal wymaga czystego commitu i zgodnego payloadu; pełny nowy artefakt powstanie w późniejszym kroku właściciela.
+
+11.2. Etap B: listener
+
+• cm działa, eh=nil: listener rejestruje się raz i rzeczywiście obsługuje event w mocku.
+• add_listener zwraca nil bez wyjątku: brak automatycznego FAIL rejestracji.
+• Brak DLL: callback jest rejestrowany i obserwowany, stan native=module_unavailable.
+• Brak API lub wyjątek rejestracji: jawny wynik, oryginalny initializer kończy się.
+• Nieindeksowalny receiver albo wyjątek jego __index: diagnoza nie przerywa initializerów.
+• Błąd context/query/removal: wejście callbacku pozostaje widoczne, błąd diagnostyki nie propaguje do gameplay.
+• Ponowny initializer: brak drugiego listenera i resetu budżetu.
+• 1 próbka init + 4 zdarzenia frakcji: limit zgodny z kontraktem; dalsze zdarzenia nie wykonują native query.
+• Po wymuszonym błędzie remove_listener kolejne eventy nie dodają query ani wpisów callback_enter; wyczerpanie budżetu raportowane jest jednokrotnie.
+• Nowe środowisko po load: nowy cykl sondy, bez pożyczania starych liczników.
+• Błąd pliku logu: gra działa, a brak dowodu nie staje się PASS.
+
+Syntetyczne FactionTurnStart emitować tylko offline. Ręczne trigger_event w żywej kampanii mogłoby uruchomić wszystkie właściwe listenery gameplay.
+
+11.3. Native i przejścia
+
+Po zmianie native wykonać wymagane buildy/testy Release i Debug x86 oraz odpowiednie bramki repo. Testy samych liczników nie zastępują prawdziwego wykonania hooka.
+
+Do runtime gate potrzebne są faktyczne obserwacje: kampania po gotowości, koniec tury, powrót z bitwy, wczytana kampania. Dla każdej bariery zapisać callback, stan przechwycenia, fresh engine count i fresh native count. Jeżeli zmieniono lifetime, dodać wejście do menu i kolejną kampanię w tym samym procesie.
+
+Kryterium native_world_access=PASS: oba niezależne odczyty są dostępne i zgodne w wymaganych fazach, a przejścia nie używają nieudowodnionego starego wskaźnika. Wartość >0 bez porównania albo sam napis ready nie wystarczają. [S4, S14–S18]
+
+
+12. OGRANICZENIA ZAKRESU I TYPOWE ZŁE POPRAWKI
+
+Nie robić następujących zmian w celu uzyskania zielonego wyniku:
+
+• Zamiana nil na 0 albo podstawienie engine count jako native count.
+• Globalny regex łączący dowolne linie całego logu.
+• Ustawienie debug_ready=true w no-DLL mimo znaczenia tego pola.
+• Kolejne sleep i nieskończone próby luaopen.
+• Reset initialized w celu powtórnego ładowania DLL w tej samej instancji.
+• Usunięcie zerowania g_world bez rozwiązania lifetime.
+• Czytanie faction_count wewnątrz wejścia konstruktora.
+• Zmiana ECX, prototypu hooka, jmp/call lub offsetów bez bieżącego dowodu ABI.
+• Podmiana 153 zachowanych plików Workshop wersjami repo.
+• Włączenie zakomentowanego network listenera lub usuwanie is_multiplayer(), aby „dokończyć integrację”.
+• Uruchomienie pełnej canonical suite na prywatnej kampanii.
+• Osłabienie CI albo oznaczenie starego evidence jako dowodu nowej implementacji.
+
+To ograniczenia bezpośrednio związane z aktualnym problemem i kontraktem repo. Celem jest uzyskanie poprawnej obserwacji, bez zmiany zasad rozgrywki. [S18]
+
+
+13. EVIDENCE, WERSJE I PR45
+
+Oryginalne archiwa wskazane przez raport:
+
+MK1212-PR45-SP-EVIDENCE-native-20261008-084406-110.zip
+MK1212-PR45-SP-EVIDENCE-no-dll-20261008-090635-075.zip
+
+Nie zmieniać ich result.json. Wykonawca powinien odzyskać pliki, policzyć SHA-256 i zachować dosłowne ślady. Ponowną analizę starego formatu zapisać osobno z identyfikatorem parsera, hashem wejścia i wyjaśnieniem fałszywego negatywu.
+
+Pozytywna ponowna ocena starej próby nie dowodzi, że nowy emiter działa w grze. Do tego potrzebne jest nowe evidence. Powinno ono opisywać hash i pochodzenie harnessa, źródła Lua, DLL, gry, baseline Workshop, patcha, tryb, run_id oraz rzeczywiste wyniki rollbacku.
+
+Jeśli źródła harnessa i payload/DLL pochodzą z różnych wersji, ujawnić to. Builder obecnie wymaga czystego, zatwierdzonego źródła i DLL z tym samym source SHA. Nie obchodzić tego warunku, aby oznaczyć lokalną poprawkę starym bf8b4ec. Lokalne testy nad niezatwierdzonym diffem są poprawnym testem roboczym, ale nie dowodem produktu z czystego commitu.
+
+Opis PR ma starszą sekcję Remaining obejmującą m.in. battle-return i no-DLL; trzeba go później uaktualnić na podstawie odzyskanych dowodów. Nie jest to powód do powtarzania całej zaakceptowanej checklisty UI.
+
+PR45 można oceniać jako integrację opcjonalnego loadera dopiero po domknięciu wiarygodności pomiaru i jawnym opisaniu granicy Workshop/repo. Native world access nie może być ogłoszone ukończonym, dopóki odpowiednie próbki nie istnieją. Ten raport nie wykonuje ani nie zleca publikacji, zmian PR czy merge. [S0–S5]
+
+
+14. FORMAT RAPORTU OD WYKONAWCY
+
+Wymagane sekcje:
+
+1. Werdykt: ACCEPT / FIX REQUIRED / BLOCKED, z krótkim uzasadnieniem.
+2. Zakres: wykonana transza i co faktycznie zmieniło zachowanie.
+3. Git: branch, bazowy i końcowy SHA, pełny status tracked/untracked, stan commit/push/PR/merge.
+4. Dokładna lista zmienionych i nowych plików oraz powód każdej zmiany.
+5. Reproducer: wejściowy fixture, pochodzenie, zachowanie przed i po.
+6. Kontrakt: schema, pola, zasady klasyfikacji, budżety i kompatybilność.
+7. Dokładne komendy, kody wyjścia i wyniki PASS / FAIL / BLOCKED / NOT RUN.
+8. Osobny dowód, że błąd ewaluatora nie omija rollbacku.
+9. Podsumowanie diffu, git diff --check i końcowy status.
+10. Pozostałe niepewności, brakujące środowiska/evidence i najmniejszy następny krok.
+
+Nie raportować „wszystko działa” na podstawie samych testów mocków. W etapie A test w grze i odczyt świata mogą uczciwie pozostać NOT RUN.
+
+
+15. GOTOWY PROMPT DO KILO — WYŁĄCZNIE PIERWSZA TRANSZA
+
+Początek promptu:
+
+Jesteś wykonawcą w repozytorium karnalooch/MK1212Scripts. Zrealizuj wyłącznie etap A: napraw odporny na błędy kontrakt śladu i klasyfikację no-DLL, zapewniając rollback także po błędzie ewaluacji. Nie implementuj jeszcze sondy cm:add_listener, wcześniejszego loadera ani zmian C++.
+
+Stan wejściowy:
+- branch: feat/44-mk1212-twdll-runtime-integration;
+- potwierdzony HEAD: bf8b4ec9357dca56f9e71c3a5407c9db574de0fd;
+- PR45 otwarty i niescalony, CI #60 zielone dla tego HEAD;
+- wersja Workshop zachowuje oryginalny initializer i pozostałe skrypty;
+- obecny no-DLL false FAIL wynika z CR/LF w reason oraz możliwości ucięcia luaopen_calls przez limit 512 bajtów.
+
+Najpierw przeczytaj AGENTS.md i właściwe instrukcje podrzędne, docs/README.md, docs/ARCHITECTURE.md, docs/research/README.md, docs/research/TWDLL_OBSERVABILITY_BACKEND.md i docs/research/SCRIPT_SAFETY_GUARDRAILS.md. Sprawdź git branch --show-current, git rev-parse HEAD, git status --short. Jeżeli HEAD/branch różnią się od wejścia albo są nieoczekiwane zmiany, opisz rozbieżność i zatrzymaj zależne edycje; nie nadpisuj pracy użytkownika.
+
+Dozwolone istniejące pliki:
+- scripts/runtime/RUN-MK1212-PR45-SP-TEST.ps1;
+- scripts/runtime/build_product_probe.py;
+- scripts/ci/test_product_probe.py;
+- scripts/ci/test_product_probe_rollback.ps1.
+
+Dozwolone nowe pliki tylko do tej poprawki: czysty helper parsera pod scripts/runtime/ oraz testy/fixtures pod scripts/ci/. Ustal i wypisz ich dokładne nazwy przed edycją. Helper ma być bez efektów ubocznych; test nie może dot-source całego uruchamiającego grę harnessa. Jeżeli dodasz helper, builder musi dołączać go do paczki i weryfikować jego obecność oraz pochodzenie.
+
+Chronione: native/twdll/**, gameplay campaigns/**, script/**, lua_scripts/**, DB/UI, AGENTS.md i .github/**. Nie zmieniaj odbiorcy listenera, limitu 5 world samples, kolejności inicjalizacji, DLL loadera, mechanik multiplayer ani oryginalnych evidence. Jeżeli wymagane podłączenie testu do CI wymaga zmiany chronionego workflow, wskaż dokładną potrzebę w raporcie zamiast samodzielnie poszerzać transzę.
+
+Kolejność implementacji:
+1. Wskaż oba emitery: $Prefix/$Suffix w PS1 oraz instrument() w builderze. Potwierdź błędną kolejność reason przed luaopen_calls i obcinanie całego message.
+2. Odnajdź oryginalny no-DLL ZIP z 20261008-090635-075 na stanowisku i pobierz fixture z surowego śladu, zachowując archiwum. Jeśli niedostępny, użyj syntetycznego PL/CRLF, wyraźnie oznaczając realny reproducer jako NOT RUN. Nie wymyślaj tekstu jako rzekomo oryginalnego.
+3. Zaimplementuj nowy trace schema=2: run_id generowany w PS przed overlay; source_sha; event; init_seq; kontrolowane booleany/liczby/reason_code. Oddziel stabilny runtime_status od escapowanego, ograniczonego runtime_error_detail. Zachowaj limity wpisów/pliku. Wymagane pola statusu nie mogą zostać obcięte przez detail.
+   run_id ma być nowy na uruchomienie, nie na build. instrument() otrzymuje kontrolowane ID w teście albo udostępnia miejsce podstawienia przez harness przed użyciem. Nie akceptuj brakującego lub niepodstawionego ID. Nie buduj przy okazji alternatywnej ścieżki uruchamiania repo main.lua: aktywny wariant nadal tworzy własny bootstrap Workshop.
+4. Wyprowadź reason_code z zamkniętego katalogu prefiksów obecnego adaptera. Nie zmieniaj jego publicznego reason/last_load_error. Nie mapuj nieznanych powodów na dll_unavailable.
+5. Parser ma rozpoznawać rekordy i kompletne segmenty bootstrapu/inicjalizacji. run_id i init_seq nie są natywnym ID Lua state. Nie używaj globalnych Contains ani regexa łączącego różne rekordy.
+6. No-DLL wymaga właściwego schematu/run_id/SHA, kompletnej inicjalizacji z gameplay_initializer_complete, available=false, reason_code=dll_unavailable, luaopen_calls=0, potwierdzonej izolacji DLL, braku świeżego native logu i sprzecznego native-ready. Końcowy PASS wymaga także zachowania packa, rollbacku i braku run/evaluation error. Niekompletny późniejszy segment nie może zostać przykryty wcześniejszym PASS.
+7. Zachowaj znaczenie debug_ready: w no-DLL false jest zgodne z dotychczasową definicją. Nie zmieniaj go na true jako obejścia.
+8. Zagwarantuj rollback przy błędzie kopiowania/odczytu/parsowania logów. Ewaluuj tylko zabezpieczone świeże kopie. Zapisuj evaluation_error oddzielnie od restore_errors. Błąd ewaluatora musi dać pass=false przy nadal wykonywanym restore.
+9. Zastosuj ten sam kontrakt do obu emiterów, zachowując różnicę ich ścieżek i obecną nakładkę trzech plików. Nie podmieniaj repozytoryjnymi wersjami innych plików Workshop.
+10. Dodaj regresje: CRLF/LF/CR/tab/backslash/non-ASCII, error >512 bajtów, fałszywe pola w detail, zły SHA/run_id/schema, brak/uszkodzony rekord, luaopen_calls=1 w NO-DLL, sprzeczne native/no-DLL, mieszane segmenty, niekompletna druga inicjalizacja, wyjątek parsera po instalacji i dotychczasowa macierz rollbacku. Dodaj też poprawny NATIVE z luaopen_calls=1 i available=true/reason_code=ready, aby nie zepsuć działającej ścieżki DLL. Przetestuj rzeczywisty wygenerowany Lua, nie kopię emitera w teście.
+
+Walidacja:
+- Ustal komendy z aktualnych skryptów, manifestów i CI, nie zgaduj toolchainów.
+- Parser uruchom pod Windows PowerShell 5.1 i PowerShell 7, kod emitera pod Lua 5.1.
+- Wykonaj powiązane testy pakowania i ośmiu wariantów rollbacku oraz wymagane dla zakresu bramki repo. Nie przebudowuj native tylko do lokalnej próby czystej funkcji parsera, chyba że wymaga tego obowiązująca bramka.
+- Roboczy rollback sprawdzaj na jawnie oznaczonej tymczasowej fixture z istniejącym zweryfikowanym payloadem/DLL/RPFM i bieżącym harnessem/helperem. Nie uruchamiaj z niej gry ani jej nie publikuj. To syntetyczny test mieszanych wersji, nie nowa paczka exact-SHA. Zachowaj blokadę czystego źródła w produkcyjnym build().
+- Brak środowiska oznacz BLOCKED/NOT RUN. Nie oznaczaj pominiętego testu jako PASS.
+- git diff --check i końcowy git status --short.
+
+STOP przed publikacją lub rozszerzeniem zakresu. Nie wykonuj commit, push, zmiany PR, merge, rebase, reset --hard ani force push. Nie omijaj wymagania czystego commitu i DLL o właściwym SHA w builderze: test roboczy nie jest nowym exact-SHA dowodem runtime. Niezaliczoną regresję popraw w dozwolonym zakresie; nierozwiązane błędy lub braki środowiska zgłoś bez przechodzenia dalej.
+
+Raport końcowy po polsku: werdykt; branch/HEAD/status; dokładna lista plików i diff; fixture i reproducer; implementowany kontrakt; komendy i kody wyjścia; tabela PASS/FAIL/BLOCKED/NOT RUN; dowód rollbacku po wyjątku; ryzyka i niewykonane sprawdzenia; potwierdzenie braku commit/push/merge. Zakończ po etapie A. Nie ogłaszaj naprawienia WORLD ani multiplayer.
+
+Koniec promptu.
+
+
+16. ŹRÓDŁA
+
+[S0] „Wklejony tekst.txt” — raport przekazany przez użytkownika w tej rozmowie. Podstawa opisu porannych prób i akceptacji SP; surowe ZIP-y nie były załączone do niniejszej analizy.
+
+[S1] PR45, stan odczytany podczas analizy:
+https://github.com/karnalooch/MK1212Scripts/pull/45
+
+[S2] Issue #44:
+https://github.com/karnalooch/MK1212Scripts/issues/44
+
+[S3] Gumball CI #60, success dla bf8b4ec9357dca56f9e71c3a5407c9db574de0fd:
+https://github.com/karnalooch/MK1212Scripts/actions/runs/37702068787
+
+[S4] Aktywny harness, nakładka Workshop, parser i rollback:
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/scripts/runtime/RUN-MK1212-PR45-SP-TEST.ps1
+
+[S5] Builder i drugi emiter:
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/scripts/runtime/build_product_probe.py
+
+[S6] Adapter Lua:
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/campaigns/main_attila/common/mkmp_runtime.lua
+
+[S7] Logger Lua:
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/campaigns/main_attila/common/mkmp_debug.lua
+
+[S8] Wzorzec listenerów kampanii:
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/campaigns/main_attila/common/mk1212_common.lua
+
+[S9] Handler i get_eh:
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/script/_lib/lib_event_handler.lua
+
+[S10] Sekwencja inicjalizacji produktu:
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/campaigns/main_attila/scripting.lua
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/campaigns/main_attila/mk1212_start.lua
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/campaigns/main_attila/common/main.lua
+
+[S11] WORLD:
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/native/twdll/src/attila/world.cpp
+
+[S12] Resolver i lista game signatures:
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/native/twdll/src/common/signature_scanner.cpp
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/native/twdll/src/attila/game_sigs.cpp
+
+[S13] Lifetime i typy:
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/native/twdll/src/main.cpp
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/native/twdll/src/attila/campaign_hooks.cpp
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/native/twdll/src/common/tw.h
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/native/twdll/src/attila/tw_types.h
+
+[S14] Kanoniczny harness i obecny test:
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/native/twdll/tests/attila/pack/campaigns/main_attila/scripting.lua
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/native/twdll/tests/shared/testing.lua
+
+[S15] Historyczny test i dokumentacja wyników:
+https://github.com/karnalooch/MK1212Scripts/blob/7c6f5b6d691313f128e9212e37c87c2292e79504/native/twdll/tests/shared/testing.lua
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/docs/research/TWDLL_OBSERVABILITY_BACKEND.md
+
+[S16] Testy buildera:
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/scripts/ci/test_product_probe.py
+
+[S17] Testy rollbacku:
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/scripts/ci/test_product_probe_rollback.ps1
+
+[S18] Kontrakt repo i zasady runtime:
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/AGENTS.md
+https://github.com/karnalooch/MK1212Scripts/blob/bf8b4ec9357dca56f9e71c3a5407c9db574de0fd/docs/research/SCRIPT_SAFETY_GUARDRAILS.md
+
+[S19] Microsoft .NET — Singleline i zachowanie regex wobec nowych linii:
+https://learn.microsoft.com/en-us/dotnet/standard/base-types/regular-expression-options
+
+[S20] Lua 5.1 Reference Manual — package.loadlib i wywołania chronione:
+https://www.lua.org/manual/5.1/manual.html#pdf-package.loadlib
+https://www.lua.org/manual/5.1/manual.html#pdf-pcall

@@ -121,12 +121,29 @@ class MultiplayerSourceContractTests(unittest.TestCase):
         self.assertIn("if cm:is_multiplayer() then", block)
         self.assertIn("return false;", block)
 
-    def test_twdll_adapter_is_optional_and_filters_raw_battle_addresses(self) -> None:
+    def test_twdll_adapter_is_optional_idempotent_and_filters_raw_battle_addresses(self) -> None:
         source = read("campaigns/main_attila/common/mkmp_runtime.lua")
+        main = read("campaigns/main_attila/common/main.lua")
+
         self.assertIn("package.loadlib", source)
         self.assertIn("pcall(", source)
-        self.assertIn('MKMP_RUNTIME.reason = "dll_unavailable:"', source)
+        self.assertIn('"twdll_attila.dll"', source)
+        self.assertIn('"twdll"', source)
+        self.assertIn('"twdll.dll"', source)
+        self.assertIn('MKMP_RUNTIME_EXPECTED_GAME = "Attila"', source)
+        self.assertIn("game_build_mismatch:", source)
+        self.assertIn("invalid_build_sha:", source)
+        self.assertIn("MKMP_RUNTIME.luaopen_calls = MKMP_RUNTIME.luaopen_calls + 1", source)
+        self.assertIn("if MKMP_RUNTIME.initialized then", source)
+        self.assertIn("return MKMP_RUNTIME.available;", source)
         self.assertIn("gameplay must continue unchanged", source.lower())
+
+        common_start = main.index("function Common_Initializer()")
+        common_end = main.index("Add_MK1212_Common_Listeners();", common_start)
+        bootstrap = main[common_start:common_end]
+        self.assertIn("MKMP_Runtime_Initialize();", bootstrap)
+        self.assertNotIn("if cm:is_multiplayer() then", bootstrap)
+
         self.assertIn("Deliberately drop process-local memory addresses", source)
         self.assertIn("cap = info.cap", source)
         self.assertIn("size = info.size", source)

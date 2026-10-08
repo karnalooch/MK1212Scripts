@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - master
+      - feat/44-mk1212-twdll-runtime-integration # stacked turn-observation PR validation
   push:
     branches:
       - master
@@ -82,6 +83,12 @@ jobs:
       - name: Validate MK1212 repository shape
         run: python scripts/ci/check_repository.py
 
+      - name: Run twdll native source contracts
+        run: python -m unittest discover -s scripts/ci -p "test_twdll_*.py" -v
+
+      - name: Test product probe packaging
+        run: python -m unittest discover -s scripts/ci -p "test_product_probe.py" -v
+
       - name: Guard multiplayer-sensitive Lua additions
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
@@ -93,7 +100,7 @@ jobs:
   native_twdll:
     name: Native twdll Attila build
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -115,19 +122,23 @@ jobs:
 
       - name: Configure Attila x86 build
         shell: pwsh
-        run: cmake -S native/twdll -B build/twdll-attila -A Win32 -DTW_GAME=attila -DBUILD_TESTING=ON
+        run: cmake -S native/twdll -B build/twdll-attila -A Win32 -DTW_GAME=attila -DBUILD_TESTING=ON -DTWDLL_WARNINGS_AS_ERRORS=ON
 
-      - name: Build twdll target
+      - name: Build Release twdll and native stress tests
         shell: pwsh
-        run: cmake --build build/twdll-attila --config Release --target twdll --parallel 2
+        run: cmake --build build/twdll-attila --config Release --target twdll twdll_signature_scanner_tests twdll_log_tests twdll_security_tests --parallel 2
 
-      - name: Build native scanner tests
-        shell: pwsh
-        run: cmake --build build/twdll-attila --config Release --target twdll_signature_scanner_tests --parallel 2
-
-      - name: Run native scanner tests
+      - name: Run Release native stress tests
         shell: pwsh
         run: ctest --test-dir build/twdll-attila -C Release --output-on-failure
+
+      - name: Build Debug twdll and native stress tests
+        shell: pwsh
+        run: cmake --build build/twdll-attila --config Debug --target twdll twdll_signature_scanner_tests twdll_log_tests twdll_security_tests --parallel 2
+
+      - name: Run Debug native stress tests
+        shell: pwsh
+        run: ctest --test-dir build/twdll-attila -C Debug --output-on-failure
 
       - name: Verify Attila DLL PE contract
         shell: pwsh
@@ -158,6 +169,47 @@ jobs:
           }
 
           Write-Host ("Native artifact contract PASS: {0}; machine=0x{1:x4}; luaopen_twdll present" -f $dll, $machine)
+
+      - name: Parse product SP harness
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $PWD 'scripts/runtime/RUN-MK1212-PR45-SP-TEST.ps1'),
+            [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count) { throw ($errors | Out-String) }
+
+      - name: Build complete exact-head product SP probe
+        shell: pwsh
+        run: |
+          $url = 'https://github.com/Frodo45127/rpfm/releases/download/v4.6.3/rpfm-v4.6.3-x86_64-pc-windows-msvc.zip'
+          Invoke-WebRequest $url -OutFile build/rpfm.zip
+          $expected = 'a3f9a5ac7704b7703f460a722608a4baf28544b174daeddd4ca85f5e4d6b3e3a'
+          if ((Get-FileHash build/rpfm.zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) {
+            throw 'Pinned RPFM release hash mismatch'
+          }
+          Expand-Archive build/rpfm.zip build/rpfm
+          $cli = @(Get-ChildItem build/rpfm -Recurse -Filter rpfm_cli.exe)
+          if ($cli.Count -ne 1) { throw 'Expected exactly one RPFM CLI' }
+          python scripts/runtime/build_product_probe.py --dll build/twdll-attila/Release/twdll.dll --rpfm $cli[0].FullName --output build/product-probe
+          if ($LASTEXITCODE -ne 0) { throw 'Product probe build failed' }
+
+      - name: Test SP harness rollback on synthetic files
+        shell: pwsh
+        run: |
+          $zip = @(Get-ChildItem build/product-probe -Filter '*.zip')
+          if ($zip.Count -ne 1) { throw 'Expected one probe ZIP' }
+          Expand-Archive $zip[0].FullName build/rollback-probe
+          ./scripts/ci/test_product_probe_rollback.ps1 -ProbeRoot (Resolve-Path build/rollback-probe)
+
+      - name: Upload exact-head product SP probe
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mk1212-product-sp-probe-${{ github.event.pull_request.head.sha || github.sha }}
+          path: build/product-probe/*.zip
+          if-no-files-found: error
+          retention-days: 14
 
   aggregate:
     name: Aggregate CI gate
