@@ -448,3 +448,77 @@ function MKMP_Runtime_Get_Turn_Observation_Event_V1(event_name)
     result.event_source = "lua_callback_label_unverified";
     return result;
 end
+
+-- V2 additive, Attila-first observations. Every method is optional and guarded.
+-- Do not infer current turn owner from a Lua callback or from script-local FACTION_TURN.
+function MKMP_Runtime_Get_Turn_Observation_V2()
+    local result = {
+        schema = 2, source = "attila_lua_guarded", available = false,
+        turn_number = "unknown", multiplayer = "unknown",
+        player_turn = "unknown", local_factions = {},
+        local_factions_state = "unknown", human_factions = {},
+        human_factions_state = "unknown", active_faction = "unknown",
+        script_faction_turn = "unknown", script_faction_source = "mk1212_callback_cache",
+        native_faction_count = "unknown", lua_faction_count = "unknown",
+        faction_count_parity = "not_comparable",
+        provenance = { turn_number = "attila_model", player_turn = "attila_model",
+            local_factions = "attila_faction_is_local", human_factions = "attila_faction_is_human",
+            script_faction_turn = "mk1212_script", active_faction = "unverified" }
+    };
+    local prior = MKMP_Runtime_Get_Turn_Observation_V1();
+    result.turn_number = prior.turn_number;
+    result.multiplayer = prior.multiplayer;
+    result.available = prior.available;
+    if type(FACTION_TURN) == "string" and FACTION_TURN:match("^[%w_]+$") and FACTION_TURN ~= "nil" then
+        result.script_faction_turn = FACTION_TURN;
+    end
+    if not cm or type(cm.model) ~= "function" then return result; end
+    local model = MKMP_Turn_Observe_Protected(cm, "model");
+    if not model then return result; end
+    local player_turn = MKMP_Turn_Observe_Protected(model, "is_player_turn");
+    if type(player_turn) == "boolean" then result.player_turn = player_turn; end
+    local world = MKMP_Turn_Observe_Protected(model, "world");
+    local list = MKMP_Turn_Observe_Protected(world, "faction_list");
+    local length = MKMP_Turn_Observe_Protected(list, "num_items");
+    if not MKMP_Turn_Valid_Integer(length) or length > 1000 then return result; end
+    result.lua_faction_count = length;
+    if type(model.faction_is_local) == "function" then result.local_factions_state = "partial"; end
+    result.human_factions_state = "partial";
+    for i = 0, length - 1 do
+        local ok, faction = pcall(function() return list:item_at(i); end);
+        if ok and faction then
+            local key = MKMP_Turn_Observe_Protected(faction, "name");
+            if type(key) == "string" and key:match("^[%w_]+$") then
+                if result.local_factions_state == "partial" then
+                    local islocal = nil;
+                    local success, local_result = pcall(function() return model:faction_is_local(key); end);
+                    if success then islocal = local_result; end
+                    if islocal == true then table.insert(result.local_factions, key);
+                    elseif islocal ~= false then result.local_factions_state = "incomplete"; end
+                end
+                local human = MKMP_Turn_Observe_Protected(faction, "is_human");
+                if human == true then table.insert(result.human_factions, key);
+                elseif human ~= false then result.human_factions_state = "incomplete"; end
+            else
+                result.local_factions_state = "incomplete";
+                result.human_factions_state = "incomplete";
+            end
+        else
+            result.local_factions_state = "incomplete";
+            result.human_factions_state = "incomplete";
+        end
+    end
+    table.sort(result.local_factions);
+    table.sort(result.human_factions);
+    if result.local_factions_state == "partial" then result.local_factions_state = "complete"; end
+    if result.human_factions_state == "partial" then result.human_factions_state = "complete"; end
+    -- Existing twdll world count is only a corroborating optional observation.
+    if type(MKMP_Runtime_Diagnostic_Parity) == "function" then
+        local success, parity = pcall(MKMP_Runtime_Diagnostic_Parity);
+        if success and type(parity) == "table" then
+            if type(parity.native_count) == "number" then result.native_faction_count = parity.native_count; end
+            result.faction_count_parity = parity.parity or "not_comparable";
+        end
+    end
+    return result;
+end
