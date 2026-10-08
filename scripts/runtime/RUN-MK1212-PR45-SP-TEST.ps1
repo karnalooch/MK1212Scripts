@@ -165,6 +165,42 @@ function Common_Initializer(...)
         elseif status.available == false and reason:sub(1, 15) == "dll_unavailable" then reason_code = "dll_unavailable"; end
         Probe_Trace("runtime_status seq="..probe_init_seq.." available="..tostring(status.available).." reason_code="..reason_code.." luaopen_calls="..tostring(status.luaopen_calls));
         if reason_code ~= "ready" then Probe_Trace("runtime_error_detail text="..reason); end
+        -- Separate read-only V1 turn observations from bounded WORLD samples.
+        local turn_samples = 0;
+        local function Probe_Turn(phase, context)
+            if turn_samples >= 64 then return; end
+            turn_samples = turn_samples + 1;
+            local ok_turn, observation = pcall(function()
+                if type(MKMP_Runtime_Get_Turn_Observation_Event_V1) ~= "function" then return nil; end
+                return MKMP_Runtime_Get_Turn_Observation_Event_V1(phase);
+            end);
+            if not ok_turn or type(observation) ~= "table" then
+                Probe_Trace("turn_v1 event="..phase.." status=unavailable reason=query_failed");
+                return;
+            end
+            local faction_name = "unknown";
+            if context then
+                pcall(function()
+                    if type(context.faction) == "function" then
+                        local faction = context:faction();
+                        if faction and type(faction.name) == "function" then
+                            local name = faction:name();
+                            if type(name) == "string" and name:match("^[%w_]+$") then faction_name = name; end
+                        end
+                    end
+                end);
+            end
+            Probe_Trace("turn_v1 event="..phase..
+                " status="..(observation.available and "partial" or "unavailable")..
+                " turn="..tostring(observation.turn_number)..
+                " multiplayer="..tostring(observation.multiplayer)..
+                " event_faction="..faction_name..
+                " active_faction="..tostring(observation.active_faction)..
+                " local_faction="..tostring(observation.local_faction)..
+                " phase="..tostring(observation.phase)..
+                " reason="..tostring(observation.reason));
+        end
+        Probe_Turn("initializer", nil);
         Probe_World("initializer");
         if not probe_listener_registered then
             Probe_Trace("listener_register_attempt");
@@ -176,6 +212,7 @@ function Common_Initializer(...)
                     receiver:add_listener("PR45_World_Probe", "FactionTurnStart", true, function(context)
                         if probe_world_samples >= 5 then return; end
                         Probe_Trace("listener_callback_enter phase=faction_turn_start");
+                        Probe_Turn("faction_turn_start", context);
                         Probe_World("faction_turn_start");
                         if probe_world_samples >= 5 then
                             local removed, remove_error = pcall(function() receiver:remove_listener("PR45_World_Probe"); end);
