@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "name": "NSIS",
+  "version": "3.13",
+  "homepage": "https://nsis.sourceforge.io/",
+  "archive": {
+    "url": "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.13/nsis-3.13.zip",
+    "bytes": 2363925,
+    "sha256": "ba63dffc4410ee89193e1cb5a41989991bd77c61068da17e3156d136b7b0b3d8"
+  },
+  "source": {
+    "url": "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.13/nsis-3.13-src.tar.bz2",
+    "bytes": 1819771,
+    "sha256": "a8ffe024602d46b6d766f9e1ce30c324ad2a24daeacd3efc2642d436a0c157ac"
+  },
+  "windows_compiler": "nsis-3.13/makensis.exe",
+  "license_notice": "third_party/nsis/LICENSE.txt"
+}

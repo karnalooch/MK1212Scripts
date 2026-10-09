@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "name": "Goldberg Steam Emulator — original upstream Windows x86 release build",
+  "source_repository": "https://gitlab.com/Mr_Goldberg/goldberg_emulator",
+  "source_commit": "475342f0d8b2bd7eb0d93bd7cfdd61e3ae7cda24",
+  "license": "LGPL-3.0-or-later",
+  "archive": {
+    "path": "third_party/goldberg/goldberg-original-475342f0.zip",
+    "download_url": "https://gitlab.com/Mr_Goldberg/goldberg_emulator/-/jobs/4247811310/artifacts/download",
+    "bytes": 19360188,
+    "sha256": "8465984b01b42a75f5faea8f2d884bbd6085a695c40c2b90eb0385f0a5081266"
+  },
+  "dll": {
+    "entry": "steam_api.dll",
+    "bytes": 1488896,
+    "sha256": "eaeaf26f60229ae4d1a9aae07d03ab4e93ea599dd883eb810d6adebcf0e52e14",
+    "machine": 332
+  },
+  "source_bundle": {
+    "entry": "source_code/source_code.bundle",
+    "bytes": 5731790,
+    "sha256": "aa751fbc421cab0da4ad4edd2e5080d304cfb32794f92430db8a4cb0f291efbf"
+  }
+}

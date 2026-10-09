@@ -90,6 +90,15 @@ jobs:
       - name: Run deterministic MP dual-peer simulation
         run: python -m unittest discover -s scripts/ci -p "test_mp_*.py" -v
 
+      - name: Verify exact-source dual-client package contracts
+        run: python -m unittest discover -s scripts/ci -p "test_dual_client_package.py" -v
+
+      - name: Verify Goldberg package provenance and preservation contracts
+        run: python -m unittest discover -s scripts/ci -p "test_goldberg_client_package.py" -v
+
+      - name: Verify Windows installer packaging contracts
+        run: python -m unittest discover -s scripts/ci -p "test_goldberg_installer.py" -v
+
   native_twdll:
     name: Native twdll Attila build
     runs-on: windows-latest
@@ -101,6 +110,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Assert exact checked-out revision
@@ -158,6 +168,112 @@ jobs:
           }
 
           Write-Host ("Native artifact contract PASS: {0}; machine=0x{1:x4}; luaopen_twdll present" -f $dll, $machine)
+
+      - name: Test dual-client lab in Windows PowerShell 5.1
+        shell: powershell
+        run: ./scripts/ci/test_dual_client_lab.ps1
+
+      - name: Test dual-client lab in PowerShell 7
+        shell: pwsh
+        run: ./scripts/ci/test_dual_client_lab.ps1
+
+      - name: Set up Python 3.14 for operator package
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+
+      - name: Fetch and verify the pinned original Goldberg archive
+        env:
+          PACKAGE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: pwsh
+        run: python scripts/ci/build_goldberg_client_lab.py --source-sha $env:PACKAGE_SOURCE_SHA --fetch-only --archive build/goldberg-upstream.zip
+
+      - name: Verify pinned Goldberg Steamworks trace instrumentation
+        env:
+          GOLDBERG_ARCHIVE_PATH: ${{ github.workspace }}/build/goldberg-upstream.zip
+        shell: pwsh
+        run: python scripts/ci/test_goldberg_steamworks_trace_patch.py
+
+      - name: Test Goldberg lab in Windows PowerShell 5.1
+        env:
+          GOLDBERG_ARCHIVE_PATH: ${{ github.workspace }}/build/goldberg-upstream.zip
+        shell: powershell
+        run: ./scripts/ci/test_goldberg_client_lab.ps1
+
+      - name: Test Goldberg lab in PowerShell 7
+        env:
+          GOLDBERG_ARCHIVE_PATH: ${{ github.workspace }}/build/goldberg-upstream.zip
+        shell: pwsh
+        run: ./scripts/ci/test_goldberg_client_lab.ps1
+
+      - name: Build exact-source Goldberg lab package
+        env:
+          PACKAGE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: pwsh
+        run: python scripts/ci/build_goldberg_client_lab.py --source-sha $env:PACKAGE_SOURCE_SHA --archive build/goldberg-upstream.zip
+
+      - name: Compile exact-source Windows installer
+        env:
+          PACKAGE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: pwsh
+        run: |
+          $package = "build/goldberg-client-lab/mk1212-goldberg-client-lab-$env:PACKAGE_SOURCE_SHA/mk1212-goldberg-client-lab-$env:PACKAGE_SOURCE_SHA.zip"
+          python scripts/ci/build_goldberg_installer.py --source-sha $env:PACKAGE_SOURCE_SHA --package $package
+
+      - name: Rebuild delivered payloads for installer upgrade regression
+        shell: pwsh
+        run: python scripts/ci/build_goldberg_upgrade_fixtures.py --archive build/goldberg-upstream.zip
+
+      - name: Test installed toolkit in Windows PowerShell 5.1
+        env:
+          PACKAGE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: powershell
+        run: ./scripts/ci/test_goldberg_setup.ps1 -PackageRootPath "build/goldberg-installer/$env:PACKAGE_SOURCE_SHA/payload" -PreviousPackageRoots @("build/goldberg-upgrade-fixtures/7f66f06afddc53fda220f22d1940242ebd87e4ab", "build/goldberg-upgrade-fixtures/f5158fa52138d87ef00fa154b3fb50b636dabc23")
+
+      - name: Test installed toolkit in PowerShell 7
+        env:
+          PACKAGE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: pwsh
+        run: ./scripts/ci/test_goldberg_setup.ps1 -PackageRootPath "build/goldberg-installer/$env:PACKAGE_SOURCE_SHA/payload" -PreviousPackageRoots @("build/goldberg-upgrade-fixtures/7f66f06afddc53fda220f22d1940242ebd87e4ab", "build/goldberg-upgrade-fixtures/f5158fa52138d87ef00fa154b3fb50b636dabc23")
+
+      - name: Exercise the compiled installer failure boundary
+        env:
+          PACKAGE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: pwsh
+        run: ./scripts/ci/test_goldberg_installer.ps1 -InstallerPath "build/goldberg-installer/$env:PACKAGE_SOURCE_SHA/MK1212-Setup-$($env:PACKAGE_SOURCE_SHA.Substring(0,12)).exe"
+
+      - name: Upload Windows installer and exact build identity
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mk1212-goldberg-installer-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            build/goldberg-installer/${{ github.event.pull_request.head.sha || github.sha }}/*.exe
+            build/goldberg-installer/${{ github.event.pull_request.head.sha || github.sha }}/installer-build.json
+            build/goldberg-installer/${{ github.event.pull_request.head.sha || github.sha }}/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Goldberg lab package with upstream source and notices
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mk1212-goldberg-client-lab-${{ github.event.pull_request.head.sha || github.sha }}
+          path: build/goldberg-client-lab/mk1212-goldberg-client-lab-${{ github.event.pull_request.head.sha || github.sha }}/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Build exact-source dual-client lab package
+        env:
+          PACKAGE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: pwsh
+        run: python scripts/ci/build_dual_client_lab.py --source-sha $env:PACKAGE_SOURCE_SHA
+
+      - name: Upload dual-client lab package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mk1212-dual-client-lab-${{ github.event.pull_request.head.sha || github.sha }}
+          path: build/dual-client-lab/mk1212-dual-client-lab-${{ github.event.pull_request.head.sha || github.sha }}/
+          if-no-files-found: error
+          retention-days: 30
 
   aggregate:
     name: Aggregate CI gate
