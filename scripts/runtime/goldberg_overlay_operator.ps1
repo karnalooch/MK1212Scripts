@@ -65,7 +65,7 @@ function Read-ExperimentalDll {
     }
     Assert-SafeFile $Archive
     if ((Hash-File $Archive) -ne $expectedArchive) { throw 'Goldberg ZIP SHA256 mismatch.' }
-    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
     $zip = [IO.Compression.ZipFile]::OpenRead($Archive)
     try {
         $matches = @($zip.Entries | Where-Object {
