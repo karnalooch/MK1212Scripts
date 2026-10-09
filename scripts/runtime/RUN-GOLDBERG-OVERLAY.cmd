@@ -16,10 +16,10 @@ echo R  Przywroc standardowe DLL i disable_overlay.txt
 echo Q  Wyjscie
 choice /C SELRQ /M "Wybierz"
 if errorlevel 5 exit /b 0
-if errorlevel 4 set "MODE=Restore" & goto RUN
-if errorlevel 3 set "MODE=Launch" & goto RUN
-if errorlevel 2 set "MODE=Enable" & goto RUN
-if errorlevel 1 set "MODE=Status" & goto RUN
+if errorlevel 4 (set "MODE=Restore" & goto RUN)
+if errorlevel 3 (set "MODE=Launch" & goto RUN)
+if errorlevel 2 (set "MODE=Enable" & goto RUN)
+if errorlevel 1 (set "MODE=Status" & goto RUN)
 :RUN
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT%" -Mode %MODE%
 echo.
