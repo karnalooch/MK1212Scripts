@@ -188,6 +188,12 @@ jobs:
         shell: pwsh
         run: python scripts/ci/build_goldberg_client_lab.py --source-sha $env:PACKAGE_SOURCE_SHA --fetch-only --archive build/goldberg-upstream.zip
 
+      - name: Verify pinned Goldberg Steamworks trace instrumentation
+        env:
+          GOLDBERG_ARCHIVE_PATH: ${{ github.workspace }}/build/goldberg-upstream.zip
+        shell: pwsh
+        run: python scripts/ci/test_goldberg_steamworks_trace_patch.py
+
       - name: Test Goldberg lab in Windows PowerShell 5.1
         env:
           GOLDBERG_ARCHIVE_PATH: ${{ github.workspace }}/build/goldberg-upstream.zip
