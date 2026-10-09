@@ -761,5 +761,39 @@ finally {
     if (Test-Path -LiteralPath $goldTemp) { Remove-Item -LiteralPath $goldTemp -Recurse -Force }
 }
 
+# Overlay sidecar: only static/archive checks. Never touch operator game copies here.
+Invoke-GoldCheck 'Experimental overlay operator parses in the current Windows PowerShell engine' {
+    $sidecar = Join-Path $RuntimeDirectory 'goldberg_overlay_operator.ps1'
+    $tokens = $null; $parseErrors = $null
+    [void][System.Management.Automation.Language.Parser]::ParseFile($sidecar, [ref]$tokens, [ref]$parseErrors)
+    Assert-GoldEqual @($parseErrors).Count 0 'overlay script parser errors'
+    Assert-GoldTrue (Test-Path -LiteralPath (Join-Path $RuntimeDirectory 'RUN-GOLDBERG-OVERLAY.cmd')) 'operator menu exists'
+}
+Invoke-GoldCheck 'Pinned original Goldberg archive contains exactly one experimental x86 steam_api DLL' {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $archive = [System.IO.Compression.ZipFile]::OpenRead($GoldbergArchivePath)
+    try {
+        $candidates = @($archive.Entries | Where-Object {
+            $_.FullName.Replace('\', '/') -match '(?i)(^|/)experimental/(x86/)?steam_api[.]dll {0} run, {1} failed. Attila/Goldberg multiplayer NOT RUN.' -f $script:GoldbergChecks, $script:GoldbergFailures.Count)
+if ($script:GoldbergFailures.Count -gt 0) { throw ($script:GoldbergFailures -join [Environment]::NewLine) }
+
+        })
+        Assert-GoldEqual $candidates.Count 1 'experimental x86 archive entry'
+        $stream = $candidates[0].Open()
+        try {
+            $memory = New-Object System.IO.MemoryStream
+            try { $stream.CopyTo($memory); $bytes = $memory.ToArray() }
+            finally { $memory.Dispose() }
+        } finally { $stream.Dispose() }
+        Assert-GoldTrue ($bytes.Length -gt 65536) 'experimental DLL minimum size'
+        Assert-GoldEqual $bytes[0] 77 'experimental DLL MZ byte 1'
+        Assert-GoldEqual $bytes[1] 90 'experimental DLL MZ byte 2'
+        $pe = [BitConverter]::ToInt32($bytes,60)
+        Assert-GoldTrue ($pe -ge 64 -and $pe + 24 -le $bytes.Length) 'experimental PE header range'
+        Assert-GoldEqual ([BitConverter]::ToUInt32($bytes,$pe)) 0x4550 'experimental PE signature'
+        Assert-GoldEqual ([BitConverter]::ToUInt16($bytes,$pe+4)) 332 'experimental x86 machine'
+    } finally { $archive.Dispose() }
+}
+
 Write-Host ('Goldberg client lab checks: {0} run, {1} failed. Attila/Goldberg multiplayer NOT RUN.' -f $script:GoldbergChecks, $script:GoldbergFailures.Count)
 if ($script:GoldbergFailures.Count -gt 0) { throw ($script:GoldbergFailures -join [Environment]::NewLine) }
