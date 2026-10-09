@@ -761,22 +761,20 @@ finally {
     if (Test-Path -LiteralPath $goldTemp) { Remove-Item -LiteralPath $goldTemp -Recurse -Force }
 }
 
-# Overlay sidecar: only static/archive checks. Never touch operator game copies here.
-Invoke-GoldCheck 'Experimental overlay operator parses in the current Windows PowerShell engine' {
+# Overlay sidecar: parse and archive checks only; never execute the sidecar in CI.
+Invoke-GoldCheck 'Experimental overlay operator parses in this Windows PowerShell engine' {
     $sidecar = Join-Path $RuntimeDirectory 'goldberg_overlay_operator.ps1'
     $tokens = $null; $parseErrors = $null
     [void][System.Management.Automation.Language.Parser]::ParseFile($sidecar, [ref]$tokens, [ref]$parseErrors)
     Assert-GoldEqual @($parseErrors).Count 0 'overlay script parser errors'
     Assert-GoldTrue (Test-Path -LiteralPath (Join-Path $RuntimeDirectory 'RUN-GOLDBERG-OVERLAY.cmd')) 'operator menu exists'
 }
-Invoke-GoldCheck 'Pinned original Goldberg archive contains exactly one experimental x86 steam_api DLL' {
+Invoke-GoldCheck 'Pinned original Goldberg archive has one experimental x86 DLL' {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $archive = [System.IO.Compression.ZipFile]::OpenRead($GoldbergArchivePath)
     try {
         $candidates = @($archive.Entries | Where-Object {
-            $_.FullName.Replace('\', '/') -match '(?i)(^|/)experimental/(x86/)?steam_api[.]dll {0} run, {1} failed. Attila/Goldberg multiplayer NOT RUN.' -f $script:GoldbergChecks, $script:GoldbergFailures.Count)
-if ($script:GoldbergFailures.Count -gt 0) { throw ($script:GoldbergFailures -join [Environment]::NewLine) }
-
+            $_.FullName.Replace('\', '/') -match '(?i)(^|/)experimental/(x86/)?steam_api[.]dll$'
         })
         Assert-GoldEqual $candidates.Count 1 'experimental x86 archive entry'
         $stream = $candidates[0].Open()
