@@ -16,11 +16,9 @@ import sys
 UPSTREAM_COMMIT = "475342f0d8b2bd7eb0d93bd7cfdd61e3ae7cda24"
 PINNED_BLOBS = {
     "dll/steam_matchmaking.h": "94bd026b0d531ae21bf25e231d2320154d1cce28",
-    "dll/steam_matchmaking_servers.cpp": "99e1f5c39f2f17d4d142eb4e2ff16d7a66203fa7",  # verified by source-tree check below
+    "dll/steam_matchmaking_servers.cpp": "23441f353ad853b74437260c89aac5fb937ec2de",
     "dll/steam_friends.h": "5f28c95f80d393cf4a7274fa08ff4d3f769e012b",
 }
-# The one Git blob not yet read is checked dynamically against the pinned bundle checkout
-# via git rev-parse (see verify_git_commit) before anything is copied.
 
 HEADER = r'''// MK1212 narrow instrumentation for an isolated, pinned Goldberg build.
 // LGPL-3.0-or-later (derivative of Goldberg); no external contacts or secrets.
