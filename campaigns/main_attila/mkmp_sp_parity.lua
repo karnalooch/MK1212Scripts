@@ -21,6 +21,9 @@ MKMP_SP_PARITY = {
     challenge_judgement_day = false,
     challenge_no_retreat = false,
     challenge_this_is_total_war = false,
+    pope_crusades_ui = false,
+    pope_capital_visibility = false,
+    global_ui_religion_change = false,
 }
 
 -- Intentionally unsupported even in experimental MP parity mode:
