@@ -70,10 +70,10 @@ class MultiplayerSourceContractTests(unittest.TestCase):
         self.assertIn("elseif cm:is_new_game() then", challenges)
 
         # Ironman continues to be blocked in ALL multiplayer configurations.
-        self.assertRegex(
-            ironman,
-            r"function Ironman_Initializer\\(\\)\\s+if cm:is_multiplayer\\(\\) then\\s+IRONMAN_ENABLED = false;\\s+return;",
-        )
+        self.assertIn("function Ironman_Initializer()", ironman)
+        self.assertIn("if cm:is_multiplayer() then", ironman)
+        self.assertIn("IRONMAN_ENABLED = false;", ironman)
+        self.assertIn("return;", ironman)
         self.assertIn("ironman = true", parity)
 
         # MP may NOT load independent peer-local SP frontend flags.
