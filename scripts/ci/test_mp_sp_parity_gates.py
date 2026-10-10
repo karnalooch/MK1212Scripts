@@ -42,6 +42,28 @@ class MPParityGatesTests(unittest.TestCase):
                 "challenge_judgement_day", "challenge_no_retreat",
                 "challenge_this_is_total_war",
             ),
+            "mechanics/pope/mechanics_pope.lua": (
+                "pope_crusades_ui", "pope_capital_visibility",
+            ),
+            "mechanics/pope/mechanics_pope_favour.lua": (
+                "pope_favour_decisions",
+            ),
+            "common/ui/mk1212_global_ui.lua": (
+                "global_ui_religion_change",
+            ),
+            "byzantium/byzantium_reconquest.lua": ("kingdom_decisions",),
+            "mechanics/mechanics_dynamic_faction_names.lua": (
+                "dynamic_faction_decisions",
+            ),
+            "kingdoms/kingdom_armenia.lua": ("kingdom_decisions",),
+            "kingdoms/kingdom_byzantium.lua": ("kingdom_decisions",),
+            "kingdoms/kingdom_golden_horde.lua": ("kingdom_decisions",),
+            "kingdoms/kingdom_ilkhanate.lua": ("kingdom_decisions",),
+            "kingdoms/kingdom_italy.lua": ("kingdom_decisions",),
+            "kingdoms/kingdom_persia.lua": ("kingdom_decisions",),
+            "kingdoms/kingdom_poland.lua": ("kingdom_decisions",),
+            "kingdoms/kingdom_serbia.lua": ("kingdom_decisions",),
+            "kingdoms/kingdom_spain.lua": ("kingdom_decisions",),
         }
         registry = source("mkmp_sp_parity.lua")
         for path, features in mapping.items():
@@ -50,6 +72,41 @@ class MPParityGatesTests(unittest.TestCase):
                 for feature in features:
                     self.assertIn(f'MKMP_SP_Parity_Enabled("{feature}")', content)
                     self.assertIn(f"{feature} = false", registry)
+
+    def test_all_experimental_still_requires_explicit_opt_in(self):
+        config = source("mkmp_sp_parity.lua")
+        self.assertIn("enabled = false", config)
+        self.assertIn("all_experimental = false", config)
+        self.assertIn("MKMP_SP_PARITY.enabled ~= true", config)
+        self.assertIn('feature == "all_experimental"', config)
+        self.assertIn('type(MKMP_SP_PARITY[feature]) ~= "boolean"', config)
+        self.assertIn('MKMP_SP_PARITY.decisions == true', config)
+
+    def test_manual_kingdom_gate_disables_automatic_mp_branch(self):
+        paths = (
+            "byzantium/byzantium_reconquest.lua",
+            "kingdoms/kingdom_armenia.lua",
+            "kingdoms/kingdom_byzantium.lua",
+            "kingdoms/kingdom_golden_horde.lua",
+            "kingdoms/kingdom_ilkhanate.lua",
+            "kingdoms/kingdom_italy.lua",
+            "kingdoms/kingdom_persia.lua",
+            "kingdoms/kingdom_poland.lua",
+            "kingdoms/kingdom_spain.lua",
+        )
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertIn(
+                    '(cm:is_multiplayer() and not MKMP_SP_Parity_Enabled("kingdom_decisions")) or',
+                    source(path),
+                )
+
+    def test_manual_dynamic_faction_gate_disables_automatic_mp_branch(self):
+        names = source("mechanics/mechanics_dynamic_faction_names.lua")
+        self.assertIn(
+            '(cm:is_multiplayer() and not MKMP_SP_Parity_Enabled("dynamic_faction_decisions"))',
+            names,
+        )
 
     def test_sp_frontend_not_loaded_as_mp_authority(self):
         lucky = source("luckynations/lucky_nations.lua")
