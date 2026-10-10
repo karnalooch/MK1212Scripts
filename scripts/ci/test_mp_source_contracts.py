@@ -47,20 +47,46 @@ class MultiplayerSourceContractTests(unittest.TestCase):
         challenges = read("campaigns/main_attila/challenges/main.lua")
         ironman = read("campaigns/main_attila/ironman/main.lua")
         lucky = read("campaigns/main_attila/luckynations/main.lua")
+        lucky_feature = read("campaigns/main_attila/luckynations/lucky_nations.lua")
+        parity = read("campaigns/main_attila/mkmp_sp_parity.lua")
 
-        self.assertIn("if cm:is_multiplayer() then", challenges)
-        self.assertIn('CHALLENGES_ENABLED["judgement_day"] = false;', challenges)
-        self.assertIn('CHALLENGES_ENABLED["no_retreat"] = false;', challenges)
-        self.assertIn('CHALLENGES_ENABLED["this_is_total_war"] = false;', challenges)
+        # Preserve the original always-off behavior for ordinary multiplayer.
+        # Tests MUST check the default gate, not just the presence of the API.
+        self.assertIn("enabled = false", parity)
+        self.assertIn("MKMP_SP_PARITY.enabled ~= true", parity)
+        self.assertIn("MKMP_SP_PARITY[feature] == true", parity)
+        self.assertIn("blocked_features[feature]", parity)
 
+        for feature, field in (
+            ("challenge_judgement_day", "judgement_day"),
+            ("challenge_no_retreat", "no_retreat"),
+            ("challenge_this_is_total_war", "this_is_total_war"),
+        ):
+            self.assertIn(
+                f'CHALLENGES_ENABLED["{field}"] = MKMP_SP_Parity_Enabled("{feature}");',
+                challenges,
+            )
+            self.assertIn(f"{feature} = false", parity)
+        self.assertIn("elseif cm:is_new_game() then", challenges)
+
+        # Ironman continues to be blocked in ALL multiplayer configurations.
         self.assertRegex(
             ironman,
-            r"function Ironman_Initializer\(\)\s+if cm:is_multiplayer\(\) then\s+IRONMAN_ENABLED = false;\s+return;",
+            r"function Ironman_Initializer\\(\\)\\s+if cm:is_multiplayer\\(\\) then\\s+IRONMAN_ENABLED = false;\\s+return;",
         )
-        self.assertRegex(
+        self.assertIn("ironman = true", parity)
+
+        # MP may NOT load independent peer-local SP frontend flags.
+        self.assertIn(
+            'if cm:is_multiplayer() and not MKMP_SP_Parity_Enabled("lucky_nations") then',
             lucky,
-            r"function Lucky_Nations_Initializer\(\)\s+if cm:is_multiplayer\(\) then\s+LUCKY_NATIONS_ENABLED = false;\s+return;",
         )
+        self.assertIn("LUCKY_NATIONS_ENABLED = false;", lucky)
+        self.assertIn(
+            'LUCKY_NATIONS_ENABLED = MKMP_SP_Parity_Enabled("lucky_nations");',
+            lucky_feature,
+        )
+        self.assertIn("elseif cm:is_new_game() then", lucky_feature)
 
     def test_vassal_model_reconciliation_has_no_real_time_vassal_trigger(self) -> None:
         source = read("campaigns/main_attila/common/mk1212_vassal_tracking.lua")
