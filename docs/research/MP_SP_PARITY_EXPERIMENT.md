@@ -26,6 +26,31 @@ All existing SP behavior and the tested baseline MP guard behavior are preserved
 | Lucky Nations | `luckynations/main.lua` + `lucky_nations.lua` | `lucky_nations` | BLOCKED pending same-source treasury/effect events and persistence |
 | Three challenges | `challenges/main.lua` | `challenge_judgement_day`, `challenge_no_retreat`, `challenge_this_is_total_war` | BLOCKED pending AI, battle, diplomacy and save/load proof; conflicts between modes must be assessed |
 
+### Additional nested guards discovered by source audit
+
+The first entrypoint inventory was not sufficient: SP-only paths were found **inside**
+modules that already execute in MP. These have now been given explicit lab gates:
+
+| Nested feature | Source | Opt-in key |
+| --- | --- | --- |
+| Manual kingdom formation/restoration decisions | `kingdoms/kingdom_{armenia,byzantium,golden_horde,ilkhanate,italy,persia,poland,serbia,spain}.lua`; `byzantium/byzantium_reconquest.lua` | `kingdom_decisions` |
+| Human kingdom/empire rank choices vs automatic MP promotion | `mechanics/mechanics_dynamic_faction_names.lua` | `dynamic_faction_decisions` |
+| Ask Pope for Money decision and manual favour UI | `mechanics/pope/mechanics_pope_favour.lua` | `pope_favour_decisions` |
+| Crusades and Pope UI listeners | `mechanics/pope/mechanics_pope.lua` | `pope_crusades_ui` |
+| Pope capital visibility for human Catholic faction | `mechanics/pope/mechanics_pope.lua` | `pope_capital_visibility` |
+| Religion conversion UI callback | `common/ui/mk1212_global_ui.lua` | `global_ui_religion_change` |
+
+Manual kingdom/DFN/Pope decisions **require the common `decisions` feature**
+to be active. When the matching opt-in is enabled, the corresponding
+**automatic MP action is disabled for human-controlled factions** to
+avoid executing both the manual and automatic action.
+
+The England/France story event's co-op protection remains intentionally
+untouched: its MP condition is not a simple missing SP feature.
+`mk1212_slots.lua` hardcoded-limit changes remain blocked in MP.
+An unused duplicate `mechanics_dynamic_faction_names.lua` at the campaign
+root is not treated as active runtime authority.
+
 Already initialized in ordinary MP (not new/opt-in): Byzantine, kingdoms, Mongol/Timurid,
 nicknames, standard story; and Dynamic Faction Names, Islamic, Plague, Pope,
 Settle Upkeep, Silk Road, War Weariness.
@@ -39,6 +64,20 @@ This list is **entrypoint inventory**, not a claim that every nested MP conditio
 Run `python scripts/ci/audit_sp_mp_gates.py` to enumerate additional nested gates and
 frontend-only access. Those findings require individual disposition. The scan is candidate
 discovery and includes false positives from comments.
+
+## One-switch FULL experimental smoke (unproven)
+
+For an **isolated disposable dual-PC test only**, the registry also supports:
+`enabled = true` plus `all_experimental = true`. This activates **every
+known/wired experimental gate**, not Ironman, Change Capital, legacy networking,
+or unsupported engine-only systems. Both .pack files MUST have identical bytes.
+It is not safe for persistent saves and can crash/desync; the safe default is
+both flags `false`.
+
+The preferable approach is one feature at a time, not full smoke: keep
+`all_experimental = false`, turn on `enabled = true`, and enable only
+the feature flag and its required dependencies. Do not claim all SP behavior
+is restored merely because registered listeners are active.
 
 ## Experimental usage — ONLY after fixing the named feature
 
