@@ -98,6 +98,7 @@ cm:register_first_tick_callback(
 --	additional script files to load
 -------------------------------------------------------
 
+require("mkmp_sp_parity");
 require("mk1212_start");
 require("common/main");
 require("att_traits");

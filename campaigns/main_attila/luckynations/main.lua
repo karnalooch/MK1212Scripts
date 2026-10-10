@@ -27,7 +27,7 @@ LUCKY_NATIONS = {
 };
 
 function Lucky_Nations_Initializer()
-	if cm:is_multiplayer() then
+	if cm:is_multiplayer() and not MKMP_SP_Parity_Enabled("lucky_nations") then
 		LUCKY_NATIONS_ENABLED = false;
 		return;
 	end

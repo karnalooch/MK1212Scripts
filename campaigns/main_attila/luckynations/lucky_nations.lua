@@ -10,7 +10,10 @@
 LUCKY_NATIONS_ENABLED = false;
 
 function Add_Lucky_Nations_Listeners()
-	if cm:is_new_game() then
+	if cm:is_multiplayer() then
+        -- Experimental MP must NEVER consume a peer-local SP frontend setting.
+        LUCKY_NATIONS_ENABLED = MKMP_SP_Parity_Enabled("lucky_nations");
+	elseif cm:is_new_game() then
 		local svr = ScriptedValueRegistry:new();
 
 		LUCKY_NATIONS_ENABLED = svr:LoadBool("SBOOL_LUCKY_NATIONS_ENABLED");
