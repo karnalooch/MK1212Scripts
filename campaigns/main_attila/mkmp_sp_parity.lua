@@ -8,6 +8,7 @@
 
 MKMP_SP_PARITY = {
     enabled = false, -- explicit opt-in; NEVER infer from a local user setting
+    all_experimental = false, -- DANGEROUS: one-switch disposable-campaign smoke
 
     annex_vassals = false,
     buffer_states = false,
@@ -24,6 +25,9 @@ MKMP_SP_PARITY = {
     pope_crusades_ui = false,
     pope_capital_visibility = false,
     global_ui_religion_change = false,
+    kingdom_decisions = false,
+    dynamic_faction_decisions = false,
+    pope_favour_decisions = false,
 }
 
 -- Intentionally unsupported even in experimental MP parity mode:
@@ -46,5 +50,20 @@ function MKMP_SP_Parity_Enabled(feature)
     if not cm or type(cm.is_multiplayer) ~= "function" or not cm:is_multiplayer() then
         return false
     end
-    return MKMP_SP_PARITY[feature] == true
+    -- Never let all_experimental turn an unknown or blocked key into permission.
+    if feature == "enabled" or feature == "all_experimental"
+        or type(MKMP_SP_PARITY[feature]) ~= "boolean" then
+        return false
+    end
+    local all = MKMP_SP_PARITY.all_experimental == true
+    local enabled = all or MKMP_SP_PARITY[feature] == true
+    if not enabled then
+        return false
+    end
+    -- Manual decisions need the common decision UI/listener layer.
+    if feature == "kingdom_decisions" or feature == "dynamic_faction_decisions"
+        or feature == "pope_favour_decisions" then
+        return all or MKMP_SP_PARITY.decisions == true
+    end
+    return true
 end
