@@ -171,6 +171,34 @@ See [comparator](../../scripts/ci/compare_mp_debug_logs.py) and
 
 ## 4. Evidence still required from two real computers
 
+### Final source-advisory review
+
+The exact committed diff guard reports three advisory patterns. Their review
+does not disable the guard or convert missing runtime proof into a pass:
+
+| Addition | Disposition |
+| --- | --- |
+| `pairs` in `MK1212_SaveDenseLength` | Counts and validates array keys only; iteration order does not select values, perform engine commands or control serialized order. The writer then traverses dense numeric indices. |
+| Buffer `cm:add_time_trigger` | One bounded, named operation with captured targets and persistent phase ownership. Duplicate delivery is tested. Its local UI intent still lacks proven MP transport, so the feature remains experimental. |
+| Pope UI `CreateComponent` | Reuses named icons and creates only missing presentation placeholders within the fixed row/count bounds. It consumes no campaign RNG; the unfinished College entrypoint remains inactive by default. |
+
+The final local repair suite passed **88 MP/source/production-Lua tests** and
+**19 pack tests**. The numeric locale test executed with
+`MK1212_REQUIRE_NUMERIC_LOCALE=1`. Independent cleanup review additionally
+injected an immortality-enable call that mutates and then throws; production
+code now attempts restoration even for that first-command failure and preserves
+later queued operations. Common loading also validates all its tables before
+replacing that module's globals after a late malformed queue.
+
+Both **Windows PowerShell 5.1** and **PowerShell 7** ran all **10** synthetic
+installer cases in GitHub Actions run
+[38105637218](https://github.com/karnalooch/MK1212Scripts/actions/runs/38105637218).
+Those are filesystem tests, not game execution. That first run's governance
+job rejected the old PR-body snapshot for lacking the exact manual-merge line;
+the candidate still requires the complete Aggregate gate for its final SHA.
+
+### Paired runtime matrix
+
 Use two genuine Steam/Attila installations. Each run needs both peers' pack
 hashes, build/profile identity, game build, ordered mod list, configuration,
 starting-save identity, roles, precise actions, and paired logs. The intended
