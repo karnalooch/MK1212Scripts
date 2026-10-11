@@ -54,6 +54,10 @@ function Add_Pope_Listeners()
 		Add_Crusade_Event_Listeners();
 		--Add_Pope_College_Listeners();
 		Add_Pope_UI_Listeners();
+    elseif MKMP_SP_Parity_Enabled("pope_crusades_ui") then
+        -- Experimental: crusade events and papal UI are a coupled SP subsystem.
+        Add_Crusade_Event_Listeners();
+        Add_Pope_UI_Listeners();
 	else
 		AUTOMATIC_POPE_SELECTION = true;
 	end
@@ -153,7 +157,7 @@ function FactionTurnStart_Pope(context)
 	end
 
 	if context:faction():state_religion() == "att_rel_chr_catholic" and PAPAL_STATES_DEAD == false and context:faction():is_human() == true then
-		if cm:is_multiplayer() == false then
+		if not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("pope_capital_visibility") then
 			cm:make_region_visible_in_shroud(context:faction():name(), papacy:home_region():name());
 		end
 	end

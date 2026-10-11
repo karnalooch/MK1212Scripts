@@ -33,7 +33,7 @@ function Add_Kingdom_Spain_Listeners()
 		);
 	end
 
-	if cm:is_multiplayer() == false then
+	if (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("kingdom_decisions")) then
 		Register_Decision(
 			"form_kingdom_spain", 
 			function() 	
@@ -91,7 +91,7 @@ function Spanish_Regions_Check(context)
 	SPANISH_KINGDOM_REGIONS_OWNED = has_regions;
 		
 	if has_regions == true then
-		if cm:is_multiplayer() == true or context:faction():is_human() == false then
+		if (cm:is_multiplayer() and not MKMP_SP_Parity_Enabled("kingdom_decisions")) or context:faction():is_human() == false then
 			Spanish_Kingdom_Formed(faction_name);
 		elseif not mkHRE or faction_name ~= mkHRE.emperor_key then
 			Enable_Decision("form_kingdom_spain");
@@ -104,7 +104,7 @@ function Spanish_Kingdom_Formed(faction_name)
 	SPANISH_KINGDOM_FACTION = faction_name;
 	Rename_Faction(faction_name, faction_name.."_lvl"..tostring(FACTIONS_DFN_LEVEL[faction_name]));
 
-	if cm:is_multiplayer() == false then
+	if (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("kingdom_decisions")) then
 		Remove_Decision("form_kingdom_spain");
 		Add_Decision("found_an_empire", faction_name, false, false);
 	end

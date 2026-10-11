@@ -38,7 +38,7 @@ function Add_Byzantium_Reconquest_Listeners()
 		);
 	end
 
-	if cm:is_multiplayer() == false then
+	if (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("kingdom_decisions")) then
 		Register_Decision(
 			"restore_roman_empire", 
 			function() 
@@ -250,7 +250,7 @@ function Byzantium_Regions_Check(faction_name)
 	end;
 
 	if ROMAN_EMPIRE_RESTORED == false and LATIN_EMPIRE_DEAD == true and has_constantinople == true and has_regions_africa == true and has_regions_anatolia == true and has_regions_dalmatia == true and has_regions_egypt == true and has_regions_italy == true and has_regions_greece == true and has_regions_oriens == true then
-		if cm:is_multiplayer() == true or cm:model():world():faction_by_key(faction_name):is_human() == false then
+		if (cm:is_multiplayer() and not MKMP_SP_Parity_Enabled("kingdom_decisions")) or cm:model():world():faction_by_key(faction_name):is_human() == false then
 			Roman_Empire_Restored(faction_name);
 		elseif (not mkHRE or (mkHRE and HasValue(mkHRE.factions, faction_name) ~= true)) then
 			Enable_Decision("restore_roman_empire");
@@ -263,7 +263,7 @@ function Roman_Empire_Restored(faction_name)
 	Rename_Faction(BYZANTINE_EMPIRE_FACTION, "mk_faction_roman_empire");
 	FACTIONS_DFN_LEVEL[BYZANTINE_EMPIRE_FACTION] = 5;
 
-	if cm:is_multiplayer() == false then
+	if (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("kingdom_decisions")) then
 		Remove_Decision("restore_roman_empire");
 
 		if IRONMAN_ENABLED then

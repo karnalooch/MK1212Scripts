@@ -85,6 +85,9 @@ flowchart LR
 - [twdll runtime/code audit](TWDLL_RUNTIME_AUDIT.md)
 - [Dual-peer multiplayer simulation harness](MP_DUAL_PEER_SIMULATION.md)
 - [Multiplayer file debug logging and peer comparator](MP_DEBUG_LOGGING.md)
+- [SP to MP experiment and script-action repairs](MP_SP_PARITY_EXPERIMENT.md)
+- [Script-action findings and evidence limits](MP_SCRIPT_ACTION_FINDINGS.md)
+- [Reproducible script packs and installation](../runtime/PACK_RELEASE.md)
 - [Upstream author handoff: multiplayer hardening](MULTIPLAYER_HARDENING_AUTHOR_HANDOFF.md)
 
 ## Evidence states

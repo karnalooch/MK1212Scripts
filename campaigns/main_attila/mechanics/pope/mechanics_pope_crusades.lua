@@ -982,7 +982,7 @@ function Crusade_Defense_Force(cqi)
 	cm:disable_movement_for_character("character_cqi:"..cqi);
 	cm:set_character_immortality("character_cqi:"..cqi, true);
 	
-	local difficulty = cm:model():difficulty_level();
+	local difficulty = MK1212_Campaign_Difficulty();
 	local xp_lvl = 1;
 
 	if difficulty == 0 then -- Normal
