@@ -1,0 +1,1318 @@
+{
+  "additional_repository_lua": [
+    "campaigns/main_attila/common/mkmp_debug.lua",
+    "campaigns/main_attila/common/mkmp_runtime.lua",
+    "campaigns/main_attila/mechanics_dynamic_faction_names.lua",
+    "campaigns/main_attila/mkmp_sp_parity.lua"
+  ],
+  "all_base_lua_paths_covered": true,
+  "base_pack": {
+    "dependencies_count": 0,
+    "file_count": 1589,
+    "file_index_size": 81585,
+    "filename": "1-1212scripts.pack",
+    "flags": 0,
+    "format": "PFH4",
+    "sha256": "3ffe61270c953602783fcfde4723abf1d5bc698b958ef618f329d2e5b6369255",
+    "size": 343198063,
+    "timestamp": 1753184927,
+    "type": "Mod",
+    "type_value": 3
+  },
+  "lua_bytes": 2624921,
+  "lua_count": 154,
+  "lua_paths": [
+    {
+      "base_path": "campaigns/main_attila/byzantium/byzantium_greek_fire.lua",
+      "base_sha256": "ff3e1e6edea6d875d333372059c67e40a50d06e26a02da334b3a975f2812e934",
+      "base_size": 8496,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/byzantium/byzantium_greek_fire.lua",
+      "repository_sha256": "a95fd4461a92e19311e0ca3fbbf708d8c2816ad929db8148b884d6bccad47e2a"
+    },
+    {
+      "base_path": "campaigns/main_attila/byzantium/byzantium_reconquest.lua",
+      "base_sha256": "9253c0161ef4f02c42e46e6c131dc2a7a70e61152e4ffc22657a4a21f9edaed1",
+      "base_size": 13401,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/byzantium/byzantium_reconquest.lua",
+      "repository_sha256": "fbed8d43419d239cd666f8bf398c8c26b6b2ef2649261678e0f4894be4fc239f"
+    },
+    {
+      "base_path": "campaigns/main_attila/byzantium/byzantium_regions.lua",
+      "base_sha256": "15471084576e833d776c9938b890614a9cffd5b75623f01f76ffd3e3261e162b",
+      "base_size": 5524,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/byzantium/byzantium_regions.lua",
+      "repository_sha256": "15471084576e833d776c9938b890614a9cffd5b75623f01f76ffd3e3261e162b"
+    },
+    {
+      "base_path": "campaigns/main_attila/byzantium/main.lua",
+      "base_sha256": "28706603674f7e251aff8937d19d911577825ecdf9b0ff6dc815f793d534f26a",
+      "base_size": 899,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/byzantium/main.lua",
+      "repository_sha256": "28706603674f7e251aff8937d19d911577825ecdf9b0ff6dc815f793d534f26a"
+    },
+    {
+      "base_path": "campaigns/main_attila/challenges/battles/battle_no_retreat.lua",
+      "base_sha256": "f2a219b4203c5808f7f0e42685efe7b262e17e53bdf48590ec538132a1dd7602",
+      "base_size": 438,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/challenges/battles/battle_no_retreat.lua",
+      "repository_sha256": "f2a219b4203c5808f7f0e42685efe7b262e17e53bdf48590ec538132a1dd7602"
+    },
+    {
+      "base_path": "campaigns/main_attila/challenges/challenge_judgement_day.lua",
+      "base_sha256": "f77141cfb088d07031a3341dff0130857e8fac8fb454a3460a220ea61648a724",
+      "base_size": 1419,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/challenges/challenge_judgement_day.lua",
+      "repository_sha256": "d19b0876d06798982c446f1ac7b85c2009536644545a481aee6330c1fa1b4730"
+    },
+    {
+      "base_path": "campaigns/main_attila/challenges/challenge_no_retreat.lua",
+      "base_sha256": "8ce4239c095d72e99e37e2f9ef69779ef310f7e5754ebacf950b29c393944730",
+      "base_size": 1495,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/challenges/challenge_no_retreat.lua",
+      "repository_sha256": "8ce4239c095d72e99e37e2f9ef69779ef310f7e5754ebacf950b29c393944730"
+    },
+    {
+      "base_path": "campaigns/main_attila/challenges/challenge_this_is_total_war.lua",
+      "base_sha256": "214ea5fff82700d858a14ab38a3c4acb8b461cf630dea68f2fd9dbc991b17637",
+      "base_size": 3249,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/challenges/challenge_this_is_total_war.lua",
+      "repository_sha256": "214ea5fff82700d858a14ab38a3c4acb8b461cf630dea68f2fd9dbc991b17637"
+    },
+    {
+      "base_path": "campaigns/main_attila/challenges/main.lua",
+      "base_sha256": "31007bc737ccdaff95f299fac1bf52eafcedae90d7b801bd3dad03cbbf62e82d",
+      "base_size": 1684,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/challenges/main.lua",
+      "repository_sha256": "b3db1d4771fd8e91680bd77b94beaec500f9c93cafbce9b92e59f5a653868e11"
+    },
+    {
+      "base_path": "campaigns/main_attila/civil_war_fix.lua",
+      "base_sha256": "8604a659fd70a310a5f932362b5d09da67df90e6cf0ef9560b752b21b3290aa9",
+      "base_size": 4254,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/civil_war_fix.lua",
+      "repository_sha256": "8604a659fd70a310a5f932362b5d09da67df90e6cf0ef9560b752b21b3290aa9"
+    },
+    {
+      "base_path": "campaigns/main_attila/civil_war_string.lua",
+      "base_sha256": "a02baf2b2a83d01d3b4ed95d745028ea4978462ff9b49dc4ed4fe8fb1c93c7a6",
+      "base_size": 30950,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/civil_war_string.lua",
+      "repository_sha256": "a02baf2b2a83d01d3b4ed95d745028ea4978462ff9b49dc4ed4fe8fb1c93c7a6"
+    },
+    {
+      "base_path": "campaigns/main_attila/common/main.lua",
+      "base_sha256": "7eea6b9ca4f8df5bb850d4600b4499a84d0b4062df5e30eea6760fb5becec3ae",
+      "base_size": 1228,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/common/main.lua",
+      "repository_sha256": "d1d967ddf5522eafe7cdb60f54f2bd4ebe357208fcdabe6288a2357e254e0f28"
+    },
+    {
+      "base_path": "campaigns/main_attila/common/mk1212_campaign_cutscenes.lua",
+      "base_sha256": "e9eb037d2d9d96abcb52f094eae743514d783d16f35907fe48118547b37ee6db",
+      "base_size": 2696,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/common/mk1212_campaign_cutscenes.lua",
+      "repository_sha256": "7466dd817baa8c1d9ce679bffc3e62f7344f77b1004a7ac954e2038f8a294132"
+    },
+    {
+      "base_path": "campaigns/main_attila/common/mk1212_common.lua",
+      "base_sha256": "c6e4bbfcf7b84cc55c81bbfd2b253f8ae1a3329bc21f679e3993f67ee3fee41b",
+      "base_size": 30689,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/common/mk1212_common.lua",
+      "repository_sha256": "e3f674176ef91d1280e9b9fde732c677117a7bbdcc3b611bbbc14983aec2b900"
+    },
+    {
+      "base_path": "campaigns/main_attila/common/mk1212_common_lists.lua",
+      "base_sha256": "0905043e820a5b5e782567c70c487a890157c433fe7c182d8324e11b997fe0d4",
+      "base_size": 45237,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/common/mk1212_common_lists.lua",
+      "repository_sha256": "0905043e820a5b5e782567c70c487a890157c433fe7c182d8324e11b997fe0d4"
+    },
+    {
+      "base_path": "campaigns/main_attila/common/mk1212_localisation_lists.lua",
+      "base_sha256": "5f19271c3a56301170d509d99f017e3187374f0aba3e605aa536770a46a35f5e",
+      "base_size": 482600,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/common/mk1212_localisation_lists.lua",
+      "repository_sha256": "c33eeadaedf0b3d19ed7a350412c8a8d402f6e818b07319335ab59b74940f0b0"
+    },
+    {
+      "base_path": "campaigns/main_attila/common/mk1212_networking.lua",
+      "base_sha256": "5d7544a38147239535f485a28728313d827ec9d640ba6a59199c4bf2560e5d6a",
+      "base_size": 1963,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/common/mk1212_networking.lua",
+      "repository_sha256": "5d7544a38147239535f485a28728313d827ec9d640ba6a59199c4bf2560e5d6a"
+    },
+    {
+      "base_path": "campaigns/main_attila/common/mk1212_update_region_loc.lua",
+      "base_sha256": "5fd2f4b5b41b28e77daba3874ede48e1555e3c1b252f56bdda3802bae5e6def2",
+      "base_size": 3022,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/common/mk1212_update_region_loc.lua",
+      "repository_sha256": "5fd2f4b5b41b28e77daba3874ede48e1555e3c1b252f56bdda3802bae5e6def2"
+    },
+    {
+      "base_path": "campaigns/main_attila/common/mk1212_vassal_tracking.lua",
+      "base_sha256": "423544fe7526b710a062bd4984656f9c5340fc24a90a14881ef970015c65d79e",
+      "base_size": 10851,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/common/mk1212_vassal_tracking.lua",
+      "repository_sha256": "cde3fbd493a9443744b5e6fc1d76fcd930eae0734003bb9f043fbeb4862bd76d"
+    },
+    {
+      "base_path": "campaigns/main_attila/common/ui/mk1212_global_ui.lua",
+      "base_sha256": "edaf79b120dcd7a90792b793067d17d6c78aeecb2a6a51e4b5f10164b1ccc55e",
+      "base_size": 6824,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/common/ui/mk1212_global_ui.lua",
+      "repository_sha256": "5de581596a566fb12072ac285f19be844680b39fc10a2f3e8afcd7c697beafd1"
+    },
+    {
+      "base_path": "campaigns/main_attila/common/ui/mk1212_global_ui_lists.lua",
+      "base_sha256": "d3afca74d0b7911febc77df2650028fc4377a7c2c97e95b1326e4a00d19f2b88",
+      "base_size": 6480,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/common/ui/mk1212_global_ui_lists.lua",
+      "repository_sha256": "666eb1a924b4463bfe544ca2055ae4f0636eca3c36ecd0e11a91e03a18b743c2"
+    },
+    {
+      "base_path": "campaigns/main_attila/common/ui/mk1212_occupation_decisions.lua",
+      "base_sha256": "3a5a55feaa6d7f785a9fd18cff9e75106d9e9f45ea4d6b5de9a4be19cf68920a",
+      "base_size": 10508,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/common/ui/mk1212_occupation_decisions.lua",
+      "repository_sha256": "3a5a55feaa6d7f785a9fd18cff9e75106d9e9f45ea4d6b5de9a4be19cf68920a"
+    },
+    {
+      "base_path": "campaigns/main_attila/common/ui/mk1212_unit_information.lua",
+      "base_sha256": "bdf18080c645f1536a5a48f80eecb97022c28fe15e52f0ff80ce44f0ada6b1d2",
+      "base_size": 8690,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/common/ui/mk1212_unit_information.lua",
+      "repository_sha256": "3153edb62a42c91691ca68eccdcb88de63576ec6b42acdb747cb798dcd439769"
+    },
+    {
+      "base_path": "campaigns/main_attila/common/ui/mk1212_unit_information_lists.lua",
+      "base_sha256": "59a963bf46489d4cdb305ead3267692ec0c312bc11bcadc3b90913521d1a14e0",
+      "base_size": 23633,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/common/ui/mk1212_unit_information_lists.lua",
+      "repository_sha256": "2a81c0d7a20aa5dd092f1e31f7555499f7bd1afda3d57b70c81c5e2a99a539ba"
+    },
+    {
+      "base_path": "campaigns/main_attila/factions/mk_fact_epirus.lua",
+      "base_sha256": "1490da746e8940a41876e49f40368dc3ff52ee2f224e54240a9534421c7648a6",
+      "base_size": 299,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/factions/mk_fact_epirus.lua",
+      "repository_sha256": "1490da746e8940a41876e49f40368dc3ff52ee2f224e54240a9534421c7648a6"
+    },
+    {
+      "base_path": "campaigns/main_attila/factions/mk_fact_nicaea.lua",
+      "base_sha256": "9cbc3a1c5564f602411adde45c7e46c8b55293cd7b78d19663c28a32d9d96fac",
+      "base_size": 298,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/factions/mk_fact_nicaea.lua",
+      "repository_sha256": "1490da746e8940a41876e49f40368dc3ff52ee2f224e54240a9534421c7648a6"
+    },
+    {
+      "base_path": "campaigns/main_attila/factions/mk_fact_trebizond.lua",
+      "base_sha256": "9cbc3a1c5564f602411adde45c7e46c8b55293cd7b78d19663c28a32d9d96fac",
+      "base_size": 298,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/factions/mk_fact_trebizond.lua",
+      "repository_sha256": "1490da746e8940a41876e49f40368dc3ff52ee2f224e54240a9534421c7648a6"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_all_the_worlds_a_stage.lua",
+      "base_sha256": "fab8ce882986bcef6b138267afbb5adc9cdc7ec5ff51f9a3efc7816af95d2e5e",
+      "base_size": 1255,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_all_the_worlds_a_stage.lua",
+      "repository_sha256": "2788ebca941e22d331d2f0713041cade7b321448bb15c2f852614bcba8d91441"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_an_early_union.lua",
+      "base_sha256": "d8b1e34dbfda8efb040231410c7b3324baf8cde976efe42e32bdf42c6b10011d",
+      "base_size": 1026,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_an_early_union.lua",
+      "repository_sha256": "d55ffa0112ae92070674a7ec0a6d13a77a850bb49cbd67aa1c9b6b38bd3494fd"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_basileia_rhomaion.lua",
+      "base_sha256": "b060fbe90b9c84177041f3ed8996344dbbd88018ebc21cfa556a6b27ee74ad00",
+      "base_size": 828,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_basileia_rhomaion.lua",
+      "repository_sha256": "c61e6f1c3865e710f5030816f37f0ae32422591a8555f44f19815a0dad918861"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_crusader_king.lua",
+      "base_sha256": "cff470d0914f4c2515e0e8ff0b36380f2af3d1e6dbcf2039d7dcda066b630e82",
+      "base_size": 817,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_crusader_king.lua",
+      "repository_sha256": "d8f5f1bf210e6ea429d1e5b1268407a1e6074fa17ea232165ccf1a632d119eca"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_dont_mind_if_i_do.lua",
+      "base_sha256": "f6db343287585e60abd7112b6dca8c5911ba2ca0a2458aa72eb4660cea200516",
+      "base_size": 814,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_dont_mind_if_i_do.lua",
+      "repository_sha256": "1f227d17bde5699479cc4b4ee14464d7b1df8facbf3f1e6ce633eaba6939bb3d"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_ibadi.lua",
+      "base_sha256": "f03324921002435b87cea3b84f8fb806fd1753d80767d6f1841b16ceb135f98a",
+      "base_size": 940,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_ibadi.lua",
+      "repository_sha256": "a59ee72e79bcbc3ef19f3af897968d11ed38157deedcdf424ca691c324b12a25"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_its_only_human_to_sin.lua",
+      "base_sha256": "0b9716011477a820dec8d21959d34aa51d3ae9fd7b5990c1d5dbc213e7cdfecf",
+      "base_size": 799,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_its_only_human_to_sin.lua",
+      "repository_sha256": "bec601ee7ead285875b0051a0a4ed6728f6afc3c546d14233ebe1c81d8b3656d"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_king_of_kings.lua",
+      "base_sha256": "c9e9acc5c0451eafb915055ab155d9780afb2b3d2aa77ef664274d560b2a9dc2",
+      "base_size": 847,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_king_of_kings.lua",
+      "repository_sha256": "39f00831d1cd362b200edbc283cae933cdd061eaa02e6790614915351fb142d3"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_kingdom_of_david.lua",
+      "base_sha256": "6ced9ef9ef8e0a14a8afd936207583bb78cfc50afd5c59442166555571480b61",
+      "base_size": 1024,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_kingdom_of_david.lua",
+      "repository_sha256": "9b36d2b7827fe12d98f7828cb62def4d4d54202e32be4bc0cfdc702f7071ddf3"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_megalopolis.lua",
+      "base_sha256": "314fb20345ac0244d3e27cf258085ff3e03f0624d85503a1bce975b31a5fec57",
+      "base_size": 774,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_megalopolis.lua",
+      "repository_sha256": "38d3a1fc625d3a1419470bada460555c530c28984fcf990c81e652c63043cfd4"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_north_sea_empire.lua",
+      "base_sha256": "b1e55a6542830e02ff814da5f5e15794dcafdd25883d313e95dd3e59e8f30385",
+      "base_size": 1354,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_north_sea_empire.lua",
+      "repository_sha256": "c01c7ca42a65faaf7dd9710a6c66e95dab5e564a6df68bd0170c366dcf54e153"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_pays_cathare.lua",
+      "base_sha256": "f0a3cd467871e8a83e790f60d1679a7ed589be926d365f1dba37eee7ad1a9bec",
+      "base_size": 1432,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_pays_cathare.lua",
+      "repository_sha256": "eda482d3996cbe9ea7553e79ca870dffb3ed8af25208e82197a0985deeaacfb2"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_prester_john.lua",
+      "base_sha256": "33188b1b806518f7e81e7d17ee99820f553b0a56ef6144ef5ba2d0fe4da8ac8d",
+      "base_size": 1285,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_prester_john.lua",
+      "repository_sha256": "7cb958d25e2f96e364abf848aa76bbc05ac5fed233675abcb05f6458a2ed7ad2"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_renovatio_imperii.lua",
+      "base_sha256": "bfbf04e62c1f2628af3c8ccc9462b07d827d7e6535f97761320fc3a6a35e6b35",
+      "base_size": 831,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_renovatio_imperii.lua",
+      "repository_sha256": "7665d1565ad4f1a075ee50dad4aee3d8a2748f96127363f2d475e527e5d31166"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_rise_of_the_republic.lua",
+      "base_sha256": "5d4357fdbb07db9ea31d0abf1cbfe325eff3b7808a9b77c995410e86142bdb1b",
+      "base_size": 1177,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_rise_of_the_republic.lua",
+      "repository_sha256": "b4135adf56f512116ab474335fb29dbf6ba8e370df32d035e2387fd06da0e370"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_sorry_we_forgot_something.lua",
+      "base_sha256": "74d6034a008143b809399b86fc9c7448e626ea4b27eee9a1bfab64c1c38f4a44",
+      "base_size": 1058,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_sorry_we_forgot_something.lua",
+      "repository_sha256": "5b624c35f142beea70baad3095146dc507f7396aebbc3aeddb9ecd1f2acd3d33"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_survivor.lua",
+      "base_sha256": "95934bc33984c7387d5f92d4089fdaf091a2a018deb11e5587653b071bfa78e4",
+      "base_size": 782,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_survivor.lua",
+      "repository_sha256": "2fc4ae705480be0f6a1ba2d8d3b3f49b24c8630b04efa1ef95e0b0c5b90ab2ab"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_the_caliphate_strikes_back.lua",
+      "base_sha256": "d4f059690c706987910c2fcbabc978f09fd204254ec7536491a263570b5f4e7d",
+      "base_size": 2737,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_the_caliphate_strikes_back.lua",
+      "repository_sha256": "d750a2e88fc1216e1f727cf03d6f5f8e1a42e42a92078d3104a6a2efd50abcbd"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_the_lion_of_the_north.lua",
+      "base_sha256": "daab1f32940ab65497e4b921983fe4b99a194d542fc7b5e65d4e21151c2eaf63",
+      "base_size": 1887,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_the_lion_of_the_north.lua",
+      "repository_sha256": "0f151bd310875f5febc80ab345ee329497a7ebdead0b3e988239e54609d8c0d6"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_the_price_revolution.lua",
+      "base_sha256": "fa2b1ee6f0f7ebe0e3e316173cc93a5f7fe3264b479380962cd276edced7ce10",
+      "base_size": 1044,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_the_price_revolution.lua",
+      "repository_sha256": "f885ebd155f43b08f0235889146a85d1dc818033d673412813115b48840cb7c0"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_the_re-reconquista.lua",
+      "base_sha256": "294122c059f4f7d0ab38c0cb1e2690f00fb50e2b31a6981cc54b8dc57db390e3",
+      "base_size": 1739,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_the_re-reconquista.lua",
+      "repository_sha256": "9c3688c514f85967d67cbca62c1ee5ee7dfb78a668b921888d96d7dd703ae86e"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_the_spice_must_flow.lua",
+      "base_sha256": "160623d9abc885f993db756b60ddfd35ae431f2e43d9652a8075ff93c7139ed1",
+      "base_size": 773,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_the_spice_must_flow.lua",
+      "repository_sha256": "81b030e3d2525053563e92484d41bc3f9e39454c50e2e06011e23a54e93a637b"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_there_can_only_be_one.lua",
+      "base_sha256": "310ba91556b50c234a61cda15ce5f8a2a34a30c7df1559b4d068c899c40fd0a0",
+      "base_size": 1330,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_there_can_only_be_one.lua",
+      "repository_sha256": "11737820e6ca9ccdec768ce0521523ca307e79ad64d41aab22e59600a3d6723a"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_torah_torah_torah.lua",
+      "base_sha256": "6f464ea754b7250a6a4780b7730b1f9fc81c8a80528461bfd127b63644214024",
+      "base_size": 1021,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_torah_torah_torah.lua",
+      "repository_sha256": "12203ac270234529624c2f3788c51098f71bd7cfda720663428a127a522a9900"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_tri_moreta.lua",
+      "base_sha256": "f09389f6b0577472d7819a4b849767a17821f00198bb5145a565bf48322529af",
+      "base_size": 1299,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_tri_moreta.lua",
+      "repository_sha256": "58d8f23eb02b8d2686a19a958f9b48c40c1565dd51155c03c5d719cf83fca11f"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/achievements/achievement_world_conquest.lua",
+      "base_sha256": "16c985570166c8ebbc8ab9f18bdb93c7a6a93bd17c46bef172e192496c2c9c92",
+      "base_size": 7035,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/achievements/achievement_world_conquest.lua",
+      "repository_sha256": "5616a5919b63d90b53220c040f945cc385f338db1a2dffcefa8e9b35a6a254ce"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/ironman.lua",
+      "base_sha256": "57cbc1c60f8955e3f719299d69dd30fc768faa3790b005aa178f4e4d9f5741a2",
+      "base_size": 6056,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/ironman.lua",
+      "repository_sha256": "ae156a3f3e2c032c7d4c97738c337613d2cc38fadc3a6e0eff3dc515198d506a"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/ironman_achievements.lua",
+      "base_sha256": "c00228c39cbb8ad33bc650d04b82983dfa02baca3033078bc4b6f83ef3b2565a",
+      "base_size": 8928,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/ironman_achievements.lua",
+      "repository_sha256": "0ea2b32b67676d329ac3ccb9ef0ed9d799e4d0bfd15395501c441c9a99840873"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/ironman_achievements_ui.lua",
+      "base_sha256": "2242e96095fe5bca8ed888a9a87872f7481df3a04054dfa45d7c062a6deea276",
+      "base_size": 8528,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/ironman_achievements_ui.lua",
+      "repository_sha256": "de026a476abe31a20bc99367e24496385e5ce4c69084f9fc728a9d04f8de9925"
+    },
+    {
+      "base_path": "campaigns/main_attila/ironman/main.lua",
+      "base_sha256": "cb094d28f300de91775ab1e1e758bd5294428a4763e55800dda15ccf85c8a655",
+      "base_size": 637,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/ironman/main.lua",
+      "repository_sha256": "1dd12bfc201ac638f289688a1d1f0c3ec7cebe11758d3b4b4eda0179ebe9e329"
+    },
+    {
+      "base_path": "campaigns/main_attila/kingdoms/kingdom_armenia.lua",
+      "base_sha256": "4f742c150191c21ef0276a987d226fac4ad4f4a83a393972c415a20ccb36fa03",
+      "base_size": 4851,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/kingdoms/kingdom_armenia.lua",
+      "repository_sha256": "37db607a2ae46c02437362511165130a4c5fbea5113814392b19ba43e6f0992d"
+    },
+    {
+      "base_path": "campaigns/main_attila/kingdoms/kingdom_byzantium.lua",
+      "base_sha256": "0a972f1f3042b22e4fd965575ea9b9262e3fc6c9a205e22f5cadeb17061d63ce",
+      "base_size": 6272,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/kingdoms/kingdom_byzantium.lua",
+      "repository_sha256": "643e601b2f8c5f6e3e1a77597a7376ba01e318cfaee66b43a552e05fa7469d2a"
+    },
+    {
+      "base_path": "campaigns/main_attila/kingdoms/kingdom_golden_horde.lua",
+      "base_sha256": "c520fbd8eccc759d995b7b3ae8eab9e7fd206077938a2c203133cdc7785a7953",
+      "base_size": 4886,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/kingdoms/kingdom_golden_horde.lua",
+      "repository_sha256": "e9c699899e32a44fafb46fd435bc24338b97e1b30f227d8f40710ef1b37f1c7b"
+    },
+    {
+      "base_path": "campaigns/main_attila/kingdoms/kingdom_ilkhanate.lua",
+      "base_sha256": "d4a842a514a0af0cbdf17c391ca18dcca5bd55c9c58536d0c06b192e79fcc043",
+      "base_size": 4721,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/kingdoms/kingdom_ilkhanate.lua",
+      "repository_sha256": "5b588be38fc08d25f6b957042747681937aaa4029b3b2a9b9694cbb9b5a39338"
+    },
+    {
+      "base_path": "campaigns/main_attila/kingdoms/kingdom_italy.lua",
+      "base_sha256": "27a5acc4121b98512a8f981034dcfbbb31298335850bc5b219ccae8af9db314a",
+      "base_size": 4950,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/kingdoms/kingdom_italy.lua",
+      "repository_sha256": "98c1f05863ad61e3adffa82fc312b72218241cef66f7050e27d63a7a2c282cc2"
+    },
+    {
+      "base_path": "campaigns/main_attila/kingdoms/kingdom_persia.lua",
+      "base_sha256": "8c9d5ec7bbdd712519cd8963e1ee09978682a07ee90e860afb0cd8726fe01c02",
+      "base_size": 5614,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/kingdoms/kingdom_persia.lua",
+      "repository_sha256": "67b742289b61ddd89e10444e9d74f2cce9a83fc8d3384605eff0a2b61471e6be"
+    },
+    {
+      "base_path": "campaigns/main_attila/kingdoms/kingdom_poland.lua",
+      "base_sha256": "3fff6271465f7a08d6f757e082560c4df785d122bab5fd9ea9086a626615d1f0",
+      "base_size": 4788,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/kingdoms/kingdom_poland.lua",
+      "repository_sha256": "e9d5a9ba3b20a628426d148083cb90dab277545ad6d5bc93711153a3bf9f64b3"
+    },
+    {
+      "base_path": "campaigns/main_attila/kingdoms/kingdom_serbia.lua",
+      "base_sha256": "42105cb6fcb787aa0bf2b1ebc605c47d611200186d96df6424d6c59c1e6afd8b",
+      "base_size": 2194,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/kingdoms/kingdom_serbia.lua",
+      "repository_sha256": "52de71ee3e66e1200dee00194dee2ad038cd55133fab0b23aa0a59cbe8ec25b8"
+    },
+    {
+      "base_path": "campaigns/main_attila/kingdoms/kingdom_spain.lua",
+      "base_sha256": "bac9cfe0e1b7a65d579816d97dbeceb8d3b91f651da7cfffbf8503a5f4920fec",
+      "base_size": 5115,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/kingdoms/kingdom_spain.lua",
+      "repository_sha256": "45a3d459aeebbfe1b0b88bfe6dcb969f77753cac83f230ac23ed8d8f9dc1f143"
+    },
+    {
+      "base_path": "campaigns/main_attila/kingdoms/list_regions.lua",
+      "base_sha256": "f459e163fc47b841081fe0923edc8ca77b9470f7228a88a3b27bcc7ebc4a5200",
+      "base_size": 5948,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/kingdoms/list_regions.lua",
+      "repository_sha256": "f459e163fc47b841081fe0923edc8ca77b9470f7228a88a3b27bcc7ebc4a5200"
+    },
+    {
+      "base_path": "campaigns/main_attila/kingdoms/main.lua",
+      "base_sha256": "1d03d10e9c2395dc2f91e605009ec0a849e7bf1a47ec8fee78b099843abbc234",
+      "base_size": 1174,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/kingdoms/main.lua",
+      "repository_sha256": "1d03d10e9c2395dc2f91e605009ec0a849e7bf1a47ec8fee78b099843abbc234"
+    },
+    {
+      "base_path": "campaigns/main_attila/luckynations/lucky_nations.lua",
+      "base_sha256": "528e2371c1b86d7cb31a53ce1519ab9a0e7727c9acfb0a8f27df8437e1e18573",
+      "base_size": 3732,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/luckynations/lucky_nations.lua",
+      "repository_sha256": "2440be4d9ebb6d5a5145e36fc2e39c7dd7bcd23798278656151ca58d468276ab"
+    },
+    {
+      "base_path": "campaigns/main_attila/luckynations/main.lua",
+      "base_sha256": "ddb9fdb1a065b3d8b4890c50bf60f3774989c2b4de3734ce7a192d881fcd2a06",
+      "base_size": 930,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/luckynations/main.lua",
+      "repository_sha256": "26740bc035ace079f4de66f68ac7459d1831d46f6ccc9aa31e5c957d306e65a0"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/decisions/mechanics_decisions.lua",
+      "base_sha256": "7f9f1e641943e358ab5a65029b7abbc8c373b65b7bbf8cbc28bc631a8572dd77",
+      "base_size": 5140,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mechanics/decisions/mechanics_decisions.lua",
+      "repository_sha256": "7f9f1e641943e358ab5a65029b7abbc8c373b65b7bbf8cbc28bc631a8572dd77"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/decisions/mechanics_decisions_ui.lua",
+      "base_sha256": "d49eda28fe7ec62eb0e8e45ff96e263fec8819190b694ceb98b31e5a18cf678a",
+      "base_size": 17220,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mechanics/decisions/mechanics_decisions_ui.lua",
+      "repository_sha256": "d49eda28fe7ec62eb0e8e45ff96e263fec8819190b694ceb98b31e5a18cf678a"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/hre/mechanics_hre.lua",
+      "base_sha256": "25c4ba6dcd5de963a6a3ea0c0179e511ab274f0e68d7b74bb1367082b6f5e251",
+      "base_size": 2877,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mechanics/hre/mechanics_hre.lua",
+      "repository_sha256": "25c4ba6dcd5de963a6a3ea0c0179e511ab274f0e68d7b74bb1367082b6f5e251"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/hre/mechanics_hre_decrees.lua",
+      "base_sha256": "ba3b9b4c3ed441dac91cf1096900f632209023f3222dcb39ed1de0c96f2b7591",
+      "base_size": 8595,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mechanics/hre/mechanics_hre_decrees.lua",
+      "repository_sha256": "1239d780efce8c77c8dd18e4d8108c8871d0653345a8e4695e6911f368a19c1c"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/hre/mechanics_hre_elections.lua",
+      "base_sha256": "d930c6fea994a1b6d31bd67cfb79a16a3c437d5d6d55105df75ecdc7d3c72368",
+      "base_size": 27072,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mechanics/hre/mechanics_hre_elections.lua",
+      "repository_sha256": "d930c6fea994a1b6d31bd67cfb79a16a3c437d5d6d55105df75ecdc7d3c72368"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/hre/mechanics_hre_events.lua",
+      "base_sha256": "7b47644f0d1cca3da7de4bc6ab14fccfc034cb410fcbc0ee85966cf211ba7333",
+      "base_size": 27342,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mechanics/hre/mechanics_hre_events.lua",
+      "repository_sha256": "08cf7d08aa56f2219a369675d231a9f574501fa073260993100af08436e937d7"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/hre/mechanics_hre_factions.lua",
+      "base_sha256": "c87f4ab9cf88f022cf845a16f0987ad249bb2926f3cb1fc630a634fef51ee27b",
+      "base_size": 42627,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mechanics/hre/mechanics_hre_factions.lua",
+      "repository_sha256": "a16eed606a76e7e2ad09737cec4c06fadb5d50c0d451873c264968013a1fabbe"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/hre/mechanics_hre_lists.lua",
+      "base_sha256": "d396d1a7ca4beb8c2a84884c9efe7fc4a72b6036bd355e70dee446f620a770e6",
+      "base_size": 8688,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mechanics/hre/mechanics_hre_lists.lua",
+      "repository_sha256": "d396d1a7ca4beb8c2a84884c9efe7fc4a72b6036bd355e70dee446f620a770e6"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/hre/mechanics_hre_reforms.lua",
+      "base_sha256": "28846339d3c0ee54fba85990650b19e381e0800d3f4f7df5c6c7e4d921b6bc86",
+      "base_size": 12126,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mechanics/hre/mechanics_hre_reforms.lua",
+      "repository_sha256": "28846339d3c0ee54fba85990650b19e381e0800d3f4f7df5c6c7e4d921b6bc86"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/hre/mechanics_hre_regions.lua",
+      "base_sha256": "b6575e39b31c30c4bee732bb2f6f6760a2a4ac996e0d99340f413733685db171",
+      "base_size": 8019,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mechanics/hre/mechanics_hre_regions.lua",
+      "repository_sha256": "b6575e39b31c30c4bee732bb2f6f6760a2a4ac996e0d99340f413733685db171"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/hre/mechanics_hre_ui.lua",
+      "base_sha256": "2465d2d630cf4a942a1a26fdac78f81d12078f3d635d66210d930678199e4268",
+      "base_size": 44259,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mechanics/hre/mechanics_hre_ui.lua",
+      "repository_sha256": "dacc5607db63318efdcd0929000bb0e31590c83fbc4b9356a94579937aaae99d"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/islam/mechanics_islam.lua",
+      "base_sha256": "49404f64a0768b8854296f7fe5ffc7e82f0c55111f974f5fea2ef750f9beb352",
+      "base_size": 626,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mechanics/islam/mechanics_islam.lua",
+      "repository_sha256": "49404f64a0768b8854296f7fe5ffc7e82f0c55111f974f5fea2ef750f9beb352"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/islam/mechanics_islam_hajj.lua",
+      "base_sha256": "8d7f2f91dab6bcf39a2bf96c0c7077f67ea6d1c47ba272aad71181876adc19ec",
+      "base_size": 5006,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mechanics/islam/mechanics_islam_hajj.lua",
+      "repository_sha256": "8d7f2f91dab6bcf39a2bf96c0c7077f67ea6d1c47ba272aad71181876adc19ec"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/islam/mechanics_islam_mecca.lua",
+      "base_sha256": "9741dacc26958cb294173325467a153f407759f65c0f05cd57b565c740c15e31",
+      "base_size": 8330,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mechanics/islam/mechanics_islam_mecca.lua",
+      "repository_sha256": "5c813ff39013db5de49d20573122dd296dd4da2eca48dfe49c7f5991a8c12307"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/main.lua",
+      "base_sha256": "654fa2f18a116008aed757310272d8ef7c86b9af115151453f85eb3a3c354c07",
+      "base_size": 1799,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mechanics/main.lua",
+      "repository_sha256": "a0bac5028b7fba8b492322c294a33edd3a65ab5ac3381fc494ff11b9b273260e"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/mechanics_annex_vassals.lua",
+      "base_sha256": "eda425497ca3e39b3db45beb533cb33fe163f973d2b100487738e9e0e3f522c7",
+      "base_size": 18213,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mechanics/mechanics_annex_vassals.lua",
+      "repository_sha256": "eda425497ca3e39b3db45beb533cb33fe163f973d2b100487738e9e0e3f522c7"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/mechanics_buffer_states.lua",
+      "base_sha256": "5110554aff757bce33a7d93aba7111602584ce25930fb183a5e063fc445fb000",
+      "base_size": 7535,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mechanics/mechanics_buffer_states.lua",
+      "repository_sha256": "5110554aff757bce33a7d93aba7111602584ce25930fb183a5e063fc445fb000"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/mechanics_dynamic_faction_names.lua",
+      "base_sha256": "26ff6dcb38228af4519fdbbfcab899a63a43ff9e4ed5ef348aa5290a2fe5c316",
+      "base_size": 13034,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mechanics/mechanics_dynamic_faction_names.lua",
+      "repository_sha256": "c84b904b36a36985549a6e49a86138808867e29ea4506f36e4e86e62b89d6149"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/mechanics_lists.lua",
+      "base_sha256": "54fb4afeb684ed62df2cf1fdf98a036c56c8f4627303c8d8b38f3a0ef4be5acb",
+      "base_size": 102781,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mechanics/mechanics_lists.lua",
+      "repository_sha256": "54fb4afeb684ed62df2cf1fdf98a036c56c8f4627303c8d8b38f3a0ef4be5acb"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/mechanics_plague.lua",
+      "base_sha256": "e1f1eca6a96765e7b80f5c5c017baaa984d462da2ce17327529eb14df5ac07ce",
+      "base_size": 14383,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mechanics/mechanics_plague.lua",
+      "repository_sha256": "e1f1eca6a96765e7b80f5c5c017baaa984d462da2ce17327529eb14df5ac07ce"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/mechanics_region_trading.lua",
+      "base_sha256": "a5826237a91104f956451010ff21b2bdd1020b4a7691431e4f45386090effc23",
+      "base_size": 16183,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mechanics/mechanics_region_trading.lua",
+      "repository_sha256": "09673bf627e172b22d77a03e88d3b06efdeb81ea04f6531f85263b80a4d0ddea"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/mechanics_settle_upkeep.lua",
+      "base_sha256": "d8a33daa4c3f1828a0743baa40f823f95497a9a08014548ca7528e357aa9a5ba",
+      "base_size": 1697,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mechanics/mechanics_settle_upkeep.lua",
+      "repository_sha256": "d8a33daa4c3f1828a0743baa40f823f95497a9a08014548ca7528e357aa9a5ba"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/mechanics_silk_road.lua",
+      "base_sha256": "75a6f2de9d02829a2d9461c548db11a9f9171c7554822c95e097e79991cf61a6",
+      "base_size": 1916,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mechanics/mechanics_silk_road.lua",
+      "repository_sha256": "75a6f2de9d02829a2d9461c548db11a9f9171c7554822c95e097e79991cf61a6"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/mechanics_war_weariness.lua",
+      "base_sha256": "f59284b6954ee171d17bf511bd94cc095d62ec21a77321e2a1102d5ba337582e",
+      "base_size": 12045,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mechanics/mechanics_war_weariness.lua",
+      "repository_sha256": "f59284b6954ee171d17bf511bd94cc095d62ec21a77321e2a1102d5ba337582e"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/pope/mechanics_pope.lua",
+      "base_sha256": "60d943c05516a951a9058b74390c6159863434762c584eba2b65a387d4088639",
+      "base_size": 12312,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mechanics/pope/mechanics_pope.lua",
+      "repository_sha256": "59312672d51ea3602a45691205cbc8b3c7d52a9ffaff4c21279b380ed83488d8"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/pope/mechanics_pope_college.lua",
+      "base_sha256": "4f39c9e5098b72740923778cfa71042faac9854f53ed3c71bbcf507f560694b0",
+      "base_size": 11931,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mechanics/pope/mechanics_pope_college.lua",
+      "repository_sha256": "28719472b067ff8c858fc6cbabd911c04932dabbc9c22776603fc60f4ebbe292"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/pope/mechanics_pope_crusades.lua",
+      "base_sha256": "c7d5c6a33688653a9fff46ceb7a7dc705f0988251f0b4e28fd3d753d93f664c7",
+      "base_size": 41418,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mechanics/pope/mechanics_pope_crusades.lua",
+      "repository_sha256": "b2a9beb86e3e11fb2b376d46c8cb85d1b0036d1951b968fabaf66586bfa9edc0"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/pope/mechanics_pope_favour.lua",
+      "base_sha256": "32a40f53a9239aada6e00dce64f7195c6d8d76a77d0cced863d65d3caba8b499",
+      "base_size": 35450,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mechanics/pope/mechanics_pope_favour.lua",
+      "repository_sha256": "0b8a740ba6f1d80b915425305d686189303e3df633db5d59bbd5d268292d352d"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/pope/mechanics_pope_lists.lua",
+      "base_sha256": "e638b30050b127dfe0766fe348e47e35c152f21c3653222970fdc830553ae5fa",
+      "base_size": 7490,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mechanics/pope/mechanics_pope_lists.lua",
+      "repository_sha256": "f894bb4f7d2e328ce835863c172d76ca4ab53ff6caf425a4bdcf4119a29cc0b7"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/pope/mechanics_pope_missions.lua",
+      "base_sha256": "982f9687271af299c62355b6f8899e4d8045d4d91649d6cfd998817e56d3b34c",
+      "base_size": 2339,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mechanics/pope/mechanics_pope_missions.lua",
+      "repository_sha256": "982f9687271af299c62355b6f8899e4d8045d4d91649d6cfd998817e56d3b34c"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/pope/mechanics_pope_ui.lua",
+      "base_sha256": "24a4b1a1c447910f5d7b4c85d90907db507f170a1f617fb6162fff9e10e3696b",
+      "base_size": 37800,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mechanics/pope/mechanics_pope_ui.lua",
+      "repository_sha256": "c33c3e3a0d2a36a3754c83ab536e30fbe1a5e1c8f3a5a4f43dbf1c60fb499c27"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/population/mechanics_population.lua",
+      "base_sha256": "6ecec07c88fb50f996e4bc5d58103d55f4a343755e67eb8905e14a767a138382",
+      "base_size": 38238,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mechanics/population/mechanics_population.lua",
+      "repository_sha256": "41e8c24103e7f7ccd277ad2cf6f97b29acaf395a56b4659e10670ea889741302"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/population/mechanics_population_economy.lua",
+      "base_sha256": "750d0920b54b94e918af428445538b9ba2d0730fea85d572c54cdf82a41e01c7",
+      "base_size": 2729,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mechanics/population/mechanics_population_economy.lua",
+      "repository_sha256": "750d0920b54b94e918af428445538b9ba2d0730fea85d572c54cdf82a41e01c7"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/population/mechanics_population_lists.lua",
+      "base_sha256": "d9094eeec316295e4b486a08002f341e663c50b26e50f05220e3f6d69215df79",
+      "base_size": 60963,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mechanics/population/mechanics_population_lists.lua",
+      "repository_sha256": "f6c70d1dd0653f61a445707447829b2081d73e957f1091d2d908b72dff5d29d4"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/population/mechanics_population_ui.lua",
+      "base_sha256": "50c7b168afdfaccbdb9443b998efc3b1a8e09aeebd155e201e252b930e1f666d",
+      "base_size": 28576,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mechanics/population/mechanics_population_ui.lua",
+      "repository_sha256": "3307b2e4e9d4ff30df9b32b6180098f1198195a56201e733949c57b8ebafeb8f"
+    },
+    {
+      "base_path": "campaigns/main_attila/mechanics/population/mechanics_population_unit_lists.lua",
+      "base_sha256": "d0aedee31390c7cacba9bc76215d2ed127e0757bec17de013a5f2a6f9ee1e43e",
+      "base_size": 258958,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mechanics/population/mechanics_population_unit_lists.lua",
+      "repository_sha256": "64c3ffde43599e9252322cb6ff308e8a1188e5ce5dd881b5c3ca33e7922be906"
+    },
+    {
+      "base_path": "campaigns/main_attila/mk1212_change_capital.lua",
+      "base_sha256": "187bc239d5013d46454dc8c28fae9ff7d522ea6cb49aceb639a34d851c281aaa",
+      "base_size": 15739,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mk1212_change_capital.lua",
+      "repository_sha256": "a5d4225324c1eb83c4c4135d49637d2648e5130d314864b4cf186fced4d5fc2f"
+    },
+    {
+      "base_path": "campaigns/main_attila/mk1212_discord.lua",
+      "base_sha256": "61d524afb3cb24f7d71fb3451e3da215d1e88d6873ad9ffdee7dc93d95282b0b",
+      "base_size": 2822,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mk1212_discord.lua",
+      "repository_sha256": "c2479041d20b262b7c587fa9edb1f479b446ae72d49b77d29ae77937e2071d0b"
+    },
+    {
+      "base_path": "campaigns/main_attila/mk1212_slots.lua",
+      "base_sha256": "6baa1d7dc93d0ad4fdf38308d91fb6cdd7fa9851ac44344809368ab9ec64cda5",
+      "base_size": 8221,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mk1212_slots.lua",
+      "repository_sha256": "3355416aec46b11bb3ec55b16fad26c8a363c78065db2e72213d26cb97a4a3ca"
+    },
+    {
+      "base_path": "campaigns/main_attila/mk1212_start.lua",
+      "base_sha256": "9eb9d4138971356ddf1077e88d43e0d32dede07f7ca7e3fa322067af452dd787",
+      "base_size": 3296,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mk1212_start.lua",
+      "repository_sha256": "282b43b2798d8c4736981ebb7d59a96c557ebda73746febde74cec0cfec54cfe"
+    },
+    {
+      "base_path": "campaigns/main_attila/mongols/main.lua",
+      "base_sha256": "48d9dfa41cc717b037ff042ed6050b6688ce510b66cbd1c5b1037fff7480563b",
+      "base_size": 619,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/mongols/main.lua",
+      "repository_sha256": "48d9dfa41cc717b037ff042ed6050b6688ce510b66cbd1c5b1037fff7480563b"
+    },
+    {
+      "base_path": "campaigns/main_attila/mongols/mongol_invasion.lua",
+      "base_sha256": "7064cae717c23b9e0e9c35b0874f4a3da57576f309ad0255198445e061a1b84e",
+      "base_size": 17176,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mongols/mongol_invasion.lua",
+      "repository_sha256": "8ad081a66172d9f1919a925956919f3c68f8f058928e760f8dd6a3dc1ba778b9"
+    },
+    {
+      "base_path": "campaigns/main_attila/mongols/mongol_lists.lua",
+      "base_sha256": "ba63dbdc214728047fa480e1ae6cd192f1a5e82d6ed6fff9dd99f2b00b594db5",
+      "base_size": 3152,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/mongols/mongol_lists.lua",
+      "repository_sha256": "a696d77d7a6a43666eb544ac839bc83d788ab5ac29656aefa84fe081fa426dad"
+    },
+    {
+      "base_path": "campaigns/main_attila/nicknames/main.lua",
+      "base_sha256": "86c0193f32eba27b70a4c58134d314a27dc506269763d184a53429adb428ef0c",
+      "base_size": 1467,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/nicknames/main.lua",
+      "repository_sha256": "04bf5466ac11b8d5c504e377ce26170d87b4aa4d6148f0d0fb521c271e1721f2"
+    },
+    {
+      "base_path": "campaigns/main_attila/nicknames/nicknames_lists.lua",
+      "base_sha256": "a3362a146a244360f8539ffc074f0338e7f69bc131a65aec62672c4c174ac6be",
+      "base_size": 7570,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/nicknames/nicknames_lists.lua",
+      "repository_sha256": "edff11f2cee57572aa3d66e9bc8dbcdccf9ee6103c410be153a04de317f4bea9"
+    },
+    {
+      "base_path": "campaigns/main_attila/nicknames/nicknames_tracking.lua",
+      "base_sha256": "fbda822883686e0ebb7785b12c872f0746d6d60843be15a479dcbcbf18590aba",
+      "base_size": 11109,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/nicknames/nicknames_tracking.lua",
+      "repository_sha256": "d1b34403ec0712f28d0a92b936b5fb81f60572f864b0feeca91cdd76d254b50a"
+    },
+    {
+      "base_path": "campaigns/main_attila/nicknames/nicknames_ui.lua",
+      "base_sha256": "8e29ce1cf9b48bb5119db54c1615d100bce4481ead4ba979861a4f9623ad6cfe",
+      "base_size": 9513,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/nicknames/nicknames_ui.lua",
+      "repository_sha256": "ae6f96d42a2fc025ccfd2c378e98f8d3b7a01858e8f5c9d8309b2231416f6db3"
+    },
+    {
+      "base_path": "campaigns/main_attila/pretender_crash_stopgap.lua",
+      "base_sha256": "8e8758d38e0542975f053fc8c703cc96fb0bafff9b1135daccc54c897b192186",
+      "base_size": 2840,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/pretender_crash_stopgap.lua",
+      "repository_sha256": "db724eeb87846f2269dfe108c02a72b1d1153695bed0e6749ab576343ba01ff7"
+    },
+    {
+      "base_path": "campaigns/main_attila/scripting.lua",
+      "base_sha256": "45c9d11128fdd9931c45cef65be422780de953cda0e835a38a7b6c77cb146718",
+      "base_size": 3887,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/scripting.lua",
+      "repository_sha256": "26b737f5e5a3ef8082f69473e825849c6e3dd63d692992623c652fcdd9dcfe8f"
+    },
+    {
+      "base_path": "campaigns/main_attila/startingbattles/battles/battle_lasnavas/battle_lasnavas.lua",
+      "base_sha256": "929fdcced93803d3fadf7f341ef1b2299014e49fc0d971809ae7bb87fdf88155",
+      "base_size": 1871,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/startingbattles/battles/battle_lasnavas/battle_lasnavas.lua",
+      "repository_sha256": "929fdcced93803d3fadf7f341ef1b2299014e49fc0d971809ae7bb87fdf88155"
+    },
+    {
+      "base_path": "campaigns/main_attila/startingbattles/battles/battle_lasnavas/battle_lasnavas_cutscenes.lua",
+      "base_sha256": "258ca81727d6c0aa003a66d79ae00f269e5d145fef1d89ee6cfe57fea6583b82",
+      "base_size": 3246,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/startingbattles/battles/battle_lasnavas/battle_lasnavas_cutscenes.lua",
+      "repository_sha256": "258ca81727d6c0aa003a66d79ae00f269e5d145fef1d89ee6cfe57fea6583b82"
+    },
+    {
+      "base_path": "campaigns/main_attila/startingbattles/main.lua",
+      "base_sha256": "79522ac65d397282617711b543582e9f63b8511a3229e32ccf30a7e46a7067bb",
+      "base_size": 661,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/startingbattles/main.lua",
+      "repository_sha256": "79522ac65d397282617711b543582e9f63b8511a3229e32ccf30a7e46a7067bb"
+    },
+    {
+      "base_path": "campaigns/main_attila/startingbattles/startingbattle_lasnavas.lua",
+      "base_sha256": "eee06d37dc07fb2bb5198364f70781a61b722190b2103c8df90006c10321b4ad",
+      "base_size": 6188,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/startingbattles/startingbattle_lasnavas.lua",
+      "repository_sha256": "eee06d37dc07fb2bb5198364f70781a61b722190b2103c8df90006c10321b4ad"
+    },
+    {
+      "base_path": "campaigns/main_attila/story/main.lua",
+      "base_sha256": "7cc318a08bc2161da7c9bc9fd39a158a2a149c1f602264d76f06acb37f3c56de",
+      "base_size": 1779,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/story/main.lua",
+      "repository_sha256": "e411302c7f4b21ee09a864f08a89b20aaaf370beea502895f6a0580b7f3bbbf7"
+    },
+    {
+      "base_path": "campaigns/main_attila/story/story_aragon.lua",
+      "base_sha256": "c6ad686171e3e9a2f16c09a4f4a88c474d379ef6ba588f6863455c5dccd4f05f",
+      "base_size": 7347,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/story/story_aragon.lua",
+      "repository_sha256": "c6ad686171e3e9a2f16c09a4f4a88c474d379ef6ba588f6863455c5dccd4f05f"
+    },
+    {
+      "base_path": "campaigns/main_attila/story/story_ayyubids.lua",
+      "base_sha256": "ef5ace68ea4755ea2e8300c2b485797b2b7f0e73c5162ca7b0e3b97d5ddeff12",
+      "base_size": 1816,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/story/story_ayyubids.lua",
+      "repository_sha256": "ef5ace68ea4755ea2e8300c2b485797b2b7f0e73c5162ca7b0e3b97d5ddeff12"
+    },
+    {
+      "base_path": "campaigns/main_attila/story/story_england.lua",
+      "base_sha256": "9fe649c687ec2d859b19d56f257897c723067238b2fb69cf3ed623dd985acae1",
+      "base_size": 13015,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/story/story_england.lua",
+      "repository_sha256": "9fe649c687ec2d859b19d56f257897c723067238b2fb69cf3ed623dd985acae1"
+    },
+    {
+      "base_path": "campaigns/main_attila/story/story_france.lua",
+      "base_sha256": "40b283f402abae6b3ccb464222a332488edce98672e0d9cb28daac86e5518199",
+      "base_size": 11057,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/story/story_france.lua",
+      "repository_sha256": "40b283f402abae6b3ccb464222a332488edce98672e0d9cb28daac86e5518199"
+    },
+    {
+      "base_path": "campaigns/main_attila/story/story_hre.lua",
+      "base_sha256": "4a3fa2664ffbee1749211db1ef2eaeae4b4f53c055bf8c0e96ee962553b8efac",
+      "base_size": 2594,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/story/story_hre.lua",
+      "repository_sha256": "4a3fa2664ffbee1749211db1ef2eaeae4b4f53c055bf8c0e96ee962553b8efac"
+    },
+    {
+      "base_path": "campaigns/main_attila/story/story_hungary.lua",
+      "base_sha256": "2b0d4e5cbfa5f4998b7e837b556e2d90046d68fb1402e7eabf9fb25b055da25b",
+      "base_size": 6210,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/story/story_hungary.lua",
+      "repository_sha256": "9592400a302a6aae926b946da2d4555278b374844c38c67b37d068ff52069ff1"
+    },
+    {
+      "base_path": "campaigns/main_attila/story/story_reconquista.lua",
+      "base_sha256": "c54c1ffa5ac929203088f7c0d77fa0e6abb1c5a59894b78d41f0b8196da055c2",
+      "base_size": 5114,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/story/story_reconquista.lua",
+      "repository_sha256": "c54c1ffa5ac929203088f7c0d77fa0e6abb1c5a59894b78d41f0b8196da055c2"
+    },
+    {
+      "base_path": "campaigns/main_attila/story/story_sicily.lua",
+      "base_sha256": "f25a08cce7af08ab38f3a653d8902ac4f270a4a523e772b2e3ef1ae2419abfd2",
+      "base_size": 8325,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/story/story_sicily.lua",
+      "repository_sha256": "f25a08cce7af08ab38f3a653d8902ac4f270a4a523e772b2e3ef1ae2419abfd2"
+    },
+    {
+      "base_path": "campaigns/main_attila/story/story_teutonic_order.lua",
+      "base_sha256": "2771de58952c5b2ea16002e018aef8990ccba5fef558a4f6ade663ca8f3d54c2",
+      "base_size": 1498,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/story/story_teutonic_order.lua",
+      "repository_sha256": "2771de58952c5b2ea16002e018aef8990ccba5fef558a4f6ade663ca8f3d54c2"
+    },
+    {
+      "base_path": "campaigns/main_attila/story/story_world.lua",
+      "base_sha256": "6dd3373c7f0a2bf78afe6db4d03ec5ae8b8804356771c17bdefbdc192d8e9505",
+      "base_size": 2547,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/story/story_world.lua",
+      "repository_sha256": "6dd3373c7f0a2bf78afe6db4d03ec5ae8b8804356771c17bdefbdc192d8e9505"
+    },
+    {
+      "base_path": "campaigns/main_attila/timurids/main.lua",
+      "base_sha256": "7855c36b13e4d61d290268636138e608e624ea6a870bacd95660e19037f93c70",
+      "base_size": 618,
+      "relation": "identical",
+      "repository_path": "campaigns/main_attila/timurids/main.lua",
+      "repository_sha256": "7855c36b13e4d61d290268636138e608e624ea6a870bacd95660e19037f93c70"
+    },
+    {
+      "base_path": "campaigns/main_attila/timurids/timurid_invasion.lua",
+      "base_sha256": "5984126b876aa884d8b8078a9a23ddf3e3e79f9ccb8d63b7fb3c5c36ebb59c0d",
+      "base_size": 8062,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/timurids/timurid_invasion.lua",
+      "repository_sha256": "bfd32c3152e7ba347ca20994578f0a500363be6910f8679928da6715a086767d"
+    },
+    {
+      "base_path": "campaigns/main_attila/timurids/timurid_lists.lua",
+      "base_sha256": "31fad8e1180fe80f2f9b4d90037213218642e89d2c8e6cee7eee4d04b84cde9f",
+      "base_size": 1531,
+      "relation": "overridden",
+      "repository_path": "campaigns/main_attila/timurids/timurid_lists.lua",
+      "repository_sha256": "180c463cfe2f9fc3799ba59c02d684cbcf409f2c172dcd27dfb33089a7d2cb39"
+    },
+    {
+      "base_path": "lua_scripts/change_capital_binaries.lua",
+      "base_sha256": "609a5f6b5b338b94d99351f784db2bf789c0966e1b4719e43252807c57e6e2ac",
+      "base_size": 523414,
+      "relation": "overridden",
+      "repository_path": "lua_scripts/change_capital_binaries.lua",
+      "repository_sha256": "f4c5c90569c66d7b24a43b270a12c651420d4585e12fc9fff8b9c45024c8a964"
+    },
+    {
+      "base_path": "lua_scripts/dev.lua",
+      "base_sha256": "e6973f5e494d123d707cfab0c851ac1e9d510d2b6fdd4185b2863e2115d0dc1b",
+      "base_size": 6301,
+      "relation": "identical",
+      "repository_path": "lua_scripts/dev.lua",
+      "repository_sha256": "e6973f5e494d123d707cfab0c851ac1e9d510d2b6fdd4185b2863e2115d0dc1b"
+    },
+    {
+      "base_path": "lua_scripts/events.lua",
+      "base_sha256": "52c348e7dd808663aa3ad497f77db06c9bb158cb4261bf390fb641b055152355",
+      "base_size": 7492,
+      "relation": "overridden",
+      "repository_path": "lua_scripts/events.lua",
+      "repository_sha256": "9d777ed3a988119c100908289e718cebf1051e6ddd1a4448d744206f110a653b"
+    },
+    {
+      "base_path": "lua_scripts/frontend_cb_crash_fix.lua",
+      "base_sha256": "1deaaa85f0b9bc5545113c89fb9914f56f61027b705434619311fc0140f0b1e8",
+      "base_size": 3740,
+      "relation": "overridden",
+      "repository_path": "lua_scripts/frontend_cb_crash_fix.lua",
+      "repository_sha256": "14362b93b1b07ee898a16587f35f85c14998caa7a5dac9a5cb6ecf8eea16289c"
+    },
+    {
+      "base_path": "lua_scripts/frontend_challenges.lua",
+      "base_sha256": "00ce9e6e5091f6d2b776c4f0e31bda548f8259b6251f092fd1dd5656afa0aab9",
+      "base_size": 8811,
+      "relation": "overridden",
+      "repository_path": "lua_scripts/frontend_challenges.lua",
+      "repository_sha256": "31621a68c3e96447121d0d6cf3649a533092882edb473d43a04b28a6e1ecccd5"
+    },
+    {
+      "base_path": "lua_scripts/frontend_changelog.lua",
+      "base_sha256": "9414ebad7fc797f8fb3847cd8b7900e9ef5ad9c14e47998a9ea49e3a186ecefb",
+      "base_size": 6191,
+      "relation": "identical",
+      "repository_path": "lua_scripts/frontend_changelog.lua",
+      "repository_sha256": "9414ebad7fc797f8fb3847cd8b7900e9ef5ad9c14e47998a9ea49e3a186ecefb"
+    },
+    {
+      "base_path": "lua_scripts/frontend_disclaimer.lua",
+      "base_sha256": "34cca8fb4cee6d0a53c5b1a78b3a2ab60214f3d9c2a58caf33610b6473908b4d",
+      "base_size": 4592,
+      "relation": "identical",
+      "repository_path": "lua_scripts/frontend_disclaimer.lua",
+      "repository_sha256": "34cca8fb4cee6d0a53c5b1a78b3a2ab60214f3d9c2a58caf33610b6473908b4d"
+    },
+    {
+      "base_path": "lua_scripts/frontend_discord.lua",
+      "base_sha256": "c8b0f35539a211e7a37bcb3f15ad8789e91194bba9846b2df1d1c6f86e5164cf",
+      "base_size": 2689,
+      "relation": "identical",
+      "repository_path": "lua_scripts/frontend_discord.lua",
+      "repository_sha256": "c8b0f35539a211e7a37bcb3f15ad8789e91194bba9846b2df1d1c6f86e5164cf"
+    },
+    {
+      "base_path": "lua_scripts/frontend_mp_campaign.lua",
+      "base_sha256": "59505fafe296b9dc96814ca249d472ccb3b3724e8b75fb410df14793d8ded847",
+      "base_size": 5517,
+      "relation": "identical",
+      "repository_path": "lua_scripts/frontend_mp_campaign.lua",
+      "repository_sha256": "59505fafe296b9dc96814ca249d472ccb3b3724e8b75fb410df14793d8ded847"
+    },
+    {
+      "base_path": "lua_scripts/frontend_pack_check.lua",
+      "base_sha256": "34bd3f50d24944445eca6b691bb60011d116be8db6e03094ca4981aa2e02c17c",
+      "base_size": 8639,
+      "relation": "identical",
+      "repository_path": "lua_scripts/frontend_pack_check.lua",
+      "repository_sha256": "34bd3f50d24944445eca6b691bb60011d116be8db6e03094ca4981aa2e02c17c"
+    },
+    {
+      "base_path": "lua_scripts/frontend_scripted.lua",
+      "base_sha256": "04797f03b1fead140a0876081521fbc12ab9ea87fbef75674531c4696c572a04",
+      "base_size": 19906,
+      "relation": "identical",
+      "repository_path": "lua_scripts/frontend_scripted.lua",
+      "repository_sha256": "04797f03b1fead140a0876081521fbc12ab9ea87fbef75674531c4696c572a04"
+    },
+    {
+      "base_path": "lua_scripts/frontend_start_date.lua",
+      "base_sha256": "8d4b581e466260081504c477269dae9e6b8a5203d92ac2b7bd4565ea064fbeea",
+      "base_size": 2200,
+      "relation": "identical",
+      "repository_path": "lua_scripts/frontend_start_date.lua",
+      "repository_sha256": "8d4b581e466260081504c477269dae9e6b8a5203d92ac2b7bd4565ea064fbeea"
+    },
+    {
+      "base_path": "lua_scripts/frontend_strings.lua",
+      "base_sha256": "2b4f2f0344dc0882571d5ba7f5be7f89fb820a270b22a4d80cfdff2e2e650d41",
+      "base_size": 10409,
+      "relation": "identical",
+      "repository_path": "lua_scripts/frontend_strings.lua",
+      "repository_sha256": "2b4f2f0344dc0882571d5ba7f5be7f89fb820a270b22a4d80cfdff2e2e650d41"
+    },
+    {
+      "base_path": "lua_scripts/logging_callbacks.lua",
+      "base_sha256": "78701e537b54f424fc89e6e17cf606b043e08a8c97f1ea82f5752904027aa4f2",
+      "base_size": 5648,
+      "relation": "identical",
+      "repository_path": "lua_scripts/logging_callbacks.lua",
+      "repository_sha256": "78701e537b54f424fc89e6e17cf606b043e08a8c97f1ea82f5752904027aa4f2"
+    },
+    {
+      "base_path": "lua_scripts/slots_binaries.lua",
+      "base_sha256": "1684c2e1d2c3e0f8de149442a2a4f9a6456f57cdc4c367349fbbe9543b172125",
+      "base_size": 61458,
+      "relation": "identical",
+      "repository_path": "lua_scripts/slots_binaries.lua",
+      "repository_sha256": "1684c2e1d2c3e0f8de149442a2a4f9a6456f57cdc4c367349fbbe9543b172125"
+    },
+    {
+      "base_path": "lua_scripts/util.lua",
+      "base_sha256": "4cd45412a26d30f8bf642504c54519e1838b4b86efacdca59b2a212340eb7f63",
+      "base_size": 699,
+      "relation": "identical",
+      "repository_path": "lua_scripts/util.lua",
+      "repository_sha256": "4cd45412a26d30f8bf642504c54519e1838b4b86efacdca59b2a212340eb7f63"
+    },
+    {
+      "base_path": "script/_lib/lib_event_handler.lua",
+      "base_sha256": "ac9a786bfea2f6265b7307fcd3a4d72bea7e356550c02a07a93e3f86ffe8142d",
+      "base_size": 8251,
+      "relation": "identical",
+      "repository_path": "script/_lib/lib_event_handler.lua",
+      "repository_sha256": "ac9a786bfea2f6265b7307fcd3a4d72bea7e356550c02a07a93e3f86ffe8142d"
+    }
+  ],
+  "missing_base_lua": [],
+  "repository_lua_count": 158,
+  "root_inventory": {
+    "audio": {
+      "bytes": 8791404,
+      "files": 3
+    },
+    "campaigns": {
+      "bytes": 1938964,
+      "files": 137
+    },
+    "db": {
+      "bytes": 230897,
+      "files": 49
+    },
+    "dependencies_manager_v2.rpfm_reserved": {
+      "bytes": 2,
+      "files": 1
+    },
+    "lua_scripts": {
+      "bytes": 677706,
+      "files": 16
+    },
+    "movies": {
+      "bytes": 293566585,
+      "files": 2
+    },
+    "notes.rpfm_reserved": {
+      "bytes": 42,
+      "files": 1
+    },
+    "script": {
+      "bytes": 8251,
+      "files": 1
+    },
+    "settings.rpfm_reserved": {
+      "bytes": 287,
+      "files": 1
+    },
+    "terrain": {
+      "bytes": 8242696,
+      "files": 58
+    },
+    "text": {
+      "bytes": 409122,
+      "files": 19
+    },
+    "ui": {
+      "bytes": 29248589,
+      "files": 1300
+    },
+    "variantmeshes": {
+      "bytes": 1905,
+      "files": 1
+    }
+  },
+  "schema": "mk1212-base-script-inventory-v1",
+  "schema_version": 1,
+  "scope": "file/path/content inventory; actual Attila load order and MP are not proven",
+  "source_commit_sha": "49db5e129d87f2fbdc1b1e02333873caddb00437"
+}

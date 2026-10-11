@@ -21,11 +21,268 @@ MAX_POPE_FAVOUR = 10;
 MIN_POPE_FAVOUR = 0;
 AT_WAR_WITH_POPE = {};
 FAVOUR_LAST_ATTACKED_GARRISON = "";
-POSTBATTLE_DECISION_ENEMY_CATHOLIC = false;
-POSTBATTLE_DECISION_MADE_RECENTLY = false;
 POPE_DEPOSED = false;
 
+local papal_initialized = false;
+local papal_active_listeners = false;
+local papal_battle_ordinal = 0;
+local papal_battle = nil;
+local papal_battle_valid = true;
+local papal_battle_raw = "";
+local papal_battle_prefix = "MKMP_PAPAL_BATTLE_V1;";
+local papal_battle_results = {
+	heroic_victory = true, decisive_victory = true, close_victory = true,
+	pyrrhic_victory = true, valiant_defeat = true, close_defeat = true,
+	decisive_defeat = true, crushing_defeat = true
+};
+
+local function Papal_Log(stage, fields)
+	fields = fields or {};
+	fields.domain = fields.domain or "shared_candidate";
+	fields.mechanic = "papal";
+	fields.stage = stage;
+	fields.shared_delivery = "unproven";
+	fields.action_identity = fields.action_identity or "observer_lifecycle";
+	if fields.action_identity == "observer_lifecycle" then
+		fields.action_id = "papal_battle:"..string.format("%.0f", papal_battle_ordinal);
+	end
+	fields.phase = fields.phase or (papal_battle and papal_battle.phase or "no_battle");
+	if MKMP_Debug_Log then pcall(MKMP_Debug_Log, "papal_action", fields); end
+end
+
+local function Papal_Read(object, method, ...)
+	if object == nil then return nil; end
+	local args = {...};
+	local ok, value = pcall(function() return object[method](object, unpack(args)); end);
+	if ok then return value; end
+	return nil;
+end
+
+local function Papal_Valid_Interface(object)
+	return object ~= nil and Papal_Read(object, "is_null_interface") == false;
+end
+
+local function Papal_Key(value)
+	return type(value) == "string" and #value > 0 and #value <= 128
+		and string.match(value, "^[A-Za-z0-9_%.%-]+$") ~= nil;
+end
+
+local function Papal_Integer(value)
+	-- Attila's Lua number is float: every admitted ordinal/CQI is exact.
+	return type(value) == "number" and value == value and value >= 0
+		and value <= 16777215 and value == math.floor(value);
+end
+
+local function Papal_Faction(faction_name)
+	if not Papal_Key(faction_name) then return nil; end
+	local faction = Papal_Read(cm:model():world(), "faction_by_key", faction_name);
+	if Papal_Valid_Interface(faction) then return faction; end
+	return nil;
+end
+
+local function Papal_Character(context)
+	local character = Papal_Read(context, "character");
+	if not Papal_Valid_Interface(character) then return nil; end
+	local faction = Papal_Read(character, "faction");
+	if not Papal_Valid_Interface(faction) then return nil; end
+	return character, faction;
+end
+
+local function Papal_Show_Message(...)
+	-- Optional UI must not abort the rest of a valid campaign transition.
+	local args = {...};
+	local ok = pcall(function() cm:show_message_event(unpack(args)); end);
+	if not ok then Papal_Log("ui_failed", {domain = "diagnostic"}); end
+end
+
+local function Papal_Faction_Label(faction_name)
+	local rank = type(FACTIONS_DFN_LEVEL) == "table" and FACTIONS_DFN_LEVEL[faction_name];
+	if Papal_Integer(rank) and rank > 1 then
+		return "campaign_localised_strings_string_"..faction_name.."_lvl"..string.format("%.0f", rank);
+	end
+	return "factions_screen_name_"..faction_name;
+end
+
+local function Papal_Battle_Participant(pending_battle, side)
+	if Papal_Read(pending_battle, "has_"..side) ~= true then return nil; end
+	local character = Papal_Read(pending_battle, side);
+	if not Papal_Valid_Interface(character) or Papal_Read(character, "has_military_force") ~= true then return nil; end
+	local faction = Papal_Read(character, "faction");
+	local force = Papal_Read(character, "military_force");
+	if not Papal_Valid_Interface(faction) or force == nil then return nil; end
+	local name = Papal_Read(faction, "name");
+	local cqi = Papal_Read(character, "cqi");
+	local force_cqi = Papal_Read(force, "command_queue_index");
+	if not Papal_Key(name) or not Papal_Integer(cqi) or not Papal_Integer(force_cqi) then return nil; end
+	return {faction = name, cqi = cqi, force = force_cqi,
+		catholic = Papal_Read(faction, "state_religion") == "att_rel_chr_catholic"};
+end
+
+local function Papal_Same_Participant(first, second)
+	return first and second and first.faction == second.faction
+		and first.cqi == second.cqi and first.force == second.force;
+end
+
+function PendingBattle_Pope_Favour(context)
+	if not papal_battle_valid then Papal_Log("blocked", {reason = "invalid_battle_save"}); return; end
+	local pending_battle = cm:model():pending_battle();
+	local attacker = Papal_Battle_Participant(pending_battle, "attacker");
+	local defender = Papal_Battle_Participant(pending_battle, "defender");
+	if not attacker or not defender or attacker.faction == defender.faction then
+		papal_battle = nil; -- Never retain the previous battle as a fallback.
+		Papal_Log("blocked", {reason = "missing_battle_participant", phase = "pending_battle"});
+		return;
+	end
+	if papal_battle and papal_battle.phase == "pending"
+		and Papal_Same_Participant(papal_battle.attacker, attacker)
+		and Papal_Same_Participant(papal_battle.defender, defender) then
+		Papal_Log("duplicate", {reason = "pending_battle_already_open"});
+		return;
+	end
+	if papal_battle_ordinal >= 16777215 then
+		papal_battle_valid = false;
+		papal_battle_raw = "MKMP_PAPAL_BATTLE_BLOCKED|ordinal_budget";
+		Papal_Log("blocked", {reason = "battle_ordinal_budget"});
+		return;
+	end
+	-- This is an observer's lifecycle ordinal, NOT an engine/network battle ID.
+	-- Only a new PendingBattle opens a lifecycle. Completed/decision callbacks
+	-- cannot manufacture a battle from turn/faction/general identifiers.
+	papal_battle_ordinal = papal_battle_ordinal + 1;
+	local turn = cm:model():turn_number();
+	if not Papal_Integer(turn) then papal_battle = nil; return; end
+	papal_battle = {phase = "pending", round = turn, attacker = attacker, defender = defender, decisions = {}};
+	Papal_Log("observed", {phase = "pending_battle", actor = attacker.faction, target = defender.faction});
+end
+
+local function Papal_Observe_Battle_Result(context)
+	local character, faction = Papal_Character(context);
+	if not papal_battle_valid or not papal_battle or not character then
+		Papal_Log("blocked", {reason = "missing_battle_lifecycle_or_actor"}); return nil;
+	end
+	if papal_battle.round ~= cm:model():turn_number() then
+		Papal_Log("blocked", {reason = "battle_lifecycle_from_earlier_round"}); return nil;
+	end
+	local actor = Papal_Read(faction, "name");
+	if actor ~= papal_battle.attacker.faction and actor ~= papal_battle.defender.faction then
+		Papal_Log("blocked", {actor = actor, reason = "actor_outside_captured_battle"}); return nil;
+	end
+	local pending_battle = cm:model():pending_battle();
+	local attacker = Papal_Battle_Participant(pending_battle, "attacker");
+	local defender = Papal_Battle_Participant(pending_battle, "defender");
+	if not Papal_Same_Participant(papal_battle.attacker, attacker)
+		or not Papal_Same_Participant(papal_battle.defender, defender) then
+		Papal_Log("blocked", {actor = actor, reason = "stale_or_missing_battle_participant"}); return nil;
+	end
+	local attacker_result = Papal_Read(pending_battle, "attacker_battle_result");
+	local defender_result = Papal_Read(pending_battle, "defender_battle_result");
+	if not papal_battle_results[attacker_result] or not papal_battle_results[defender_result]
+		or (attacker_result == "close_defeat" and defender_result == "close_defeat") then
+		Papal_Log("blocked", {actor = actor, reason = "unresolved_or_retreat_result"}); return nil;
+	end
+	if papal_battle.phase == "result" and (papal_battle.attacker_result ~= attacker_result
+		or papal_battle.defender_result ~= defender_result) then
+		Papal_Log("blocked", {actor = actor, reason = "conflicting_result"}); return nil;
+	end
+	papal_battle.phase = "result";
+	papal_battle.attacker_result, papal_battle.defender_result = attacker_result, defender_result;
+	return character, faction;
+end
+
+local function Papal_Save_Battle_State(context)
+	if not papal_battle_valid then
+		cm:save_value("MKMP_PAPAL_BATTLE_STATE", papal_battle_raw, context);
+		return;
+	end
+	local rows = {papal_battle_prefix, string.format("O,%.0f;", papal_battle_ordinal)};
+	if papal_battle then
+		local b = papal_battle;
+		rows[#rows + 1] = table.concat({"B", b.phase, string.format("%.0f", b.round), b.attacker.faction,
+			string.format("%.0f", b.attacker.cqi), string.format("%.0f", b.attacker.force), tostring(b.attacker.catholic),
+			b.defender.faction, string.format("%.0f", b.defender.cqi), string.format("%.0f", b.defender.force),
+			tostring(b.defender.catholic), b.attacker_result or "none", b.defender_result or "none"}, ",")..";";
+		local keys = MK1212_SaveSortedKeys(b.decisions);
+		if #keys > 2 then error("MK1212 Papal battle decision budget exceeded"); end
+		for i = 1, #keys do
+			local decision = b.decisions[keys[i]];
+			rows[#rows + 1] = "D,"..keys[i]..","..decision.kind..","..decision.status..";";
+		end
+	end
+	local payload = table.concat(rows);
+	if #payload > 4096 then error("MK1212 Papal battle save byte budget exceeded"); end
+	-- Version and state share one engine value; no independent schema sidecar.
+	cm:save_value("MKMP_PAPAL_BATTLE_STATE", payload, context);
+end
+
+local function Papal_Load_Battle_State(context)
+	local raw = cm:load_value("MKMP_PAPAL_BATTLE_STATE", "", context);
+	papal_battle_raw = raw;
+	papal_battle, papal_battle_ordinal, papal_battle_valid = nil, 0, false;
+	if raw == "" then papal_battle_valid = true; return; end -- Legacy: require a fresh PendingBattle.
+	if type(raw) ~= "string" or #raw > 4096 or string.sub(raw, 1, #papal_battle_prefix) ~= papal_battle_prefix then
+		Papal_Log("blocked", {reason = "unknown_or_oversized_battle_save"}); return;
+	end
+	local body = string.sub(raw, #papal_battle_prefix + 1);
+	local ordinal, position = string.match(body, "^O,(%d+);()");
+	ordinal = tonumber(ordinal);
+	if not Papal_Integer(ordinal) then return; end
+	if position > #body then papal_battle_ordinal, papal_battle_valid = ordinal, true; return; end
+	local first, last, phase, round, aname, acqi, aforce, acatholic, dname, dcqi, dforce, dcatholic, aresult, dresult =
+		string.find(body, "B,([^,;]+),(%d+),([^,;]+),(%d+),(%d+),([^,;]+),([^,;]+),(%d+),(%d+),([^,;]+),([^,;]+),([^,;]+);", position);
+	if first ~= position or ordinal == 0 or (phase ~= "pending" and phase ~= "result")
+		or not Papal_Integer(tonumber(round)) or tonumber(round) > cm:model():turn_number()
+		or not Papal_Key(aname) or not Papal_Key(dname) or aname == dname
+		or not Papal_Integer(tonumber(acqi)) or not Papal_Integer(tonumber(aforce))
+		or not Papal_Integer(tonumber(dcqi)) or not Papal_Integer(tonumber(dforce))
+		or (acatholic ~= "true" and acatholic ~= "false") or (dcatholic ~= "true" and dcatholic ~= "false")
+		or (phase == "pending" and (aresult ~= "none" or dresult ~= "none"))
+		or (phase == "result" and (not papal_battle_results[aresult] or not papal_battle_results[dresult])) then return; end
+	local battle = {phase = phase, round = tonumber(round), decisions = {},
+		attacker = {faction = aname, cqi = tonumber(acqi), force = tonumber(aforce), catholic = acatholic == "true"},
+		defender = {faction = dname, cqi = tonumber(dcqi), force = tonumber(dforce), catholic = dcatholic == "true"}};
+	if phase == "result" then battle.attacker_result, battle.defender_result = aresult, dresult; end
+	position = last + 1;
+	local count = 0;
+	while position <= #body do
+		local start, finish, actor, kind, status = string.find(body, "D,([^,;]+),([^,;]+),([^,;]+);", position);
+		if start ~= position or phase ~= "result" or (actor ~= aname and actor ~= dname) or battle.decisions[actor]
+			or (kind ~= "RELEASE" and kind ~= "ENSLAVE" and kind ~= "SLAUGHTER")
+			or (status ~= "claimed" and status ~= "requested" and status ~= "unknown") or count >= 2 then return; end
+		-- A saved claim cannot be replayed: some engine effects may already exist.
+		battle.decisions[actor] = {kind = kind, status = status == "claimed" and "unknown" or status};
+		count = count + 1;
+		position = finish + 1;
+	end
+	papal_battle, papal_battle_ordinal, papal_battle_valid = battle, ordinal, true;
+end
+
+function MKMP_Papal_Get_State()
+	local function copy(value)
+		if type(value) ~= "table" then return value; end
+		local result = {};
+		local keys = MK1212_SaveSortedKeys(value);
+		if #keys > 4096 then error("Papal diagnostic snapshot exceeds entry budget"); end
+		for i = 1, #keys do result[keys[i]] = copy(value[keys[i]]); end
+		return result;
+	end
+	return {schema = 1, complete = papal_battle_valid, favour = copy(FACTION_POPE_FAVOUR),
+		excommunicated = copy(FACTION_EXCOMMUNICATED), at_war = copy(AT_WAR_WITH_POPE),
+		active = PAPAL_FAVOUR_SYSTEM_ACTIVE, force_stopped = PAPAL_FAVOUR_SYSTEM_FORCE_STOPPED,
+		deposed = POPE_DEPOSED, last_attacked_garrison = FAVOUR_LAST_ATTACKED_GARRISON,
+		postbattle = {schema = 1, enabled = papal_battle_valid, ordinal = papal_battle_ordinal,
+			identity = "observer_lifecycle_unproven", current = papal_battle and copy(papal_battle) or false}};
+end
+
 function Add_Pope_Favour_Listeners()
+	if papal_initialized then return; end
+	papal_initialized = true;
+	if MKMP_Debug_Register_State_Provider then
+		pcall(MKMP_Debug_Register_State_Provider, "papal", function()
+			local data = MKMP_Papal_Get_State();
+			if data.complete then return data, "complete"; end
+			return data, "incomplete", "papal_battle_state_invalid";
+		end);
+	end
 	cm:add_listener(
 		"FactionTurnStart_Check_Catholic_Nations",
 		"FactionTurnStart",
@@ -38,7 +295,7 @@ function Add_Pope_Favour_Listeners()
 		Activate_Papal_Favour_System();
 	end
 
-	if cm:is_multiplayer() == false then
+	if (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("pope_favour_decisions")) then
 		Register_Decision(
 			"ask_pope_for_money", 
 			function() 	
@@ -52,7 +309,7 @@ function Add_Pope_Favour_Listeners()
 					conditionstring = conditionstring.."([[rgba:8:201:27:150]]Y[[/rgba]]) - Is not excommunicated.\n";
 				end
 			
-				if FACTION_POPE_FAVOUR[faction_name] > 7 then
+				if (FACTION_POPE_FAVOUR[faction_name] or 0) > 7 then
 					conditionstring = conditionstring.."([[rgba:8:201:27:150]]Y[[/rgba]]) - Papal Favour is greater than 7.\n";
 				else
 					conditionstring = conditionstring.."([[rgba:255:0:0:150]]X[[/rgba]]) - Papal Favour is greater than 7.\n";
@@ -88,7 +345,7 @@ function Add_Pope_Favour_Listeners()
 					cm:apply_effect_bundle("mk_bundle_pope_favour_5", current_faction:name(), 0);
 					FACTION_POPE_FAVOUR[current_faction:name()] = 5;
 
-					if current_faction:is_human() and cm:is_multiplayer() == false then
+					if current_faction:is_human() and (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("pope_favour_decisions")) then
 						Add_Decision("ask_pope_for_money", current_faction:name(), false, false);
 					end
 				else
@@ -100,6 +357,15 @@ function Add_Pope_Favour_Listeners()
 end
 
 function Activate_Papal_Favour_System()
+	if papal_active_listeners then return; end
+	papal_active_listeners = true;
+	cm:add_listener(
+		"PendingBattle_Pope_Favour",
+		"PendingBattle",
+		true,
+		function(context) PendingBattle_Pope_Favour(context) end,
+		true
+	);
 	cm:add_listener(
 		"FactionLeaderDeclaresWar_Pope",
 		"FactionLeaderDeclaresWar",
@@ -205,13 +471,6 @@ function Activate_Papal_Favour_System()
 		function(context) MissionSucceeded_Check_Mission(context) end,
 		true
 	);
-	cm:add_listener(
-		"TimeTrigger_Pope",
-		"TimeTrigger",
-		true,
-		function(context) TimeTrigger_Pope(context) end,
-		true
-	);
 end
 
 function Reactivate_Papal_Favour_System()
@@ -230,12 +489,12 @@ function Reactivate_Papal_Favour_System()
 				cm:apply_effect_bundle("mk_bundle_pope_favour_5", current_faction:name(), 0);
 				FACTION_POPE_FAVOUR[current_faction:name()] = 5;
 
-				if current_faction:is_human() and cm:is_multiplayer() == false then
+				if current_faction:is_human() and (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("pope_favour_decisions")) then
 					Add_Decision("ask_pope_for_money", current_faction:name(), false, false);
 				end
 			end
 
-			cm:show_message_event(
+			Papal_Show_Message(
 				current_faction:name(),
 				"message_event_text_text_mk_event_pope_papacy_restored_title",
 				"message_event_text_text_mk_event_pope_papacy_restored_primary",
@@ -249,6 +508,9 @@ end
 
 function Deactivate_Papal_Favour_System()
 	PAPAL_FAVOUR_SYSTEM_ACTIVE = false;
+	papal_active_listeners = false;
+	papal_battle = nil;
+	cm:remove_listener("PendingBattle_Pope_Favour");
 	cm:remove_listener("FactionLeaderDeclaresWar_Pope");
 	cm:remove_listener("GarrisonAttackedEvent_Pope");
 	cm:remove_listener("CharacterPerformsOccupationDecisionLoot_Pope");
@@ -264,7 +526,6 @@ function Deactivate_Papal_Favour_System()
 	cm:remove_listener("FactionReligionConverted_Pope");
 	cm:remove_listener("MissionFailed_Check_Mission");
 	cm:remove_listener("MissionSucceeded_Check_Mission");
-	cm:remove_listener("TimeTrigger_Pope");
 
 	local faction_list = cm:model():world():faction_list();
 
@@ -277,8 +538,8 @@ function Deactivate_Papal_Favour_System()
 			Remove_Excommunication_Manual(current_faction:name());
 		end
 
-		if current_faction:is_human() and cm:is_multiplayer() == false then
-			Remove_Decision("ask_pope_for_money");
+		if current_faction:is_human() and (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("pope_favour_decisions")) then
+			Remove_Decision("ask_pope_for_money", current_faction:name());
 		end
 
 		for j = 0, 10 do
@@ -293,12 +554,15 @@ function Force_Stop_Papal_Favour_System()
 end
 
 function FactionTurnStart_Check_Catholic_Nations(context)
+	local actor = Papal_Read(context, "faction");
+	if not Papal_Valid_Interface(actor) then return; end
 	local faction_name = context:faction():name();
 	local faction_religion = context:faction():state_religion();
 	local turn_number = cm:model():turn_number();
 
 	if faction_religion == "att_rel_chr_catholic" and faction_name ~= PAPAL_STATES_KEY then
-		local pope_faction = cm:model():world():faction_by_key(PAPAL_STATES_KEY);
+		local pope_faction = Papal_Faction(PAPAL_STATES_KEY);
+		if not pope_faction then return; end
 		local war_with_pope = context:faction():at_war_with(pope_faction);
 
 		AT_WAR_WITH_POPE[faction_name] = war_with_pope;
@@ -357,8 +621,8 @@ function FactionTurnStart_Check_Catholic_Nations(context)
 
 		Remove_Excommunication_Manual(faction_name);
 
-		if context:faction():is_human() and cm:is_multiplayer() == false then
-			Remove_Decision("ask_pope_for_money");
+		if context:faction():is_human() and (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("pope_favour_decisions")) then
+			Remove_Decision("ask_pope_for_money", faction_name);
 		end
 	end
 
@@ -370,18 +634,20 @@ end
 
 function GarrisonAttackedEvent_Pope(context)
 	FAVOUR_LAST_ATTACKED_GARRISON = "";
-
-	if context:garrison_residence():is_null_interface() == false then
-		if context:garrison_residence():faction():is_null_interface() == false then
-			FAVOUR_LAST_ATTACKED_GARRISON = context:garrison_residence():faction():name();
-		end
+	local garrison = Papal_Read(context, "garrison_residence");
+	if not Papal_Valid_Interface(garrison) then return; end
+	local faction = Papal_Read(garrison, "faction");
+	if Papal_Valid_Interface(faction) then
+		FAVOUR_LAST_ATTACKED_GARRISON = faction:name();
 	end
 end
 
 function Check_If_Catholic_Attacked(context, type)
-	local region = FindClosestRegion(context:character():logical_position_x(), context:character():logical_position_y(), "none"); -- Taking the character's region may be inaccurate if they're at sea or across a strait.
+	local character, faction = Papal_Character(context);
+	if not character or not PAPAL_FAVOUR_SYSTEM_ACTIVE then return; end
+	local region = FindClosestRegion(character:logical_position_x(), character:logical_position_y(), "none"); -- Taking the character's region may be inaccurate if they're at sea or across a strait.
 
-	if region then
+	if Papal_Valid_Interface(region) then
 		local region_name = region:name();
 		local faction_name = context:character():faction():name();
 
@@ -396,9 +662,9 @@ function Check_If_Catholic_Attacked(context, type)
 								defender_name = FAVOUR_LAST_ATTACKED_GARRISON;
 							end
 
-							local sacked_faction = cm:model():world():faction_by_key(defender_name);
+							local sacked_faction = Papal_Faction(defender_name);
 
-							if sacked_faction:is_null_interface() == false then
+							if sacked_faction then
 								local sacked_rel = sacked_faction:state_religion();
 
 								if sacked_rel == "att_rel_chr_catholic" then
@@ -411,13 +677,17 @@ function Check_If_Catholic_Attacked(context, type)
 				end
 			end
 		else
-			if region:owning_faction():name() == PAPAL_STATES_KEY then
+			local owner = Papal_Read(region, "owning_faction");
+			if Papal_Valid_Interface(owner) and owner:name() == PAPAL_STATES_KEY then
 				if context:character():faction():is_human() then
 					if context:character():faction():state_religion() == "att_rel_chr_catholic" then
 						cm:trigger_dilemma(faction_name, "mk_dilemma_rome_attacked_christian");
 						Force_Excommunication(faction_name);
 					else
-						cm:show_message_event(
+						-- Resolve the complete target collection before starting the
+						-- transition. The old branch referenced an undefined local.
+						local faction_list = cm:model():world():faction_list();
+						Papal_Show_Message(
 							faction_name,
 							"message_event_text_text_mk_event_pope_rome_attacked_nonchrist_title",
 							"message_event_text_text_mk_event_pope_rome_attacked_nonchrist_primary",
@@ -429,7 +699,7 @@ function Check_If_Catholic_Attacked(context, type)
 						for i = 0, faction_list:num_items() - 1 do
 							local current_faction = faction_list:item_at(i);
 
-							if current_faction:state_religion() == "att_rel_chr_catholic" then
+							if Papal_Valid_Interface(current_faction) and current_faction:state_religion() == "att_rel_chr_catholic" then
 								cm:apply_effect_bundle("mk_bundle_christian_dejection", current_faction:name(), 0);
 							end
 						end
@@ -443,9 +713,12 @@ function Check_If_Catholic_Attacked(context, type)
 end
 
 function Check_Excommunication_Pope_War(context)
+	local character, faction = Papal_Character(context);
+	if not character then return; end
 	if AT_WAR_WITH_POPE[context:character():faction():name()] == false then
 		-- They weren't at war with the Pope...
-		local pope_faction = cm:model():world():faction_by_key(PAPAL_STATES_KEY);
+		local pope_faction = Papal_Faction(PAPAL_STATES_KEY);
+		if not pope_faction then return; end
 		local now_at_war = context:character():faction():at_war_with(pope_faction);
 			
 		if now_at_war == true then
@@ -455,7 +728,7 @@ function Check_Excommunication_Pope_War(context)
 			if context:character():faction():state_religion() == "att_rel_chr_catholic" then
 				Force_Excommunication(context:character():faction():name());
 			else
-				cm:show_message_event(
+				Papal_Show_Message(
 					context:character():faction():name(),
 					"message_event_text_text_mk_event_pope_enemy_of_christendom_title",
 					"message_event_text_text_mk_event_pope_enemy_of_christendom_primary",
@@ -471,65 +744,48 @@ function Check_Excommunication_Pope_War(context)
 end
 
 function CharacterCompletedBattle_Pope_Favour(context)
-	local character = context:character();
-
-	if character:faction():state_religion() == "att_rel_chr_catholic" and character:faction():is_human() then	
-		local character_force_cqi = -1;
-		
-		if character:has_military_force() then
-			character_force_cqi = character:military_force():command_queue_index();
-		end
-		
-		if character_force_cqi == -1 then
-			return;
-		end
-		
-		local pending_battle = cm:model():pending_battle();
-		local attacker_result = nil;
-		local defender_result = nil;
-		
-		if pending_battle:has_attacker() then
-			attacker_result = pending_battle:attacker_battle_result();
-		end
-		
-		if pending_battle:has_defender() then
-			defender_result = pending_battle:defender_battle_result();
-		end
-		
-		if attacker_result == "close_defeat" and defender_result == "close_defeat" then
-			-- They've both had a close defeat, probably a retreat!
-			POSTBATTLE_DECISION_ENEMY_CATHOLIC = false;
-			return;
-		end
-
-		if pending_battle:attacker():has_military_force() and pending_battle:attacker():faction():state_religion() == "att_rel_chr_catholic" and pending_battle:defender():has_military_force() and pending_battle:defender():faction():state_religion() == "att_rel_chr_catholic" then
-			POSTBATTLE_DECISION_ENEMY_CATHOLIC = true;
-		else
-			POSTBATTLE_DECISION_ENEMY_CATHOLIC = false;
-		end
-	end
+	local character, faction = Papal_Observe_Battle_Result(context);
+	if not character then return; end
+	Papal_Log("observed", {actor = faction:name(), phase = "character_completed_battle",
+		attacker_result = papal_battle.attacker_result, defender_result = papal_battle.defender_result});
 end
 
-function CharacterPostBattle_Favour(context, type)
-	if context:character():faction():state_religion() == "att_rel_chr_catholic" and context:character():faction():is_human() and POSTBATTLE_DECISION_MADE_RECENTLY == false and POSTBATTLE_DECISION_ENEMY_CATHOLIC == true then
-		if FACTION_EXCOMMUNICATED[context:character():faction():name()] ~= true then
-			if type == "RELEASE" then
-				Add_Pope_Favour(context:character():faction():name(), 1, "released_captives");
-			elseif type == "SLAUGHTER" then
-				local faction_name = context:character():faction():name();
-
-				if faction_name ~= PAPAL_STATES_KEY and faction_name ~= POPE_CONTROLLING_FACTION then
-					Subtract_Pope_Favour(context:character():faction():name(), 1, "slaughtered_captives");
-				end
+function CharacterPostBattle_Favour(context, decision_kind)
+	if decision_kind ~= "RELEASE" and decision_kind ~= "ENSLAVE" and decision_kind ~= "SLAUGHTER" then return false; end
+	-- Result observation here also handles a decision callback arriving before
+	-- CharacterCompletedBattle; it never opens a missing PendingBattle lifecycle.
+	local character, faction = Papal_Observe_Battle_Result(context);
+	if not character then return false; end
+	local actor = faction:name();
+	if faction:state_religion() ~= "att_rel_chr_catholic" or not faction:is_human()
+		or not papal_battle.attacker.catholic or not papal_battle.defender.catholic then return false; end
+	local previous = papal_battle.decisions[actor];
+	if previous then
+		Papal_Log(previous.kind == decision_kind and "duplicate" or "blocked",
+			{actor = actor, kind = decision_kind, reason = "battle_faction_decision_already_claimed"});
+		return false;
+	end
+	-- All callbacks for generals of one faction share one decision claim. Two
+	-- human factions have independent claims; a one-second global latch cannot
+	-- suppress the other player's action or reopen a previous decision.
+	local decision = {kind = decision_kind, status = "claimed"};
+	papal_battle.decisions[actor] = decision;
+	Papal_Log("claimed", {actor = actor, kind = decision_kind, phase = "postbattle_decision"});
+	local ok = pcall(function()
+		if FACTION_EXCOMMUNICATED[actor] ~= true then
+			if decision_kind == "RELEASE" then
+				Add_Pope_Favour(actor, 1, "released_captives");
+			elseif decision_kind == "SLAUGHTER" and actor ~= PAPAL_STATES_KEY and actor ~= POPE_CONTROLLING_FACTION then
+				Subtract_Pope_Favour(actor, 1, "slaughtered_captives");
 			end
 		end
-
-		POSTBATTLE_DECISION_MADE_RECENTLY = true;
-		
-		cm:add_time_trigger("Postbattle_Decision_Pope", 1);
-
-		Update_Pope_Favour(context:character():faction());
-	end
+	end);
+	-- A returned command is requested, not proof of successful engine delivery.
+	-- On error the claim survives save/load; an uncertain partial effect is never
+	-- retried automatically, including through a different decision callback.
+	decision.status = ok and "requested" or "unknown";
+	Papal_Log(decision.status, {actor = actor, kind = decision_kind, phase = "postbattle_decision"});
+	return ok;
 end
 
 function DilemmaChoiceMadeEvent_Pope(context)
@@ -574,8 +830,8 @@ function FactionReligionConverted_Pope(context)
 			Remove_Excommunication_Manual(faction_name);
 
 			if faction:is_human() then 
-				if cm:is_multiplayer() == false then
-					Remove_Decision("ask_pope_for_money");
+				if (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("pope_favour_decisions")) then
+					Remove_Decision("ask_pope_for_money", faction_name);
 				end
 
 				if MISSION_TAKE_JERUSALEM_ACTIVE == true then
@@ -654,6 +910,7 @@ function MissionFailed_Check_Mission(context)
 end
 
 function Update_Pope_Favour(faction)
+	if not Papal_Valid_Interface(faction) then return false; end
 	local pope_favour = 5;
 	local bundle_applied = false;
 	
@@ -680,11 +937,11 @@ function Update_Pope_Favour(faction)
 
 	Check_Excommunication_Low_Favour(faction);
 
-	if faction:is_human() and cm:is_multiplayer() == false then
+	if faction:is_human() and (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("pope_favour_decisions")) then
 		if pope_favour > 7 then
-			Enable_Decision("ask_pope_for_money");
+			Enable_Decision("ask_pope_for_money", faction:name());
 		else
-			Disable_Decision("ask_pope_for_money");
+			Disable_Decision("ask_pope_for_money", faction:name());
 		end
 	end
 end
@@ -693,20 +950,20 @@ function Check_Excommunication_Low_Favour(faction)
 	local faction_name = faction:name();
 
 	if FACTION_POPE_FAVOUR[faction_name] == 0 and FACTION_EXCOMMUNICATED[faction_name] ~= true then
-		cm:apply_effect_bundle("mk_bundle_pope_excommunication", faction_name, 0);
 		FACTION_EXCOMMUNICATED[faction_name] = true;
+		cm:apply_effect_bundle("mk_bundle_pope_excommunication", faction_name, 0);
 
-		if faction:is_human() and cm:is_multiplayer() == false then
-			Remove_Decision("ask_pope_for_money");
+		if faction:is_human() and (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("pope_favour_decisions")) then
+			Remove_Decision("ask_pope_for_money", faction_name);
 		end
 
 		if IRONMAN_ENABLED then
-			if faction:is_human() and cm:is_multiplayer() == false then
+			if faction:is_human() and (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("pope_favour_decisions")) then
 				Unlock_Achievement("achievement_its_only_human_to_sin");
 			end
 		end
 
-		cm:show_message_event(
+		Papal_Show_Message(
 			faction_name,
 			"message_event_text_text_mk_event_pope_excommunication_title",
 			"message_event_text_text_mk_event_pope_excommunication_primary",
@@ -728,7 +985,7 @@ function Check_Excommunication_Low_Favour(faction)
 					faction_string = "campaign_localised_strings_string_"..faction_name.."_lvl"..tostring(FACTIONS_DFN_LEVEL[faction_name]);
 				end
 
-				cm:show_message_event(
+				Papal_Show_Message(
 					current_faction_name,
 					"message_event_text_text_mk_event_pope_excommunication_other_title",
 					faction_string,
@@ -747,7 +1004,8 @@ end
 
 function Force_Excommunication(faction_name, silent)
 	if FACTION_EXCOMMUNICATED[faction_name] ~= true then
-		local faction = cm:model():world():faction_by_key(faction_name);
+		local faction = Papal_Faction(faction_name);
+		if not faction then return false; end
 
 		FACTION_POPE_FAVOUR[faction_name] = 0;
 		FACTION_EXCOMMUNICATED[faction_name] = true;
@@ -759,18 +1017,18 @@ function Force_Excommunication(faction_name, silent)
 		cm:apply_effect_bundle("mk_bundle_pope_favour_0", faction_name, 0);
 		cm:apply_effect_bundle("mk_bundle_pope_excommunication", faction_name, 0);
 
-		if faction:is_human() and cm:is_multiplayer() == false then
-			Remove_Decision("ask_pope_for_money");
+		if faction:is_human() and (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("pope_favour_decisions")) then
+			Remove_Decision("ask_pope_for_money", faction_name);
 		end
 
 		if not silent then
 			if IRONMAN_ENABLED then
-				if faction:is_human() and cm:is_multiplayer() == false then
+				if faction:is_human() and (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("pope_favour_decisions")) then
 					Unlock_Achievement("achievement_its_only_human_to_sin");
 				end
 			end
 
-			cm:show_message_event(
+			Papal_Show_Message(
 				faction_name,
 				"message_event_text_text_mk_event_pope_excommunication_title",
 				"message_event_text_text_mk_event_pope_excommunication_primary",
@@ -794,7 +1052,7 @@ function Force_Excommunication(faction_name, silent)
 						faction_string = "campaign_localised_strings_string_"..faction_name.."_lvl"..tostring(FACTIONS_DFN_LEVEL[faction_name]);
 					end
 
-					cm:show_message_event(
+					Papal_Show_Message(
 						current_faction_name,
 						"message_event_text_text_mk_event_pope_excommunication_other_title",
 						faction_string,
@@ -808,112 +1066,91 @@ function Force_Excommunication(faction_name, silent)
 	end
 end
 
-function Remove_Excommunication(context)
-	-- This faction has a new leader, so lets remove their excommunication!
+local function Papal_Clear_Excommunication(faction)
+	if not Papal_Valid_Interface(faction) then return false; end
+	local faction_name = faction:name();
+	if FACTION_EXCOMMUNICATED[faction_name] ~= true then return false; end
 
-	if FACTION_EXCOMMUNICATED[context:character():faction():name()] == true then
-		FACTION_EXCOMMUNICATED[context:character():faction():name()] = false;
-		cm:remove_effect_bundle("mk_bundle_pope_excommunication", context:character():faction():name());
-
-		if context:character():faction():state_religion() == "att_rel_chr_catholic" then
-			FACTION_POPE_FAVOUR[context:character():faction():name()] = 2;
-
-			if context:character():faction():is_human() and cm:is_multiplayer() == false then
-				Add_Decision("ask_pope_for_money", context:character():faction():name(), false, false);
-			end
-
-			cm:show_message_event(
-				context:faction():name(),
-				"message_event_text_text_mk_event_pope_excommunication_lifted_title",
-				"message_event_text_text_mk_event_pope_excommunication_lifted_primary",
-				"message_event_text_text_mk_event_pope_excommunication_lifted_secondary",
-				true, 
-				701
-			);
-
-			local faction_list = cm:model():world():faction_list();
-
-			for i = 0, faction_list:num_items() - 1 do
-				local current_faction = faction_list:item_at(i);
-
-				if current_faction:name() ~= context:faction():name() and current_faction:is_human() then
-					local rank = FACTIONS_DFN_LEVEL(context:faction():name());
-
-					cm:show_message_event(
-						current_faction:name(),
-						"message_event_text_text_mk_event_pope_excommunication_lifted_other_title",
-						"campaign_localised_strings_string_"..context:faction():name().."_lvl"..tostring(rank),
-						"message_event_text_text_mk_event_pope_excommunication_lifted_other_secondary",
-						true, 
-						707
-					);
-				end
-			end
-		end
-	end
-end
-
-function Remove_Excommunication_Manual(faction_name)
-	local faction = cm:model():world():faction_by_key(faction_name);
-
+	-- Claim the transition before issuing model commands. Repeated leader or
+	-- dilemma callbacks cannot reset favour or repeat the notification.
 	FACTION_EXCOMMUNICATED[faction_name] = false;
 	cm:remove_effect_bundle("mk_bundle_pope_excommunication", faction_name);
-
-	if faction:state_religion() == "att_rel_chr_catholic" and PAPAL_FAVOUR_SYSTEM_ACTIVE == true then
+	if faction:state_religion() == "att_rel_chr_catholic" and PAPAL_FAVOUR_SYSTEM_ACTIVE then
 		FACTION_POPE_FAVOUR[faction_name] = 2;
-
-		if faction:is_human() and cm:is_multiplayer() == false then
+		if faction:is_human() and (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("pope_favour_decisions")) then
 			Add_Decision("ask_pope_for_money", faction_name, false, false);
 		end
-
-		cm:show_message_event(
+		Update_Pope_Favour(faction);
+		Papal_Show_Message(
 			faction_name,
 			"message_event_text_text_mk_event_pope_excommunication_lifted_title",
 			"message_event_text_text_mk_event_pope_excommunication_lifted_primary",
 			"message_event_text_text_mk_event_pope_excommunication_lifted_secondary",
-			true, 
-			701
+			true, 701
 		);
-
 		local faction_list = cm:model():world():faction_list();
-
+		local faction_label = Papal_Faction_Label(faction_name);
 		for i = 0, faction_list:num_items() - 1 do
 			local current_faction = faction_list:item_at(i);
-
-			if current_faction:name() ~= faction_name and current_faction:is_human() then
-				local rank = FACTIONS_DFN_LEVEL(faction_name);
-
-				cm:show_message_event(
+			if Papal_Valid_Interface(current_faction) and current_faction:name() ~= faction_name and current_faction:is_human() then
+				Papal_Show_Message(
 					current_faction:name(),
 					"message_event_text_text_mk_event_pope_excommunication_lifted_other_title",
-					"campaign_localised_strings_string_"..faction_name.."_lvl"..tostring(rank),
+					faction_label,
 					"message_event_text_text_mk_event_pope_excommunication_lifted_other_secondary",
-					true, 
-					707
+					true, 707
 				);
 			end
 		end
-
-		Update_Pope_Favour(faction);
 	end
+	Papal_Log("requested", {actor = faction_name, phase = "excommunication_lifted"});
+	return true;
+end
+
+function Remove_Excommunication(context)
+	-- CharacterBecomesFactionLeader supplies a character; context:faction is not
+	-- a supported substitute for this event's owner.
+	local character, faction = Papal_Character(context);
+	if not character then return false; end
+	return Papal_Clear_Excommunication(faction);
+end
+
+function Remove_Excommunication_Manual(faction_name)
+	return Papal_Clear_Excommunication(Papal_Faction(faction_name));
+end
+
+function MKMP_Papal_Validate_Loan(faction_name)
+	local faction = Papal_Faction(faction_name);
+	if not faction or faction_name == PAPAL_STATES_KEY or not faction:is_human() then return false, "invalid_actor"; end
+	if not PAPAL_FAVOUR_SYSTEM_ACTIVE or PAPAL_FAVOUR_SYSTEM_FORCE_STOPPED or not Papal_Faction(PAPAL_STATES_KEY) then
+		return false, "papacy_inactive";
+	end
+	if not FactionIsAlive(faction_name) then return false, "actor_dead"; end
+	if faction:state_religion() ~= "att_rel_chr_catholic" or FACTION_EXCOMMUNICATED[faction_name] == true then
+		return false, "actor_ineligible";
+	end
+	local favour = FACTION_POPE_FAVOUR[faction_name];
+	if not Papal_Integer(favour) or favour < 8 or favour > 10 then return false, "insufficient_favour"; end
+	return true, nil, ({[8] = 5000, [9] = 7500, [10] = 10000})[favour];
 end
 
 function Decision_Pope_Money(faction_name)
-	local faction =  cm:model():world():faction_by_key(faction_name);
-
-	if FACTION_POPE_FAVOUR[faction_name] == 8 then
-		cm:treasury_mod(faction_name, 5000);
-	elseif FACTION_POPE_FAVOUR[faction_name] == 9 then
-		cm:treasury_mod(faction_name, 7500);
-	elseif FACTION_POPE_FAVOUR[faction_name] == 10 then
-		cm:treasury_mod(faction_name, 10000);
-	end
-
+	-- The action registry owns accepted intent IDs and no-retry claims. This is
+	-- the mutation executor, called only after that execution contract permits it.
+	local valid, reason, amount = MKMP_Papal_Validate_Loan(faction_name);
+	if not valid then return false, reason; end
+	Papal_Log("validated", {actor = faction_name, phase = "loan_execute", amount = amount,
+		action_identity = "caller_owned"});
+	cm:treasury_mod(faction_name, amount);
 	Subtract_Pope_Favour(faction_name, 3, "borrowed_money");
+	Papal_Log("requested", {actor = faction_name, phase = "loan_execute", amount = amount,
+		action_identity = "caller_owned"});
+	return true;
 end
 
 function Add_Pope_Favour(faction_name, amount, reason)
-	local faction =  cm:model():world():faction_by_key(faction_name);
+	local faction = Papal_Faction(faction_name);
+	if not faction or not Papal_Integer(amount) then return false; end
 
 	if FACTION_POPE_FAVOUR[faction_name] == nil then
 		FACTION_POPE_FAVOUR[faction_name] = 5 + amount;
@@ -925,7 +1162,8 @@ function Add_Pope_Favour(faction_name, amount, reason)
 		FACTION_POPE_FAVOUR[faction_name] = math.min(FACTION_POPE_FAVOUR[faction_name], MAX_POPE_FAVOUR);
 	end
 
-	cm:show_message_event(
+	Update_Pope_Favour(faction);
+	Papal_Show_Message(
 		faction_name,
 		"message_event_text_text_mk_event_pope_favour_increase_title",
 		"message_event_text_text_mk_event_pope_favour_increase_primary_"..reason,
@@ -934,11 +1172,12 @@ function Add_Pope_Favour(faction_name, amount, reason)
 		701
 	);
 
-	Update_Pope_Favour(faction);
+	return true;
 end
 
 function Subtract_Pope_Favour(faction_name, amount, reason)
-	local faction =  cm:model():world():faction_by_key(faction_name);
+	local faction = Papal_Faction(faction_name);
+	if not faction or not Papal_Integer(amount) then return false; end
 
 	if FACTION_POPE_FAVOUR[faction_name] == nil then
 		FACTION_POPE_FAVOUR[faction_name] = 5 - amount;
@@ -950,7 +1189,8 @@ function Subtract_Pope_Favour(faction_name, amount, reason)
 		FACTION_POPE_FAVOUR[faction_name] = math.min(FACTION_POPE_FAVOUR[faction_name], MAX_POPE_FAVOUR);
 	end
 
-	cm:show_message_event(
+	Update_Pope_Favour(faction);
+	Papal_Show_Message(
 		faction_name,
 		"message_event_text_text_mk_event_pope_favour_decrease_title",
 		"message_event_text_text_mk_event_pope_favour_decrease_primary_"..reason,
@@ -959,13 +1199,13 @@ function Subtract_Pope_Favour(faction_name, amount, reason)
 		707
 	);
 
-	Update_Pope_Favour(faction);
+	return true;
 end
 
 function TimeTrigger_Pope(context)
-	if context.string == "Postbattle_Decision_Pope" then
-		POSTBATTLE_DECISION_MADE_RECENTLY = false;
-	end
+	-- Compatibility for a timer already queued in a pre-N0 save. It has no
+	-- authority to reopen a postbattle decision and schedules no replacement.
+	return false;
 end
 
 ------------------------------------------------
@@ -979,16 +1219,32 @@ cm:register_saving_game_callback(
 		cm:save_value("PAPAL_FAVOUR_SYSTEM_FORCE_STOPPED", PAPAL_FAVOUR_SYSTEM_FORCE_STOPPED, context);
 		cm:save_value("FAVOUR_LAST_ATTACKED_GARRISON", FAVOUR_LAST_ATTACKED_GARRISON, context);
 		cm:save_value("POPE_DEPOSED", POPE_DEPOSED, context);
+		Papal_Save_Battle_State(context);
 	end
 );
 
 cm:register_loading_game_callback(
 	function(context)
-		FACTION_POPE_FAVOUR = LoadKeyPairTableNumbers(context, "FACTION_POPE_FAVOUR");
-		FACTION_EXCOMMUNICATED = LoadBooleanPairTable(context, "FACTION_EXCOMMUNICATED");
-		PAPAL_FAVOUR_SYSTEM_ACTIVE = cm:load_value("PAPAL_FAVOUR_SYSTEM_ACTIVE", true, context);
-		PAPAL_FAVOUR_SYSTEM_FORCE_STOPPED = cm:load_value("PAPAL_FAVOUR_SYSTEM_FORCE_STOPPED", false, context);
-		FAVOUR_LAST_ATTACKED_GARRISON = cm:load_value("FAVOUR_LAST_ATTACKED_GARRISON", "", context);
-		POPE_DEPOSED = cm:load_value("POPE_DEPOSED", false, context);
+		local favour = LoadKeyPairTableNumbers(context, "FACTION_POPE_FAVOUR");
+		local excommunicated = LoadBooleanPairTable(context, "FACTION_EXCOMMUNICATED");
+		local active = cm:load_value("PAPAL_FAVOUR_SYSTEM_ACTIVE", true, context);
+		local force_stopped = cm:load_value("PAPAL_FAVOUR_SYSTEM_FORCE_STOPPED", false, context);
+		local garrison = cm:load_value("FAVOUR_LAST_ATTACKED_GARRISON", "", context);
+		local deposed = cm:load_value("POPE_DEPOSED", false, context);
+		if type(active) ~= "boolean" or type(force_stopped) ~= "boolean" or type(deposed) ~= "boolean"
+			or (garrison ~= "" and not Papal_Key(garrison)) then error("MK1212 invalid Papal save state"); end
+		local keys = MK1212_SaveSortedKeys(favour);
+		if #keys > 4096 then error("MK1212 Papal favour faction budget exceeded"); end
+		for i = 1, #keys do
+			if not Papal_Key(keys[i]) or not Papal_Integer(favour[keys[i]]) or favour[keys[i]] > MAX_POPE_FAVOUR then
+				error("MK1212 invalid Papal favour save value");
+			end
+		end
+		-- Validate the whole legacy snapshot before replacing either authoritative
+		-- map. An unknown owned battle frame disables only postbattle processing.
+		Papal_Load_Battle_State(context);
+		FACTION_POPE_FAVOUR, FACTION_EXCOMMUNICATED = favour, excommunicated;
+		PAPAL_FAVOUR_SYSTEM_ACTIVE, PAPAL_FAVOUR_SYSTEM_FORCE_STOPPED = active, force_stopped;
+		FAVOUR_LAST_ATTACKED_GARRISON, POPE_DEPOSED = garrison, deposed;
 	end
 );

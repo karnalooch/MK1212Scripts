@@ -16,6 +16,12 @@ local PENDING_OPERATION_MAX_AGE_TURNS = 1;
 
 FACTIONS_TO_FACTIONS_VASSALIZED = {};
 
+function MKMP_Vassals_Get_State()
+	return MKMP_Diagnostic_Copy({schema = 1, relations = FACTIONS_TO_FACTIONS_VASSALIZED,
+		liberation = PENDING_LIBERATION_CHECKS, subjugation = PENDING_SUBJUGATIONS,
+		diplomacy = PENDING_DIPLO_EVENTS}), "complete";
+end
+
 local function VassalTrackingLog(message)
 	if MKMP_Debug_Log then
 		MKMP_Debug_Log(
@@ -38,7 +44,7 @@ local function VassalTrackingSortedKeys(tab)
 		table.insert(keys, key);
 	end
 
-	table.sort(keys);
+	table.sort(keys, MK1212_SaveByteLess);
 	return keys;
 end
 

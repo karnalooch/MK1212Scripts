@@ -12,6 +12,8 @@ This is the documentation router and authority map for this fork.
 - [`native/twdll/`](../native/twdll/) — canonical MK1212 native source; provenance is pinned in [`native/twdll/UPSTREAM.md`](../native/twdll/UPSTREAM.md).
 - [Dual-peer MP simulation harness](research/MP_DUAL_PEER_SIMULATION.md) — CI-only fake HOST/CLIENT determinism, persistence fuzzing, source contracts and fault injection.
 - [MP file debug logging](research/MP_DEBUG_LOGGING.md) — bounded `MK1212_mp_debug.log`, structured event schema and HOST/CLIENT comparator.
+- [N0–N4 implementation](research/MP_N0_N4_IMPLEMENTATION.md) — captured actions, save compatibility, first divergence, native delivery limits and buffered receipts.
+- [N4 HOST coordinator](runtime/MP_HOST_COORDINATOR.md) — setup and one consolidated two-PC evidence capture.
 - [Architecture](ARCHITECTURE.md) — repository layout, runtime boundaries and authoritative surfaces.
 - [Gumball adoption](GUMBALL_ADOPTION.md) — repository-platform baseline, current immutable platform pin and deferred items.
 - [Diagram style](DIAGRAM_STYLE.md) — required Blueprint-style diagram conventions.

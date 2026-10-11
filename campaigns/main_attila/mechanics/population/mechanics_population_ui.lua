@@ -8,6 +8,8 @@
 ---------------------------------------------------------------------------------------------------------------------
 
 local button_disband_pressed = false;
+local captured_disband = nil;
+local captured_commander = nil;
 
 POPULATION_COMMANDER_TO_REPLACE_CQI = 0;
 POPULATION_CURRENT_TOOLTIP_SELECTED = 0;
@@ -236,48 +238,22 @@ function OnComponentLClickUp_Population_UI(context)
 		Change_Tooltip_Population_UI(REGION_SELECTED, POPULATION_CURRENT_TOOLTIP_SELECTED, false);
 	elseif string.find(context.string, "_recruitable") then
 		local unit_name = string.gsub(context.string, "_recruitable", "");
-		local unit_population_table = POPULATION_UNITS_TO_POPULATION[unit_name];
-		
-		if unit_population_table then
-			if UIComponent(context.component):CurrentState() == "active" then
-				local unit_class = unit_population_table[2];
-
-				if not LAST_CHARACTER_SELECTED:faction():is_horde() then
-					local region_name = LAST_CHARACTER_SELECTED:region():name();	
-					local region_class_manpower = POPULATION_REGIONS_MANPOWER[region_name][unit_class];
-
-					Change_Manpower_Region(region_name, unit_class, -unit_population_table[1]);
-				end
-
-				if POPULATION_UNITS_IN_RECRUITMENT[tostring(LAST_CHARACTER_SELECTED:cqi())] == nil then
-					POPULATION_UNITS_IN_RECRUITMENT[tostring(LAST_CHARACTER_SELECTED:cqi())] = {};
-				end
-
-				table.insert(POPULATION_UNITS_IN_RECRUITMENT[tostring(LAST_CHARACTER_SELECTED:cqi())], unit_name);
+		if POPULATION_UNITS_TO_POPULATION[unit_name] and UIComponent(context.component):CurrentState() == "active" then
+			local payload = MKMP_Population_Capture_Recruit(LAST_CHARACTER_SELECTED, unit_name);
+			if payload then
+				local accepted, reason = MKMP_Actions_Submit_Local("population_recruit", payload.actor, payload);
+				if not accepted then MKMP_Actions_UI_Feedback(context.component, reason); end
 			end
-
 			UIComponent(context.component):SetDisabled(true);
 			cm:add_time_trigger("Unit_Cards", 0.0);
 		end
 	elseif string.find(context.string, "QueuedLandUnit") then
-		local queue_number = string.gsub(context.string, "QueuedLandUnit ", "");
-
-		queue_number = tonumber(queue_number) + 1;
-
-		local unit_name = POPULATION_UNITS_IN_RECRUITMENT[tostring(LAST_CHARACTER_SELECTED:cqi())][queue_number];
-		local unit_population_table = POPULATION_UNITS_TO_POPULATION[unit_name];
-
-		if unit_population_table then
-			local unit_class = unit_population_table[2];
-
-			if not LAST_CHARACTER_SELECTED:faction():is_horde() then
-				local region_name = LAST_CHARACTER_SELECTED:region():name();	
-				local region_class_manpower = POPULATION_REGIONS_MANPOWER[region_name][unit_class];
-
-				Change_Manpower_Region(region_name, unit_class, unit_population_table[1]);
-			end
-
-			table.remove(POPULATION_UNITS_IN_RECRUITMENT[tostring(LAST_CHARACTER_SELECTED:cqi())], queue_number);
+		local value = string.match(context.string, "^QueuedLandUnit (%d+)$");
+		local slot = value and tonumber(value) + 1;
+		local payload = slot and MKMP_Population_Capture_Cancel(LAST_CHARACTER_SELECTED, slot);
+		if payload then
+			local accepted, reason = MKMP_Actions_Submit_Local("population_cancel", payload.actor, payload);
+			if not accepted then MKMP_Actions_UI_Feedback(context.component, reason); end
 		end
 	elseif string.find(context.string, "LandUnit") then
 		local unit_card_uic = UIComponent(context.component);
@@ -296,22 +272,31 @@ function OnComponentLClickUp_Population_UI(context)
 		end
 	elseif context.string == "button_tick" then
 		if UIComponent(context.component):GetTooltipText() == "Accept" and button_disband_pressed == true then
-			cm:add_time_trigger("Check_Disbanded_Units", 0.1);
-			cm:trigger_event("UnitDisbanded"); -- I should probably put this in mk1212_common or something but I'm lazy.
-			button_disband_pressed = false;
+			local payload = captured_disband;
+			captured_disband, button_disband_pressed = nil, false;
+			if payload then
+				local accepted, reason = MKMP_Actions_Submit_Local("population_force", payload.actor, payload);
+				if not accepted then MKMP_Actions_UI_Feedback(context.component, reason); end
+			end
 		elseif UIComponent(context.component):GetTooltipText() == "Cancel" and button_disband_pressed == true then
-			button_disband_pressed = false;
+			captured_disband, button_disband_pressed = nil, false;
 		end
 	elseif context.string == "button_replace_general" then
-		POPULATION_COMMANDER_TO_REPLACE_CQI = LAST_CHARACTER_SELECTED:cqi();
+		captured_commander = MKMP_Population_Capture_Force(LAST_CHARACTER_SELECTED, "commander");
 	elseif context.string == "button_accept_general" then
-		cm:add_time_trigger("Update_Force_CQI", 0.5);
+		local payload = captured_commander;
+		captured_commander = nil;
+		if payload then
+			local accepted, reason = MKMP_Actions_Submit_Local("population_force", payload.actor, payload);
+			if not accepted then MKMP_Actions_UI_Feedback(context.component, reason); end
+		end
 	elseif context.string == "Summary" or context.string == "Records" then
 		cm:add_time_trigger("Faction_Panel_Population", 0.0);
 	end
 
 	if context.string == "button_disband" then
-		button_disband_pressed = true;
+		captured_disband = MKMP_Population_Capture_Force(LAST_CHARACTER_SELECTED, "disband");
+		button_disband_pressed = captured_disband ~= nil;
 	end
 end
 
@@ -325,13 +310,16 @@ end
 
 function ShortcutTriggered_Population_UI(context)
 	if context.string == "auto_merge_units" then
-		Check_Last_Character_Force();
+		local payload = MKMP_Population_Capture_Force(LAST_CHARACTER_SELECTED, "merge");
+		if payload then MKMP_Actions_Submit_Local("population_force", payload.actor, payload); end
 	elseif context.string == "current_selection_disband" then
-		button_disband_pressed = true;
+		captured_disband = MKMP_Population_Capture_Force(LAST_CHARACTER_SELECTED, "disband");
+		button_disband_pressed = captured_disband ~= nil;
 	end
 end
 
 function TimeTrigger_Population_UI(context)
+	if MKMP_Population_Observe_Timer(context) then return; end
 	if context.string == "Unit_Cards" then
 		local root = cm:ui_root();
 		local recuitment_list_uic = UIComponent(root:Find("recuitment_list"));
@@ -357,92 +345,9 @@ function TimeTrigger_Population_UI(context)
 				end
 			end 
 		end
-	elseif context.string == "Check_Disbanded_Units" then
-		local new_army = {};
-		local forces = cm:model():world():faction_by_key(cm:get_local_faction()):military_force_list();
-
-		for x = 0, forces:num_items() - 1 do
-			local force = forces:item_at(x);
-
-			if force:has_general() then
-				if force:general_character() == LAST_CHARACTER_SELECTED then
-					for i = 0, LAST_CHARACTER_SELECTED:military_force():unit_list():num_items() - 1 do
-						if not LAST_CHARACTER_SELECTED:military_force():unit_list():item_at(i):has_unit_commander() then
-							table.insert(new_army, LAST_CHARACTER_SELECTED:military_force():unit_list():item_at(i):unit_key());
-						end
-					end
-
-					for i = 2, #ARMY_SELECTED_TABLE do
-						if HasValue(new_army, ARMY_SELECTED_TABLE[i]) then
-							for j = 1, #new_army do
-								if new_army[j] == ARMY_SELECTED_TABLE[i] then
-									table.remove(new_army, j);
-									break;
-								end
-							end
-						else
-							local unit_name = ARMY_SELECTED_TABLE[i];
-
-							if not string.find(unit_name, "mk_merc") then
-								local unit_population_table = POPULATION_UNITS_TO_POPULATION[unit_name];
-
-								if unit_population_table then
-									local unit_cost = unit_population_table[1];
-									local unit_strength = math.floor((unit_cost * (ARMY_SELECTED_STRENGTHS_TABLE[i] / 100)) + 0.5);
-									local unit_class = unit_population_table[2];
-
-									if LAST_CHARACTER_SELECTED:has_region() then
-										Change_Manpower_Region(LAST_CHARACTER_SELECTED:region():name(), unit_class, unit_strength);
-									else
-										local region = FindClosestPort(x, y, LAST_CHARACTER_SELECTED:faction());
-										Change_Manpower_Region(region:name(), unit_class, unit_strength);
-									end
-
-									for j = 1, #new_army do
-										if new_army[j] == ARMY_SELECTED_TABLE[i] then
-											table.remove(new_army, j);
-											break;
-										end
-									end
-								end
-							end
-						end
-					end
-
-					Check_Last_Character_Force();
-					return;
-				end
-			end
-		end
-
-		if #ARMY_SELECTED_TABLE > 1 then
-			for i = 2, #ARMY_SELECTED_TABLE do
-				local unit_name = ARMY_SELECTED_TABLE[i];
-
-				if not string.find(unit_name, "mk_merc") then
-					local unit_population_table = POPULATION_UNITS_TO_POPULATION[unit_name];
-
-					if unit_population_table then
-						local unit_cost = unit_population_table[1];
-						local unit_strength = math.floor((unit_cost * (ARMY_SELECTED_STRENGTHS_TABLE[i] / 100)) + 0.5);
-						local unit_class = unit_population_table[2];
-
-						Change_Manpower_Region(ARMY_SELECTED_REGION, unit_class, unit_strength);
-					end
-				end
-			end
-		end
-	elseif context.string == "Update_Force_CQI" then
-		POPULATION_UNITS_IN_RECRUITMENT[tostring(LAST_CHARACTER_SELECTED:cqi())] = {};
-
-		if #POPULATION_UNITS_IN_RECRUITMENT[tostring(POPULATION_COMMANDER_TO_REPLACE_CQI)] > 0 then
-			for i = 1, #POPULATION_UNITS_IN_RECRUITMENT[tostring(POPULATION_COMMANDER_TO_REPLACE_CQI)] do
-				POPULATION_UNITS_IN_RECRUITMENT[tostring(LAST_CHARACTER_SELECTED:cqi())][i] = POPULATION_UNITS_IN_RECRUITMENT[tostring(POPULATION_COMMANDER_TO_REPLACE_CQI)][i];
-			end
-		end
-
-		POPULATION_UNITS_IN_RECRUITMENT[tostring(POPULATION_COMMANDER_TO_REPLACE_CQI)] = nil;
-		POPULATION_COMMANDER_TO_REPLACE = 0;
+	elseif context.string == "Check_Disbanded_Units" or context.string == "Update_Force_CQI" then
+		-- Old uncorrelated timers cannot use current selection as an action target.
+		return;
 	elseif context.string == "Faction_Panel_Population" then
 		local root = cm:ui_root();
 		local tab_records_uic = UIComponent(root:Find("Records"));

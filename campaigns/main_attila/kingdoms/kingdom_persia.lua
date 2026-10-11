@@ -32,7 +32,7 @@ function Add_Kingdom_Persia_Listeners()
 		);
 	end
 
-	if cm:is_multiplayer() == false then
+	if (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("kingdom_decisions")) then
 		Register_Decision(
 			"form_empire_persia", 
 			function() 	
@@ -88,10 +88,10 @@ function Persian_Empire_Regions_Check(context)
 	PERSIAN_EMPIRE_REGIONS_OWNED = has_regions;
 
 	if has_regions == true then
-		if cm:is_multiplayer() == true or context:faction():is_human() == false then
+		if (cm:is_multiplayer() and not MKMP_SP_Parity_Enabled("kingdom_decisions")) or context:faction():is_human() == false then
 			Persian_Empire_Formed(faction_name);
 		elseif (not mkHRE or (mkHRE and HasValue(mkHRE.factions, faction_name) ~= true)) then
-			Enable_Decision("form_empire_persia");
+			Enable_Decision("form_empire_persia", faction_name);
 		end		
 	end
 end
@@ -101,8 +101,8 @@ function Persian_Empire_Formed(faction_name)
 	PERSIAN_EMPIRE_FACTION = faction_name;
 	Rename_Faction(faction_name, faction_name.."_lvl"..tostring(FACTIONS_DFN_LEVEL[faction_name]));
 
-	if cm:is_multiplayer() == false then
-		Remove_Decision("form_empire_persia");
+	if (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("kingdom_decisions")) then
+		Remove_Decision("form_empire_persia", faction_name);
 
 		if IRONMAN_ENABLED then
 			Unlock_Achievement("achievement_king_of_kings");

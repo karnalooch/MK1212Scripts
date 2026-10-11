@@ -846,6 +846,10 @@ function RefreshPopeElectionPanel()
 	local button_accept_uic = UIComponent(accept_uic:Find("button_accept"));
 	local preferati_list_uic = UIComponent(pope_election_panel_uic:Find("preferati_list"));
 	local list_box_uic = UIComponent(preferati_list_uic:Find("list_box"));
+	-- These unfinished rows have no candidate binding and display placeholders,
+	-- not election results. Keep their 1..8 logo budget presentation-only: a
+	-- local button click must never advance the shared campaign RNG stream.
+	local placeholder_vote_counts = {4, 7, 2};
 
 	for i = 1, 3 do
 		local cardinal_template_uic = UIComponent(list_box_uic:Find("cardinal_template_"..tostring(i)));
@@ -855,8 +859,13 @@ function RefreshPopeElectionPanel()
 
 		button_vote_uic:SetState("inactive");
 
-		for j = 1, MK1212_Random_Int(1, 8, "pope_ui.placeholder_votes:"..tostring(i)) do
-			local faction_logo_uic = UIComponent(list_box_uic:CreateComponent("faction_logo_"..tostring(i).."_"..tostring(j), "UI/new/faction_flags/mk_fact_unknown_flag_small"));
+		for j = 1, placeholder_vote_counts[i] do
+			local logo_name = "faction_logo_"..tostring(i).."_"..tostring(j);
+			local faction_logo_uic = UIComponent(list_box_uic:Find(logo_name));
+
+			if not faction_logo_uic then
+				faction_logo_uic = UIComponent(list_box_uic:CreateComponent(logo_name, "UI/new/faction_flags/mk_fact_unknown_flag_small"));
+			end
 
 			faction_logo_uic:SetMoveable(true);
 			faction_logo_uic:MoveTo(tx_votes_uicX + 48 + (25 * (j - 1)), tx_votes_uicY);

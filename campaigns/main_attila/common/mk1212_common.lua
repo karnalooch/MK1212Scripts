@@ -23,10 +23,22 @@ REGIONS_RAZED = {};
 LAST_CHARACTER_SELECTED = nil;
 LAST_SACKED_SETTLEMENT = "";
 
+require("common/mkmp_persistence");
+
+function MK1212_Campaign_Difficulty()
+	-- ATTILA documents model:difficulty_level() as the LOCAL faction's level.
+	-- Shared scripted MP effects use the content-defined normal baseline (0).
+	-- This does not change the engine's difficulty or each player's UI setting.
+	if cm:is_multiplayer() then return 0; end
+	return cm:model():difficulty_level();
+end
+
 function MK1212_Random_Int(minimum, maximum, token)
-	if minimum == nil or maximum == nil or minimum > maximum then
+	if not MK1212_IsFiniteNumber(minimum) or not MK1212_IsFiniteNumber(maximum)
+		or minimum ~= math.floor(minimum) or maximum ~= math.floor(maximum)
+		or minimum > maximum then
 		if MKMP_Debug_Log then
-			MKMP_Debug_Log(
+			pcall(MKMP_Debug_Log,
 				"contract_error",
 				{
 					contract = "rng_bounds",
@@ -44,9 +56,10 @@ function MK1212_Random_Int(minimum, maximum, token)
 	-- that can influence campaign state. Do not replace this with Lua math.random.
 	local result = cm:random_number(maximum, minimum);
 
-	if result < minimum or result > maximum then
+	if not MK1212_IsFiniteNumber(result) or result ~= math.floor(result)
+		or result < minimum or result > maximum then
 		if MKMP_Debug_Log then
-			MKMP_Debug_Log(
+			pcall(MKMP_Debug_Log,
 				"contract_error",
 				{
 					contract = "rng_result",
@@ -62,7 +75,7 @@ function MK1212_Random_Int(minimum, maximum, token)
 	end
 
 	if MKMP_Debug_Log then
-		MKMP_Debug_Log(
+		pcall(MKMP_Debug_Log,
 			"rng",
 			{
 				token = token,
@@ -74,13 +87,15 @@ function MK1212_Random_Int(minimum, maximum, token)
 	end
 
 	if dev and dev.log then
-		dev.log(
-			"[MKMP][RNG] turn="..tostring(cm:model():turn_number())..
-			" token="..tostring(token)..
-			" min="..tostring(minimum)..
-			" max="..tostring(maximum)..
-			" result="..tostring(result)
-		);
+		pcall(function()
+			dev.log(
+				"[MKMP][RNG] turn="..tostring(cm:model():turn_number())..
+				" token="..tostring(token)..
+				" min="..tostring(minimum)..
+				" max="..tostring(maximum)..
+				" result="..tostring(result)
+			);
+		end);
 	end
 
 	return result;
@@ -181,27 +196,14 @@ function FactionTurnStart_Global(context)
 			"faction_turn_start",
 			{
 				faction = FACTION_TURN,
+				stage = "handler_entry", listener = "FactionTurnStart_Global",
 				human = context:faction():is_human()
 			}
 		);
 	end
 	SACKED_SETTLEMENTS = {}; -- Array is reset every faction turn.
 
-	-- Crash fix: execute deferred AI region transfers from a bounded queue.
-	-- The queue is cleared before processing so a still-unsafe transfer can
-	-- explicitly requeue itself without duplicating the old record.
-	if #REGIONS_TO_TRANSFER > 0 then
-		local pending_transfers = REGIONS_TO_TRANSFER;
-		REGIONS_TO_TRANSFER = {};
-
-		for i = 1, #pending_transfers do
-			local transfer = pending_transfers[i];
-
-			if transfer and transfer.faction and transfer.region then
-				Transfer_Region_To_Faction(transfer.region, transfer.faction);
-			end
-		end
-	end
+	Drain_Region_Transfers();
 
 	if context:faction():is_human() then
 		local faction_list = cm:model():world():faction_list();
@@ -225,6 +227,7 @@ function FactionTurnEnd_Global(context)
 			"faction_turn_end",
 			{
 				faction = context:faction():name(),
+				stage = "handler_entry", listener = "FactionTurnEnd_Global",
 				human = context:faction():is_human()
 			}
 		);
@@ -415,7 +418,7 @@ function Check_Razed_Regions()
 end
 
 function CreateCivilWarArmy(region, culture, rebel_faction_name, army_id, x, y)
-	local difficulty = cm:model():difficulty_level();
+	local difficulty = MK1212_Campaign_Difficulty();
 	local effect_bundle = "";
 	local force = "";
 	
@@ -639,7 +642,15 @@ function Religion_Check(faction)
 	FACTIONS_TO_RELIGIONS[faction_name] = state_religion;
 end
 
+local function Region_Transfer_Valid_Key(value)
+	return type(value) == "string" and #value > 0 and #value <= 256
+		and string.match(value, "^[A-Za-z0-9_]+$") ~= nil;
+end
+
 function Queue_Region_Transfer(region_name, faction_name)
+	if not Region_Transfer_Valid_Key(region_name) or not Region_Transfer_Valid_Key(faction_name) then
+		return false;
+	end
 	for i = 1, #REGIONS_TO_TRANSFER do
 		local queued = REGIONS_TO_TRANSFER[i];
 
@@ -703,9 +714,14 @@ end
 
 function Serialize_Region_Transfer_Queue()
 	local output = {};
+	local count = MK1212_SaveDenseLength(REGIONS_TO_TRANSFER, MAX_PENDING_REGION_TRANSFERS);
 
-	for i = 1, #REGIONS_TO_TRANSFER do
+	for i = 1, count do
 		local queued = REGIONS_TO_TRANSFER[i];
+		if type(queued) ~= "table" or not Region_Transfer_Valid_Key(queued.region)
+			or not Region_Transfer_Valid_Key(queued.faction) then
+			error("MK1212 save refused: malformed region transfer");
+		end
 		table.insert(output, queued.faction.."|"..queued.region);
 	end
 
@@ -715,28 +731,61 @@ end
 function Load_Region_Transfer_Queue(context)
 	local encoded = LoadTable(context, "REGIONS_TO_TRANSFER");
 	local output = {};
+	local seen = {};
+	if #encoded > MAX_PENDING_REGION_TRANSFERS then
+		error("MK1212 load refused: region transfer queue exceeds budget");
+	end
 
 	for i = 1, #encoded do
 		local token = encoded[i];
-		local separator = string.find(token, "|", 1, true);
-
-		if separator then
-			local faction_name = string.sub(token, 1, separator - 1);
-			local region_name = string.sub(token, separator + 1);
-
-			if faction_name ~= "" and region_name ~= "" then
-				table.insert(output, {faction = faction_name, region = region_name});
-			end
+		local faction_name, region_name = string.match(token, "^([^|]+)|([^|]+)$");
+		if not Region_Transfer_Valid_Key(region_name) or not Region_Transfer_Valid_Key(faction_name) then
+			error("MK1212 load refused: malformed region transfer");
+		end
+		if not seen[token] then
+			table.insert(output, {faction = faction_name, region = region_name});
+			seen[token] = true;
 		end
 	end
 
 	return output;
 end
 
+local region_transfers_draining = false;
+
+function MKMP_Transfers_Get_State()
+	return MKMP_Diagnostic_Copy({schema = 1, queue = REGIONS_TO_TRANSFER,
+		draining = region_transfers_draining}), "complete";
+end
+
+function Drain_Region_Transfers()
+	if region_transfers_draining then return; end
+	region_transfers_draining = true;
+	local ok, failure = pcall(function()
+		local pending = MK1212_SaveDenseLength(REGIONS_TO_TRANSFER, MAX_PENDING_REGION_TRANSFERS);
+		for i = 1, pending do
+			-- Claim one record before the engine command. An exception preserves
+			-- later work; the possibly partial current command is never retried.
+			-- A still-unsafe AI turn appends one record for a future drain.
+			local transfer = table.remove(REGIONS_TO_TRANSFER, 1);
+			Transfer_Region_To_Faction(transfer.region, transfer.faction);
+		end
+	end);
+	region_transfers_draining = false;
+	if not ok then error(failure); end
+end
+
 function Transfer_Region_To_Faction(region_name, faction_name)
+	if not Region_Transfer_Valid_Key(region_name) or not Region_Transfer_Valid_Key(faction_name) then
+		return false;
+	end
 	-- If a region has a governor then they will die when a region is transferred, so we need to temporarily give them immortality.
 	local region = cm:model():world():region_manager():region_by_key(region_name);
+	local target = cm:model():world():faction_by_key(faction_name);
+	if not region or region:is_null_interface() or not target or target:is_null_interface() then return false; end
 	local owning_faction = region:owning_faction();
+	if not owning_faction or owning_faction:is_null_interface() then return false; end
+	if owning_faction:name() == faction_name then return true; end
 
 	-- Transfering regions can crash if it happens on an AI faction's turn for some reason.
 	if owning_faction:is_human() or owning_faction:name() ~= FACTION_TURN then
@@ -754,15 +803,20 @@ function Transfer_Region_To_Faction(region_name, faction_name)
 		if region:has_governor() then
 			local governor = region:governor():command_queue_index();
 
-			cm:set_character_immortality("character_cqi:"..governor, true);
-			cm:transfer_region_to_faction(region_name, faction_name);
-			cm:set_character_immortality("character_cqi:"..governor, false);
+			local ok, failure = pcall(function()
+				cm:set_character_immortality("character_cqi:"..governor, true);
+				cm:transfer_region_to_faction(region_name, faction_name);
+			end);
+			local restored, restore_failure = pcall(cm.set_character_immortality, cm, "character_cqi:"..governor, false);
+			if not ok then error(failure); end
+			if not restored then error(restore_failure); end
 		else
 			cm:transfer_region_to_faction(region_name, faction_name);
 		end
 	else
 		Queue_Region_Transfer(region_name, faction_name);
 	end
+	return true;
 end
 
 -- From AoC Kingdoms.
@@ -900,21 +954,32 @@ end
 ---------------- Saving/Loading ----------------
 ------------------------------------------------
 
-MK1212_SAVE_SCHEMA_VERSION = 2;
+MK1212_SAVE_SCHEMA_VERSION = 3;
 MK1212_SAVE_MAX_ENTRIES = 20000;
 MK1212_SAVE_MAX_STRING_BYTES = 1048576;
 
 function MK1212_SaveSortedKeys(tab)
+	if type(tab) ~= "table" then error("MK1212 save refused: expected table"); end
 	local keys = {};
+	local encoded = {};
 
 	for key, _ in pairs(tab) do
+		if type(key) ~= "string" and type(key) ~= "number" then
+			error("MK1212 save refused: unsupported map key");
+		end
+		local scalar = MK1212_SaveScalar(key);
+		if encoded[scalar] then error("MK1212 save refused: colliding map keys"); end
+		encoded[scalar] = true;
 		table.insert(keys, key);
+		if #keys > MK1212_SAVE_MAX_ENTRIES then
+			error("MK1212 save refused: map exceeds entry budget");
+		end
 	end
 
 	table.sort(
 		keys,
 		function(a, b)
-			return tostring(a) < tostring(b);
+			return MK1212_SaveByteLess(MK1212_SaveScalar(a), MK1212_SaveScalar(b));
 		end
 	);
 
@@ -923,6 +988,10 @@ end
 
 function MK1212_SaveCommitString(context, savename, savestring, entry_count)
 	local entries = entry_count or 0;
+	if type(savename) ~= "string" or savename == "" or type(savestring) ~= "string"
+		or not MK1212_IsFiniteNumber(entries) or entries < 0 or entries ~= math.floor(entries) then
+		error("MK1212 save refused: invalid writer arguments");
+	end
 
 	if entries > MK1212_SAVE_MAX_ENTRIES then
 		error(
@@ -932,42 +1001,50 @@ function MK1212_SaveCommitString(context, savename, savestring, entry_count)
 		);
 	end
 
-	if string.len(savestring) > MK1212_SAVE_MAX_STRING_BYTES then
+	local framed = MK1212_SAVE_V3_PREFIX..savestring;
+	if string.len(framed) > MK1212_SAVE_MAX_STRING_BYTES then
 		error(
 			"MK1212 save refused: "..tostring(savename)..
-			" bytes="..tostring(string.len(savestring))..
+			" bytes="..tostring(string.len(framed))..
 			" max="..tostring(MK1212_SAVE_MAX_STRING_BYTES)
 		);
 	end
 
-	-- Sidecar versioning keeps the established payload format backward-compatible
-	-- with existing saves while making future migrations explicit.
+	-- Validate the entire record before either engine write. The frame detects a
+	-- schema-3 sidecar paired with an unframed payload. It cannot distinguish an
+	-- old schema-3 payload after an engine write failure. Attila owns the outer
+	-- save transaction; these two save_value calls are not an atomic transaction.
 	cm:save_value(savename.."__schema", MK1212_SAVE_SCHEMA_VERSION, context);
-	cm:save_value(savename, savestring, context);
+	cm:save_value(savename, framed, context);
 
 	if MKMP_Debug_Log then
-		MKMP_Debug_Log(
-			"save_write",
-			{
+		pcall(function()
+			MKMP_Debug_Log("save_write", {
 				name = savename,
 				schema = MK1212_SAVE_SCHEMA_VERSION,
 				entries = entries,
-				bytes = string.len(savestring)
-			}
-		);
+				bytes = string.len(framed),
+				checksum = MK1212_SaveChecksum(framed)
+			});
+		end);
 	end
 end
 
 
 cm:register_loading_game_callback(
 	function(context)
-		FACTION_TURN = cm:load_value("FACTION_TURN", "nil", context);
-		FACTIONS_TO_RELIGIONS = LoadKeyPairTable(context, "FACTIONS_TO_RELIGIONS");
-		REGIONS_RAZED = LoadTable(context, "REGIONS_RAZED");
-		SACKED_SETTLEMENTS = LoadTable(context, "SACKED_SETTLEMENTS");
-		SACKED_SETTLEMENTS2 = LoadTable(context, "SACKED_SETTLEMENTS2");
-		SACKED_SETTLEMENTS_TOTAL = LoadKeyPairTables(context, "SACKED_SETTLEMENTS_TOTAL");
-		REGIONS_TO_TRANSFER = Load_Region_Transfer_Queue(context);
+		-- Validate this module's complete snapshot before replacing its state.
+		-- A late malformed queue must not leave half of the common tables loaded.
+		local faction_turn = cm:load_value("FACTION_TURN", "nil", context);
+		local religions = LoadKeyPairTable(context, "FACTIONS_TO_RELIGIONS");
+		local razed = LoadTable(context, "REGIONS_RAZED");
+		local sacked = LoadTable(context, "SACKED_SETTLEMENTS");
+		local sacked2 = LoadTable(context, "SACKED_SETTLEMENTS2");
+		local sacked_total = LoadKeyPairTables(context, "SACKED_SETTLEMENTS_TOTAL");
+		local transfers = Load_Region_Transfer_Queue(context);
+		FACTION_TURN, FACTIONS_TO_RELIGIONS, REGIONS_RAZED = faction_turn, religions, razed;
+		SACKED_SETTLEMENTS, SACKED_SETTLEMENTS2, SACKED_SETTLEMENTS_TOTAL = sacked, sacked2, sacked_total;
+		REGIONS_TO_TRANSFER = transfers;
 	end
 );
 
@@ -988,181 +1065,109 @@ cm:register_saving_game_callback(
 ------------------------------------------------
 
 function SaveTable(context, tab, savename)
-	local savestring = "";
-	
-	for i = 1, #tab do
-		savestring = savestring..tab[i]..",";
-	end
-		
-	MK1212_SaveCommitString(context, savename, savestring, #tab);
+	local count = MK1212_SaveDenseLength(tab);
+	local parts = {};
+	for i = 1, count do MK1212_SaveAppend(parts, tab[i], ","); end
+	MK1212_SaveCommitString(context, savename, table.concat(parts), count);
 end
 
 function LoadTable(context, savename)
-	local savestring = cm:load_value(savename, "", context);
-	local tab = {};
-	
-	if savestring ~= "" then
-		local first_split = SplitString(savestring, ",");
-		for i = 1, #first_split do
-			table.insert(tab, first_split[i]);
-		end
-	end
-
-	return tab;
+	return MK1212_LoadSaveList(context, savename);
 end
 
 function LoadTableNumbers(context, savename)
-	local savestring = cm:load_value(savename, "", context);
-	local tab = {};
-	
-	if savestring ~= "" then
-		local first_split = SplitString(savestring, ",");
-		for i = 1, #first_split do
-			table.insert(tab, tonumber(first_split[i]));
-		end
-	end
-
-	return tab;
+	local values = MK1212_LoadSaveList(context, savename);
+	for i = 1, #values do values[i] = MK1212_SaveNumber(values[i], savename); end
+	return values;
 end
 
 function SaveKeyPairTable(context, tab, savename)
-	local savestring = "";
+	local parts = {};
 	local keys = MK1212_SaveSortedKeys(tab);
-
 	for i = 1, #keys do
 		local key = keys[i];
-		local value = tab[key];
-		savestring = savestring..tostring(key)..","..tostring(value)..",;";
+		MK1212_SaveAppend(parts, key, ",");
+		MK1212_SaveAppend(parts, tab[key], ",;");
 	end
-
-	MK1212_SaveCommitString(context, savename, savestring, #keys);
+	MK1212_SaveCommitString(context, savename, table.concat(parts), #keys);
 end
 
 function SaveBooleanPairTable(context, tab, savename)
-	local savestring = "";
+	local parts = {};
 	local keys = MK1212_SaveSortedKeys(tab);
-
 	for i = 1, #keys do
 		local key = keys[i];
-		local value = tab[key];
-		savestring = savestring..tostring(key)..","..tostring(value)..",;";
+		if type(tab[key]) ~= "boolean" then error("MK1212 save refused: expected boolean in "..savename); end
+		MK1212_SaveAppend(parts, key, ",");
+		MK1212_SaveAppend(parts, tab[key], ",;");
 	end
-
-	MK1212_SaveCommitString(context, savename, savestring, #keys);
+	MK1212_SaveCommitString(context, savename, table.concat(parts), #keys);
 end
 
 function SaveKeyPairTables(context, tab, savename)
-	local savestring = "";
+	local parts = {};
 	local keys = MK1212_SaveSortedKeys(tab);
-
 	for i = 1, #keys do
 		local key = keys[i];
-		local value = tab[key];
-		savestring = savestring..tostring(key)..",";
-
-		for j = 1, #value do
-			savestring = savestring..tostring(value[j])..",";
-		end
-
-		savestring = savestring..";";
+		local values = tab[key];
+		local length = MK1212_SaveDenseLength(values, MK1212_SAVE_MAX_STRING_BYTES);
+		MK1212_SaveAppend(parts, key, ",");
+		for j = 1, length do MK1212_SaveAppend(parts, values[j], ","); end
+		MK1212_SaveEndRow(parts);
 	end
-
-	MK1212_SaveCommitString(context, savename, savestring, #keys);
+	MK1212_SaveCommitString(context, savename, table.concat(parts), #keys);
 end
 
 function LoadKeyPairTable(context, savename)
-	local savestring = cm:load_value(savename, "", context);
+	local rows = MK1212_LoadSaveRows(context, savename);
 	local tab = {};
-	
-	if savestring ~= "" then
-		local first_split = SplitString(savestring, ";");
-		
-		for i = 1, #first_split do
-			local second_split = SplitString(first_split[i], ",");
-
-			tab[second_split[1]] = second_split[2];
-		end
+	for i = 1, #rows do
+		local row = rows[i];
+		local key = MK1212_SaveUniqueRow(tab, row, 2, savename);
+		tab[key] = row[2];
 	end
-
 	return tab;
 end
 
 function LoadKeyPairTableNumbers(context, savename)
-	local savestring = cm:load_value(savename, "", context);
-	local tab = {};
-	
-	if savestring ~= "" then
-		local first_split = SplitString(savestring, ";");
-
-		for i = 1, #first_split do
-			local second_split = SplitString(first_split[i], ",");
-
-			tab[second_split[1]] = tonumber(second_split[2]);
-		end
-	end
-
+	local tab = LoadKeyPairTable(context, savename);
+	local keys = MK1212_SaveSortedKeys(tab);
+	for i = 1, #keys do tab[keys[i]] = MK1212_SaveNumber(tab[keys[i]], savename); end
 	return tab;
 end
 
 function LoadBooleanPairTable(context, savename)
-	local savestring = cm:load_value(savename, "", context);
-	local tab = {};
-	
-	if savestring ~= "" then
-		local first_split = SplitString(savestring, ";");
-		
-		for i = 1, #first_split do
-			local second_split = SplitString(first_split[i], ",");
-
-			if second_split[2] == "true" then
-				tab[second_split[1]] = true;
-			else
-				tab[second_split[1]] = false;				
-			end
-		end
-	end
-
+	local tab = LoadKeyPairTable(context, savename);
+	local keys = MK1212_SaveSortedKeys(tab);
+	for i = 1, #keys do tab[keys[i]] = MK1212_SaveBoolean(tab[keys[i]], savename); end
 	return tab;
 end
 
 function LoadKeyPairTables(context, savename)
-	local savestring = cm:load_value(savename, "", context);
+	local rows = MK1212_LoadSaveRows(context, savename);
 	local tab = {};
-	
-	if savestring ~= "" then
-		local first_split = SplitString(savestring, ";");
-
-		for i = 1, #first_split do
-			local tab2 = {};
-			local second_split = SplitString(first_split[i], ",");
-
-			if #second_split > 1 then
-				for j = 2, #second_split do
-					table.insert(tab2, second_split[j]);
-				end
-			end
-
-			-- Preserve an explicit empty child table. Older saves already emit
-			-- "key,;" for empty values; treating empty as missing loses meaning.
-			if second_split[1] then
-				tab[second_split[1]] = DeepCopy(tab2);
-			end
-		end
+	for i = 1, #rows do
+		local row = rows[i];
+		local key = MK1212_SaveUniqueRow(tab, row, #row, savename);
+		local values = {};
+		for j = 2, #row do values[#values + 1] = row[j]; end
+		-- An explicit empty child remains present, including legacy "key,;".
+		tab[key] = values;
 	end
-
 	return tab;
 end
 
 function SplitString(str, delim)
-	local res = { };
-	local pattern = string.format("([^%s]+)%s()", delim, delim);
-
-	while (true) do
-		line, pos = str:match(pattern, pos);
-		if line == nil then break end;
-		table.insert(res, line);
+	-- Legacy non-save callers keep their delimiter semantics. Parser state must
+	-- remain local so a nested callback cannot overwrite another parse cursor.
+	local res = {};
+	local position = 1;
+	while true do
+		local separator = string.find(str, delim, position, true);
+		if not separator then break; end
+		if separator > position then res[#res + 1] = string.sub(str, position, separator - 1); end
+		position = separator + #delim;
 	end
-
 	return res;
 end
 

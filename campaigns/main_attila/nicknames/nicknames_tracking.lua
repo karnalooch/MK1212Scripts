@@ -10,7 +10,97 @@
 CHARACTERS_TO_NICKNAMES = {};
 CHARACTERS_TO_NICKNAME_STATS = {};
 
+local nicknames_initialized = false;
+local nickname_trait_keys = nil;
+local nickname_last_turn = {};
+local nickname_turn_valid = true;
+local nickname_turn_raw = "";
+local nickname_turn_prefix = "MKMP_NICKNAME_TURNS_V1;";
+
+local function Nicknames_Log(stage, faction_name)
+	if MKMP_Debug_Log then
+		pcall(MKMP_Debug_Log, "nickname_phase", {domain = "shared_candidate", stage = stage,
+			actor = faction_name, phase = "faction_turn_start", shared_delivery = "unproven"});
+	end
+end
+
+local function Nicknames_Ordered_Characters(faction)
+	local character_list = faction:character_list();
+	local characters, seen = {}, {};
+	for i = 0, character_list:num_items() - 1 do
+		local character = character_list:item_at(i);
+		if not character or character:is_null_interface() then return nil; end
+		local cqi = character:cqi();
+		if not MK1212_IsFiniteNumber(cqi) or cqi < 0 or cqi > 16777215
+			or cqi ~= math.floor(cqi) or seen[cqi] or #characters >= 4096 then return nil; end
+		seen[cqi] = true;
+		characters[#characters + 1] = character;
+	end
+	table.sort(characters, function(a, b) return a:cqi() < b:cqi(); end);
+	return characters;
+end
+
+local function Nicknames_Save_Turns(context)
+	if not nickname_turn_valid then
+		cm:save_value("MKMP_NICKNAME_TURNS", nickname_turn_raw, context);
+		return;
+	end
+	local keys = MK1212_SaveSortedKeys(nickname_last_turn);
+	if #keys > 4096 then error("MK1212 nickname turn faction budget exceeded"); end
+	local rows = {nickname_turn_prefix};
+	for i = 1, #keys do
+		rows[#rows + 1] = keys[i]..","..string.format("%.0f", nickname_last_turn[keys[i]])..";";
+	end
+	local payload = table.concat(rows);
+	if #payload > 262144 then error("MK1212 nickname turn byte budget exceeded"); end
+	cm:save_value("MKMP_NICKNAME_TURNS", payload, context);
+end
+
+local function Nicknames_Load_Turns(context)
+	local raw = cm:load_value("MKMP_NICKNAME_TURNS", "", context);
+	nickname_turn_raw = raw;
+	nickname_last_turn, nickname_turn_valid = {}, false;
+	if raw == "" then nickname_turn_valid = true; return; end -- Legacy: no phase replay on load.
+	if type(raw) ~= "string" or #raw > 262144 or string.sub(raw, 1, #nickname_turn_prefix) ~= nickname_turn_prefix then return; end
+	local turns, count = {}, 0;
+	local cursor = #nickname_turn_prefix + 1;
+	while cursor <= #raw do
+		local first, last, faction_name, encoded_turn = string.find(raw, "([A-Za-z0-9_%.%-]+),(%d+);", cursor);
+		local round = tonumber(encoded_turn);
+		if first ~= cursor or #faction_name > 128 or turns[faction_name] or count >= 4096
+			or not MK1212_IsFiniteNumber(round) or round < 0 or round > 16777215
+			or round ~= math.floor(round) or round > cm:model():turn_number() then return; end
+		local faction = cm:model():world():faction_by_key(faction_name);
+		if not faction or faction:is_null_interface() then return; end
+		turns[faction_name] = round;
+		count = count + 1;
+		cursor = last + 1;
+	end
+	nickname_last_turn, nickname_turn_valid = turns, true;
+end
+
+function MKMP_Nicknames_Get_State()
+	local function copy(value)
+		if type(value) ~= "table" then return value; end
+		local result, keys = {}, MK1212_SaveSortedKeys(value);
+		if #keys > 20000 then error("Nickname diagnostic snapshot exceeds entry budget"); end
+		for i = 1, #keys do result[keys[i]] = copy(value[keys[i]]); end
+		return result;
+	end
+	return {schema = 1, complete = nickname_turn_valid, last_turn = copy(nickname_last_turn),
+		names = copy(CHARACTERS_TO_NICKNAMES), stats = copy(CHARACTERS_TO_NICKNAME_STATS)};
+end
+
 function Add_Nicknames_Tracking_Listeners()
+	if nicknames_initialized then return; end
+	nicknames_initialized = true;
+	if MKMP_Debug_Register_State_Provider then
+		pcall(MKMP_Debug_Register_State_Provider, "nicknames", function()
+			local data = MKMP_Nicknames_Get_State();
+			if data.complete then return data, "complete"; end
+			return data, "incomplete", "nickname_turn_state_invalid";
+		end);
+	end
 	cm:add_listener(
 		"FactionTurnStart_Nicknames",
 		"FactionTurnStart",
@@ -62,7 +152,10 @@ function Add_Nicknames_Tracking_Listeners()
 	);
 
 	if cm:is_new_game() then
-		for k, v in pairs(HISTORICAL_CHARACTERS_TO_NICKNAMES) do
+		local historical_keys = MK1212_SaveSortedKeys(HISTORICAL_CHARACTERS_TO_NICKNAMES);
+		for i = 1, #historical_keys do
+			local k = historical_keys[i];
+			local v = HISTORICAL_CHARACTERS_TO_NICKNAMES[k];
 			if string.find(k, "mk_fact_") then
 				local faction = cm:model():world():faction_by_key(k);
 
@@ -77,15 +170,17 @@ function Add_Nicknames_Tracking_Listeners()
 		end
 
 		local faction_list = cm:model():world():faction_list();
-
+		local factions = {};
 		for i = 0, faction_list:num_items() - 1 do
-			local faction = faction_list:item_at(i);
-			local character_list = faction:character_list();
-	
-			for j = 0, character_list:num_items() - 1 do
-				local character = character_list:item_at(j);
-		
-				Check_Character_Nickname(character);
+			factions[#factions + 1] = faction_list:item_at(i);
+		end
+		table.sort(factions, function(a, b) return MK1212_SaveByteLess(a:name(), b:name()); end);
+		for i = 1, #factions do
+			local characters = Nicknames_Ordered_Characters(factions[i]);
+			if characters then
+				for j = 1, #characters do Check_Character_Nickname(characters[j]); end
+			else
+				Nicknames_Log("invalid_initial_characters", factions[i]:name());
 			end
 		end
 	end
@@ -93,13 +188,20 @@ end
 
 function FactionTurnStart_Nicknames(context)
 	local faction = context:faction();
-	local character_list = faction:character_list();
-	
-	for i = 0, character_list:num_items() - 1 do
-		local character = character_list:item_at(i);
-
-		Check_Character_Nickname(character);
-	end
+	if not faction or faction:is_null_interface() or not nickname_turn_valid then return; end
+	local name, round = faction:name(), cm:model():turn_number();
+	if type(name) ~= "string" or #name > 128 or not string.match(name, "^[A-Za-z0-9_%.%-]+$")
+		or not MK1212_IsFiniteNumber(round) or round < 0 or round > 16777215 or round ~= math.floor(round) then return; end
+	if nickname_last_turn[name] == round then Nicknames_Log("duplicate", name); return; end
+	if nickname_last_turn[name] == nil and #MK1212_SaveSortedKeys(nickname_last_turn) >= 4096 then return; end
+	local characters = Nicknames_Ordered_Characters(faction);
+	if not characters then Nicknames_Log("invalid_characters", name); return; end
+	-- Distinct from the historical/new-game pass. Claim before the first RNG
+	-- draw or stat increment, and persist so reload cannot repeat this phase.
+	nickname_last_turn[name] = round;
+	Nicknames_Log("claimed", name);
+	for i = 1, #characters do Check_Character_Nickname(characters[i]); end
+	Nicknames_Log("requested", name);
 end
 
 function BattleCompleted_Nicknames(context)
@@ -173,14 +275,17 @@ function Check_Character_Nickname(character)
 			Add_Character_Nickname(cqi, "the_old", false);
 		end
 
-		for trait, nickname in pairs(TRAITS_TO_NICKNAMES) do
+		if nickname_trait_keys == nil then nickname_trait_keys = MK1212_SaveSortedKeys(TRAITS_TO_NICKNAMES); end
+		for i = 1, #nickname_trait_keys do
+			local trait = nickname_trait_keys[i];
+			local nickname = TRAITS_TO_NICKNAMES[trait];
 			if character:has_trait(trait) then
 				-- Make sure the character actually has the trait and it isn't just invisible.
 				if character:trait_points(trait) >= 4 then
 					-- 100% chance past this threshold (4 points is generally level 2 trait).
 					Add_Character_Nickname(cqi, nickname, false);
 				elseif character:trait_points(trait) >= 2 then
-					if cm:random_number(10, 1) == 1 then
+					if MK1212_Random_Int(1, 10, "nicknames.trait:"..cqi_str..":"..trait) == 1 then
 						Add_Character_Nickname(cqi, nickname, false);
 					end
 				end
@@ -285,44 +390,48 @@ cm:register_saving_game_callback(
 	function(context)
 		SaveKeyPairTable(context, CHARACTERS_TO_NICKNAMES, "CHARACTERS_TO_NICKNAMES");
 		SaveNicknamesStatsTable(context, CHARACTERS_TO_NICKNAME_STATS, "CHARACTERS_TO_NICKNAME_STATS");
+		Nicknames_Save_Turns(context);
 	end
 );
 
 cm:register_loading_game_callback(
 	function(context)
-		CHARACTERS_TO_NICKNAMES = LoadKeyPairTable(context, "CHARACTERS_TO_NICKNAMES");
-		CHARACTERS_TO_NICKNAME_STATS = LoadNicknamesStatsTable(context, "CHARACTERS_TO_NICKNAME_STATS");
+		local nicknames = LoadKeyPairTable(context, "CHARACTERS_TO_NICKNAMES");
+		local stats = LoadNicknamesStatsTable(context, "CHARACTERS_TO_NICKNAME_STATS");
+		Nicknames_Load_Turns(context);
+		CHARACTERS_TO_NICKNAMES, CHARACTERS_TO_NICKNAME_STATS = nicknames, stats;
 	end
 );
 
+local nickname_save_fields = {"regions_taken", "captives_killed", "times_excommunicated", "turns_without_revolt", "heroic_victories"};
+
 function SaveNicknamesStatsTable(context, tab, savename)
-	local savestring = "";
+	local parts = {};
 	local keys = MK1212_SaveSortedKeys(tab);
-
 	for i = 1, #keys do
-		local cqi = keys[i];
-		local tab2 = tab[cqi];
-		savestring = savestring..tostring(cqi)..","..tostring(tab2["regions_taken"])..","..tostring(tab2["captives_killed"])..","..tostring(tab2["times_excommunicated"])..","..tostring(tab2["turns_without_revolt"])..","..tostring(tab2["heroic_victories"])..",;";
+		local key = keys[i];
+		local values = tab[key];
+		if type(values) ~= "table" then error("MK1212 save refused: invalid nickname record"); end
+		MK1212_SaveAppend(parts, key, ",");
+		for j = 1, #nickname_save_fields do
+			local value = values[nickname_save_fields[j]];
+			if not MK1212_IsFiniteNumber(value) then error("MK1212 save refused: invalid nickname number"); end
+			MK1212_SaveAppend(parts, value, ",");
+		end
+		MK1212_SaveEndRow(parts);
 	end
-
-	MK1212_SaveCommitString(context, savename, savestring, #keys);
+	MK1212_SaveCommitString(context, savename, table.concat(parts), #keys);
 end
 
-
 function LoadNicknamesStatsTable(context, savename)
-	local savestring = cm:load_value(savename, "", context);
+	local rows = MK1212_LoadSaveRows(context, savename);
 	local tab = {};
-	
-	if savestring ~= "" then
-		local first_split = SplitString(savestring, ";");
-
-		for i = 1, #first_split do
-			local second_split = SplitString(first_split[i], ",");
-
-			local nickname_stats_table = {["regions_taken"] = tonumber(second_split[2]), ["captives_killed"] = tonumber(second_split[3]), ["times_excommunicated"] = tonumber(second_split[4]), ["turns_without_revolt"] = tonumber(second_split[5]), ["heroic_victories"] = tonumber(second_split[6])};
-			tab[second_split[1]] = nickname_stats_table;
-		end
+	for i = 1, #rows do
+		local row = rows[i];
+		local key = MK1212_SaveUniqueRow(tab, row, 6, savename);
+		local values = {};
+		for j = 1, #nickname_save_fields do values[nickname_save_fields[j]] = MK1212_SaveNumber(row[j + 1], savename); end
+		tab[key] = values;
 	end
-
 	return tab;
 end
