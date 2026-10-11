@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+/build/
+/dist/
+
+# Game binary reverse engineering is always local / not shipping.
+/.mk1212-re/
+*.gpr
+*.rep
+*.idb
+*.i64
