@@ -11,6 +11,9 @@ IGNORED_EVENTS = {
     "runtime",
 }
 
+# Identity must match, but it does not demonstrate any shared campaign action.
+IDENTITY_EVENTS = {"content_identity"}
+
 IGNORED_FIELDS = {
     "seq",
     "local_faction",
@@ -19,23 +22,23 @@ IGNORED_FIELDS = {
     "existing_bytes",
 }
 
+SUPPORTED_SCHEMAS = {"1"}
+REQUIRED_FIELDS = ("v", "seq", "turn", "event")
 
-def _split_escaped(line: str) -> list[str]:
+
+def _split_escaped(line: str, line_number: int = 1) -> list[str]:
     parts: list[str] = []
     current: list[str] = []
     escaped = False
 
     for char in line.rstrip("\r\n"):
         if escaped:
-            current.append(
-                {
-                    "n": "\n",
-                    "r": "\r",
-                    "t": "\t",
-                    "|": "|",
-                    "\\": "\\",
-                }.get(char, char)
-            )
+            escapes = {"n": "\n", "r": "\r", "t": "\t", "|": "|", "\\": "\\"}
+            if char not in escapes:
+                raise ValueError(
+                    f"line {line_number}: unsupported escape {chr(92) + char!r}"
+                )
+            current.append(escapes[char])
             escaped = False
         elif char == "\\":
             escaped = True
@@ -46,7 +49,7 @@ def _split_escaped(line: str) -> list[str]:
             current.append(char)
 
     if escaped:
-        current.append("\\")
+        raise ValueError(f"line {line_number}: incomplete trailing escape")
 
     parts.append("".join(current))
     return parts
@@ -74,7 +77,7 @@ class SemanticRecord:
 
 
 def parse_line(line: str, line_number: int = 1) -> LogRecord:
-    parts = _split_escaped(line)
+    parts = _split_escaped(line, line_number)
 
     if not parts or parts[0] != "MKMP":
         raise ValueError(f"line {line_number}: not an MKMP record")
@@ -87,10 +90,22 @@ def parse_line(line: str, line_number: int = 1) -> LogRecord:
         key, value = part.split("=", 1)
         if not key:
             raise ValueError(f"line {line_number}: empty field name")
+        if key in fields:
+            raise ValueError(f"line {line_number}: duplicate field {key!r}")
         fields[key] = value
 
-    if "event" not in fields:
-        raise ValueError(f"line {line_number}: missing event")
+    missing = [key for key in REQUIRED_FIELDS if key not in fields]
+    if missing:
+        raise ValueError(
+            f"line {line_number}: missing required fields: {', '.join(missing)}"
+        )
+    if fields["v"] not in SUPPORTED_SCHEMAS:
+        raise ValueError(
+            f"line {line_number}: unsupported log schema v={fields['v']!r}; "
+            f"supported: {', '.join(sorted(SUPPORTED_SCHEMAS))}"
+        )
+    if not fields["event"]:
+        raise ValueError(f"line {line_number}: empty event")
 
     return LogRecord(line_number=line_number, fields=fields)
 
@@ -151,6 +166,22 @@ def compare_records(
 ) -> tuple[bool, str]:
     host = semantic_records(host_records)
     client = semantic_records(client_records)
+    host_actions = sum(record.event not in IDENTITY_EVENTS for record in host)
+    client_actions = sum(record.event not in IDENTITY_EVENTS for record in client)
+
+    def insufficient_evidence() -> tuple[bool, str]:
+        return (
+            False,
+            "INSUFFICIENT EVIDENCE "
+            f"host_semantic_records={host_actions} client_semantic_records={client_actions}; "
+            "both logs must contain shared semantic records; "
+            "session/runtime bootstrap alone or with content identity does not "
+            "establish shared execution",
+        )
+
+    if not host or not client:
+        return insufficient_evidence()
+
     shared = min(len(host), len(client))
 
     for index in range(shared):
@@ -182,7 +213,14 @@ def compare_records(
             f"HOST_NEXT={host_next!r} CLIENT_NEXT={client_next!r}",
         )
 
-    return True, f"PASS semantic_records={len(host)}"
+    if not host_actions or not client_actions:
+        return insufficient_evidence()
+
+    return (
+        True,
+        f"PASS semantic_records={len(host)} "
+        "scope=instrumented_semantic_trace runtime_mp_proof=not_established",
+    )
 
 
 def compare_files(host_path: str | Path, client_path: str | Path) -> tuple[bool, str]:
@@ -191,7 +229,10 @@ def compare_files(host_path: str | Path, client_path: str | Path) -> tuple[bool,
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Compare MK1212 HOST/CLIENT structured MP debug logs."
+        description=(
+            "Compare MK1212 HOST/CLIENT structured semantic traces. "
+            "A match alone does not establish runtime multiplayer proof."
+        )
     )
     parser.add_argument("host_log")
     parser.add_argument("client_log")

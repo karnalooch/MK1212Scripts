@@ -1,6 +1,6 @@
 # MK1212: SP → MP parity experiment — Issue #66
 
-Status: **DRAFT, opt-in only / NO REAL-GAME MP PROOF** (2026-10-10).
+Status: **DRAFT, script-action fixes and reproducible packs / NO REAL-GAME MP PROOF** (2026-10-11).
 Authority: `AGENTS.md`, `SCRIPT_SAFETY_GUARDRAILS.md`, `MP_RUNTIME_RESEARCH_PLAYBOOK.md`.
 
 ## Intent
@@ -8,8 +8,66 @@ Expose functionality present in a single-player campaign but withheld in multipl
 on two physical PCs with distinct **licensed Steam accounts**. Never use Goldberg or
 Sandboxie as the multiplayer proof environment. The original game binary remains unchanged.
 
-The code in this branch **does not turn everything on by default**.
-All existing SP behavior and the tested baseline MP guard behavior are preserved.
+The source registry keeps experimental gates disabled by default. The release
+builder also produces the requested **full-experimental** pack with all wired
+experimental gates enabled. Both profiles contain the script-action fixes below.
+The baseline profile is a control for the experimental gates; it is not a copy
+of the original unmodified scripts.
+
+The user's control observation — synchronization worked with scripts disabled —
+prioritizes script execution, local inputs and save state. The earlier PR45
+`no-dll` ZIP is a different control: scripts were enabled and its sessions were SP.
+
+Release and installation: [PACK_RELEASE](../runtime/PACK_RELEASE.md).
+Detailed findings and evidence limits: [MP_SCRIPT_ACTION_FINDINGS](MP_SCRIPT_ACTION_FINDINGS.md).
+
+## Script-action repair tranche
+
+| Boundary | Implemented behavior | Proof |
+| --- | --- | --- |
+| Local difficulty | Shared MP War Weariness, rebel army composition and Crusade defender experience use one content-defined normal level, 0. SP keeps the chosen level. Engine difficulty settings are not changed. | Real production Lua with opposite local difficulty values on two isolated peers. Official Attila documentation calls the API's value local. |
+| Repeated initialization and turns | War Weariness initializes once and owns a bounded, saved faction/round ledger. It claims each passive turn update before mutations; a failed partial update is not blindly retried. | Production Lua duplication, re-entry, partial failure, next-turn and save/reload scenarios. |
+| Mecca events | Unique raze listener, one initializer, stable faction-key persistence and entity validation. Repeated destruction does not duplicate the transition; recapture permits a later real destruction. | Production Lua listener registry and save/reload scenarios. |
+| Pope panel RNG | Presentation placeholders no longer consume campaign RNG and reuse existing logos. | HOST-only refreshes leave the next shared production RNG draw equal. College initialization is currently commented out: this is a latent UI hazard, not an established ordinary-MP root cause. |
+| Buffer timer | Captured region/master/vassal intent, bounded namespaced operation, duplicate callback refusal and an owned save lifecycle. Only confirmed waiting-transfer state may be rearmed after load. | Production Lua confirmation/selection changes and asynchronous callbacks. Local UI has no newly proven MP transport; this gate stays experimental. |
+| Deferred transfers | Validated queue capped at 64, stable ordering, duplicate load entries collapsed, already-owned targets are no-ops. Each record is claimed separately; an engine error preserves later queued work and attempts governor cleanup. | Production Lua unsafe-AI-turn, reload, re-entry, missing entity and partial-error scenarios. |
+| Saves | Schema 3 escapes delimiters/control characters, preserves empty strings and canonical ordering, bounds encoding as it accumulates, and reads numeric values under dot/comma locales. | Actual generic, population, decision and nickname functions, old schema migration and corrupt-input refusals. |
+| Diagnostics | Pack source/profile identity, payload checksums, guarded file and formatting errors. Bootstrap-only traces cannot pass the comparator. | Production logger/RNG/save injection tests and parser regressions. |
+
+The compiled test interpreter is the repository's Lua **5.1.2** source with its
+configured **float** number type. The tests exercise actual Lua functions with
+mocked Attila interfaces; they do not emulate the multiplayer engine.
+
+## Save compatibility and rollback
+
+Common tables now write **schema 3** with the frame `MK1212_SAVE_V3|` and
+percent-escaped scalar bytes. Readers preserve valid legacy schemas 0 (absent),
+1 and 2 literally, including pre-existing percent sequences, and migrate them
+on the next successful save. A legacy string that merely starts with the new
+prefix remains literal. Empty nested lists and empty new scalar strings remain
+distinct, supported values.
+
+Unknown schemas, invalid numeric/boolean values, duplicate map keys and
+malformed or oversized records are rejected. An already ambiguous old city
+record containing an unescaped comma cannot be reconstructed reliably; the
+reader does not guess its original text. The 20,000-entry limit continues to
+count map rows, and the 1 MiB byte limit includes the new frame. A legacy payload
+exactly at the old byte ceiling may therefore need reduction before migration.
+
+Validation completes before either engine write. The frame detects a schema-3
+sidecar paired with an unframed payload; it cannot detect an older valid
+schema-3 payload left by a later engine write failure. Attila owns the outer
+save transaction. Two `cm:save_value` calls are not a transaction supplied by
+this codec.
+
+War Weariness and Buffer States also own separate small lifecycle metadata.
+Unknown/unsafe operation states are retained and blocked rather than replayed.
+Read their source and the findings document for the exact supported transitions.
+
+**Rollback uses the preserved save from before this update.** Older scripts do
+not understand the schema-3 payload. This applies to saves created by either
+the baseline or full-experimental release. Do not point older scripts at a
+newly migrated campaign and assume the result is compatible.
 
 ## Verified initialization-gate inventory (repo observed)
 

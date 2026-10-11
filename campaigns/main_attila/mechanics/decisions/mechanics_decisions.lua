@@ -142,34 +142,30 @@ cm:register_loading_game_callback(
 );
 
 function SaveDecisionsTable(context, tab, savename)
-	local savestring = "";
-	
-	for i = 1, #tab do
-		savestring = savestring..tab[i][1]..","..tab[i][2]..","..tostring(tab[i][3])..",;";
+	local parts = {};
+	local count = MK1212_SaveDenseLength(tab);
+	for i = 1, count do
+		local row = tab[i];
+		if MK1212_SaveDenseLength(row) ~= 3 or type(row[1]) ~= "string"
+			or type(row[2]) ~= "string" or type(row[3]) ~= "boolean" then
+			error("MK1212 save refused: invalid decision record");
+		end
+		MK1212_SaveAppend(parts, row[1], ",");
+		MK1212_SaveAppend(parts, row[2], ",");
+		MK1212_SaveAppend(parts, row[3], ",;");
 	end
-
-	cm:save_value(savename, savestring, context);
+	MK1212_SaveCommitString(context, savename, table.concat(parts), count);
 end
 
 function LoadDecisionsTable(context, savename)
-	local savestring = cm:load_value(savename, "", context);
-	local tab = {};
-	
-	if savestring ~= "" then
-		local first_split = SplitString(savestring, ";");
-
-		for i = 1, #first_split do
-			local second_split = SplitString(first_split[i], ",");
-			local trueorfalse = false;
-
-			if second_split[3] == "true" then
-				trueorfalse = true;
-			end
-
-			local decision = {second_split[1], second_split[2], trueorfalse};
-			table.insert(tab, decision);
-		end
+	local rows = MK1212_LoadSaveRows(context, savename);
+	local output = {};
+	local seen = {};
+	for i = 1, #rows do
+		local row = rows[i];
+		local key = MK1212_SaveUniqueRow(seen, row, 3, savename);
+		seen[key] = true;
+		output[#output + 1] = {row[1], row[2], MK1212_SaveBoolean(row[3], savename)};
 	end
-
-	return tab;
+	return output;
 end

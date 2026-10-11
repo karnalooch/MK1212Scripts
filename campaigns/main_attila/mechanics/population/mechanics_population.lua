@@ -899,59 +899,43 @@ cm:register_loading_game_callback(
 );
 
 function SavePopulationNumbersTable(context, tab, savename)
-	local savestring = "";
+	local parts = {};
 	local keys = MK1212_SaveSortedKeys(tab);
-
 	for i = 1, #keys do
 		local key = keys[i];
 		local values = tab[key];
-		savestring = savestring..tostring(key)..","..tostring(values[1])..","..tostring(values[2])..","..tostring(values[3])..","..tostring(values[4])..","..tostring(values[5])..",;";
+		if MK1212_SaveDenseLength(values) ~= 5 then error("MK1212 save refused: population needs five classes"); end
+		MK1212_SaveAppend(parts, key, ",");
+		for j = 1, 5 do
+			if not MK1212_IsFiniteNumber(values[j]) then error("MK1212 save refused: invalid population number"); end
+			MK1212_SaveAppend(parts, values[j], ",");
+		end
+		MK1212_SaveEndRow(parts);
 	end
-
-	MK1212_SaveCommitString(context, savename, savestring, #keys);
+	MK1212_SaveCommitString(context, savename, table.concat(parts), #keys);
 end
 
 function SaveFactionPopulationNumbersTable(context, tab, savename)
-	local savestring = "";
-
-	for key, tab2 in pairs(tab) do
-		savestring = savestring..key..","..tostring(tab[key])..",;";
+	local keys = MK1212_SaveSortedKeys(tab);
+	for i = 1, #keys do
+		if not MK1212_IsFiniteNumber(tab[keys[i]]) then error("MK1212 save refused: invalid faction population"); end
 	end
-
-	cm:save_value(savename, savestring, context);
+	SaveKeyPairTable(context, tab, savename);
 end
 
 function LoadPopulationNumbersTable(context, savename)
-	local savestring = cm:load_value(savename, "", context);
+	local rows = MK1212_LoadSaveRows(context, savename);
 	local tab = {};
-	
-	if savestring ~= "" then
-		local first_split = SplitString(savestring, ";");
-
-		for i = 1, #first_split do
-			local second_split = SplitString(first_split[i], ",");
-
-			local population_table = {tonumber(second_split[2]), tonumber(second_split[3]), tonumber(second_split[4]), tonumber(second_split[5]), tonumber(second_split[6])};
-			tab[second_split[1]] = population_table;
-		end
+	for i = 1, #rows do
+		local row = rows[i];
+		local key = MK1212_SaveUniqueRow(tab, row, 6, savename);
+		local values = {};
+		for j = 2, 6 do values[#values + 1] = MK1212_SaveNumber(row[j], savename); end
+		tab[key] = values;
 	end
-
 	return tab;
 end
 
 function LoadFactionPopulationNumbersTable(context, savename)
-	local savestring = cm:load_value(savename, "", context);
-	local tab = {};
-	
-	if savestring ~= "" then
-		local first_split = SplitString(savestring, ";");
-
-		for i = 1, #first_split do
-			local second_split = SplitString(first_split[i], ",");
-
-			tab[second_split[1]] = tonumber(second_split[2]);
-		end
-	end
-
-	return tab;
+	return LoadKeyPairTableNumbers(context, savename);
 end

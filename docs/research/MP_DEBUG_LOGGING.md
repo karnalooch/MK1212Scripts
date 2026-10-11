@@ -4,7 +4,7 @@ Status: **implemented / runtime file location proof pending**
 Issue: #32  
 Primary output: `MK1212_mp_debug.log`  
 Schema: `1`  
-Last reviewed: 2026-10-07
+Last reviewed: 2026-10-11
 
 ## Purpose
 
@@ -102,6 +102,21 @@ Contains local diagnostic metadata such as:
 
 These values are diagnostic and are ignored by the semantic peer comparator.
 
+### Pack identity
+
+`content_identity`
+
+The release builder injects the immutable source commit and the selected
+`baseline` or `full-experimental` profile into the packaged registry.
+This event records `source`, `profile`, `multiplayer` and `save_schema`.
+An unpackaged source checkout reports `unpackaged`; it is not a release identity.
+
+The comparator compares these fields, so different pack profiles or source
+revisions fail comparison. Identical identity records alone still produce
+`INSUFFICIENT EVIDENCE`: metadata does not establish shared campaign execution.
+Use the external manifest SHA256 to verify the entire pack's bytes as well.
+The logger never reads these metadata back as gameplay authority.
+
 ### Runtime / twdll
 
 `runtime`
@@ -147,6 +162,11 @@ Events include:
 - `region_transfer_apply`
 - `contract_error` for queue overflow.
 
+The queue claims one operation before calling the engine and keeps later
+operations when the current call fails. Such a failure can still leave a
+partial engine operation. Logs diagnose that boundary; they are not a replay
+journal or a repair authority.
+
 ### Vassal reconciliation
 
 `vassal`
@@ -162,9 +182,15 @@ Records only metadata:
 - save key/name;
 - schema;
 - entry count;
-- serialized byte count.
+- serialized byte count;
+- `adler32-v1:` followed by eight hexadecimal checksum digits for the framed
+  canonical payload.
 
 The complete save payload is **not** written to the debug log.
+The checksum distinguishes many equal-length payload changes but is not a
+cryptographic identity. It is calculated as two exact 16-bit halves so the
+repository's float-based Lua runtime does not round away the low bits.
+Checksum or logger failures cannot interrupt a successful save.
 
 ## twdll relationship
 
@@ -194,7 +220,7 @@ python scripts/ci/compare_mp_debug_logs.py HOST_MK1212_mp_debug.log CLIENT_MK121
 Matching result:
 
 ```text
-MK1212 MP log compare: PASS semantic_records=...
+MK1212 MP log compare: PASS semantic_records=... scope=instrumented_semantic_trace runtime_mp_proof=not_established
 ```
 
 Divergence result:
@@ -202,6 +228,11 @@ Divergence result:
 ```text
 MK1212 MP log compare: FIRST DIVERGENCE semantic_index=...
 ```
+
+Empty logs, native/session bootstrap only, or matching content identity without
+any campaign action produce `INSUFFICIENT EVIDENCE` and a nonzero exit status.
+Missing core fields, duplicate fields, unknown log schemas and invalid escapes
+are rejected before comparison.
 
 The comparator ignores:
 

@@ -150,9 +150,9 @@ local function MKMP_Debug_WriteLine(line)
 
 	local write_ok, write_error = pcall(
 		function()
-			file:write(line);
-			file:write("\n");
-			file:flush();
+			assert(file:write(line));
+			assert(file:write("\n"));
+			assert(file:flush());
 		end
 	);
 
@@ -185,7 +185,12 @@ function MKMP_Debug_Initialize()
 		return false;
 	end
 
-	MKMP_DEBUG.bytes = MKMP_Debug_ReadExistingSize();
+	local size_ok, existing_size = pcall(MKMP_Debug_ReadExistingSize);
+	if not size_ok then
+		MKMP_Debug_Disable("read_failed");
+		return false;
+	end
+	MKMP_DEBUG.bytes = existing_size;
 
 	if MKMP_DEBUG.bytes >= MKMP_DEBUG_MAX_BYTES then
 		MKMP_Debug_Disable("existing_log_at_budget");
@@ -206,10 +211,20 @@ function MKMP_Debug_Initialize()
 		}
 	);
 
+	-- Injected from immutable Git inputs by the pack builder. Metadata is
+	-- diagnostic-only and never selects a shared-model gameplay branch.
+	local identity = type(MKMP_PACK_ID) == "table" and MKMP_PACK_ID or {};
+	MKMP_Debug_Log("content_identity", {
+		source = identity.source or "unpackaged",
+		profile = identity.profile or "unpackaged",
+		multiplayer = cm and cm.is_multiplayer and cm:is_multiplayer() or false,
+		save_schema = MK1212_SAVE_SCHEMA_VERSION
+	});
+
 	return MKMP_DEBUG.enabled;
 end
 
-function MKMP_Debug_Log(event_name, payload)
+local function MKMP_Debug_LogRecord(event_name, payload)
 	if not MKMP_DEBUG.initialized then
 		return false;
 	end
@@ -253,6 +268,17 @@ function MKMP_Debug_Log(event_name, payload)
 	end
 
 	return false;
+end
+
+function MKMP_Debug_Log(event_name, payload)
+	-- io.open and formatting can throw as well as return nil. Neither may
+	-- interrupt the gameplay caller or consume a second campaign RNG draw.
+	local ok, result = pcall(MKMP_Debug_LogRecord, event_name, payload);
+	if not ok then
+		MKMP_Debug_Disable("log_exception");
+		return false;
+	end
+	return result;
 end
 
 function MKMP_Debug_Barrier(name, payload)

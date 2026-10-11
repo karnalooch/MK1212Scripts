@@ -10,8 +10,22 @@
 MECCA_REGION_KEY = "att_reg_arabia_magna_yathrib";
 MECCA_OCCUPIED = false;
 MECCA_RAZER = "nil";
+local mecca_initialized = false;
 
-local function Mecca_Destroyed(faction)
+local function Mecca_Destroyed(faction, refresh)
+	if not faction or faction:is_null_interface() then
+		return;
+	end
+	local faction_name = faction:name();
+	local was_occupied = MECCA_OCCUPIED;
+	local already_destroyed = MECCA_RAZER == faction_name;
+	if already_destroyed and not refresh then
+		return;
+	end
+	-- Retain the actor as a stable faction key, never a Lua engine interface.
+	-- Claim the transition before messages/model work so re-entry is a no-op.
+	MECCA_RAZER = faction_name;
+	MECCA_OCCUPIED = true;
 	local faction_list = cm:model():world():faction_list();
 
 	for i = 0, faction_list:num_items() - 1 do
@@ -19,7 +33,7 @@ local function Mecca_Destroyed(faction)
 		local current_faction_religion = current_faction:state_religion();
 		local current_faction_name = current_faction:name();
 
-		if current_faction:is_human() and MECCA_OCCUPIED == true then
+		if current_faction:is_human() and was_occupied and not refresh then
 			local faction_string = "factions_screen_name_"..faction:name();
 
 			cm:show_message_event(
@@ -41,10 +55,10 @@ local function Mecca_Destroyed(faction)
 
 	cm:apply_effect_bundle("mk_bundle_islams_outcry", faction:name(), 0);
 
-	MECCA_OCCUPIED = true;
 end
 
 local function Mecca_Liberated(faction)
+	MECCA_RAZER = "nil";
 	local faction_list = cm:model():world():faction_list();
 
 	for i = 0, faction_list:num_items() - 1 do
@@ -75,6 +89,7 @@ local function Mecca_Liberated(faction)
 end
 
 local function Mecca_Occupied(faction)
+	MECCA_RAZER = "nil";
 	local faction_list = cm:model():world():faction_list();
 
 	for i = 0, faction_list:num_items() - 1 do
@@ -108,6 +123,10 @@ local function Mecca_Occupied(faction)
 end
 
 function Add_Islam_Mecca_Listeners()
+	if mecca_initialized then
+		return;
+	end
+	mecca_initialized = true;
 	cm:add_listener(
 		"FactionTurnStart_Islam_Mecca",
 		"FactionTurnStart",
@@ -137,7 +156,7 @@ function Add_Islam_Mecca_Listeners()
 		true
 	);
 	cm:add_listener(
-		"CharacterPerformsOccupationDecisionRaze_Population",
+		"CharacterPerformsOccupationDecisionRaze_Islam_Mecca",
 		"CharacterPerformsOccupationDecisionRaze",
 		true,
 		function(context) CharacterPerformsOccupationDecision_Islam_Mecca(context, "RAZE") end,
@@ -158,15 +177,21 @@ end
 
 function Check_Mecca_Owner()
 	local mecca = cm:model():world():region_manager():region_by_key(MECCA_REGION_KEY);
+	if not mecca or mecca:is_null_interface() then
+		return;
+	end
 	local mecca_owner = mecca:owning_faction();
 
 	if mecca_owner and mecca_owner:is_null_interface() ~= true then
 		if mecca_owner:name() == "rebels" then
 			-- Razed!
-			if MECCA_RAZER ~= "nil" then
-				Mecca_Destroyed(MECCA_RAZER);
+			if type(MECCA_RAZER) == "string" and MECCA_RAZER ~= "nil" and MECCA_RAZER ~= "" then
+				local razer = cm:model():world():faction_by_key(MECCA_RAZER);
+				-- Refresh persistent effects without repeating a destruction popup.
+				Mecca_Destroyed(razer, true);
 			end
 		else
+			MECCA_RAZER = "nil";
 			local mecca_owner_religion = mecca_owner:state_religion();
 
 			if mecca_owner_religion ~= "att_rel_semitic_paganism" and mecca_owner_religion ~= "mk_rel_ibadi_islam" and mecca_owner_religion ~= "mk_rel_shia_islam" then
@@ -203,8 +228,15 @@ function FactionTurnStart_Islam_Mecca(context)
 end
 
 function CharacterPerformsOccupationDecision_Islam_Mecca(context, type)
-	local faction = context:character():faction();
-	local region = FindClosestRegion(context:character():logical_position_x(), context:character():logical_position_y(), "none"); -- Taking the character's region may be inaccurate if they're at sea or across a strait.
+	local character = context:character();
+	if not character or character:is_null_interface() then
+		return;
+	end
+	local faction = character:faction();
+	if not faction or faction:is_null_interface() then
+		return;
+	end
+	local region = FindClosestRegion(character:logical_position_x(), character:logical_position_y(), "none"); -- Taking the character's region may be inaccurate if they're at sea or across a strait.
 
 	if region then
 		local region_name = region:name();

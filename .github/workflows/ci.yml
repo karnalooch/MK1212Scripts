@@ -88,7 +88,25 @@ jobs:
         run: python scripts/ci/check_mp_safety_diff.py --base "${BASE_SHA}"
 
       - name: Run deterministic MP dual-peer simulation
+        env:
+          MK1212_REQUIRE_NUMERIC_LOCALE: '1'
         run: python -m unittest discover -s scripts/ci -p "test_mp_*.py" -v
+
+      - name: Test complete PFH4 pack generation
+        run: python -m unittest discover -s scripts/ci -p "test_pack_*.py" -v
+
+      - name: Build both verified Lua release profiles from exact HEAD
+        run: |
+          python scripts/pack/build_mk1212_pack.py build --ref HEAD --profile baseline --output-dir build/pack-release/baseline
+          python scripts/pack/build_mk1212_pack.py build --ref HEAD --profile full-experimental --output-dir build/pack-release/full-experimental
+
+      - name: Preserve exact-source script packs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mk1212-lua-packs-${{ github.event.pull_request.head.sha || github.sha }}
+          path: build/pack-release/
+          if-no-files-found: error
+          retention-days: 14
 
   native_twdll:
     name: Native twdll Attila build
@@ -112,6 +130,14 @@ jobs:
           if ($actual -ne $env:EXPECTED_SHA) {
             throw "Expected exact caller-local revision $env:EXPECTED_SHA, got $actual"
           }
+
+      - name: Test pack installer in Windows PowerShell 5.1
+        shell: powershell
+        run: .\scripts\pack\Test-Install-MK1212-Pack.ps1
+
+      - name: Test pack installer in PowerShell 7
+        shell: pwsh
+        run: .\scripts\pack\Test-Install-MK1212-Pack.ps1
 
       - name: Configure Attila x86 build
         shell: pwsh

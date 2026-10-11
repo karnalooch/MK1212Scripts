@@ -295,34 +295,35 @@ cm:register_loading_game_callback(
 	end
 );
 
+local nickname_save_fields = {"regions_taken", "captives_killed", "times_excommunicated", "turns_without_revolt", "heroic_victories"};
+
 function SaveNicknamesStatsTable(context, tab, savename)
-	local savestring = "";
+	local parts = {};
 	local keys = MK1212_SaveSortedKeys(tab);
-
 	for i = 1, #keys do
-		local cqi = keys[i];
-		local tab2 = tab[cqi];
-		savestring = savestring..tostring(cqi)..","..tostring(tab2["regions_taken"])..","..tostring(tab2["captives_killed"])..","..tostring(tab2["times_excommunicated"])..","..tostring(tab2["turns_without_revolt"])..","..tostring(tab2["heroic_victories"])..",;";
+		local key = keys[i];
+		local values = tab[key];
+		if type(values) ~= "table" then error("MK1212 save refused: invalid nickname record"); end
+		MK1212_SaveAppend(parts, key, ",");
+		for j = 1, #nickname_save_fields do
+			local value = values[nickname_save_fields[j]];
+			if not MK1212_IsFiniteNumber(value) then error("MK1212 save refused: invalid nickname number"); end
+			MK1212_SaveAppend(parts, value, ",");
+		end
+		MK1212_SaveEndRow(parts);
 	end
-
-	MK1212_SaveCommitString(context, savename, savestring, #keys);
+	MK1212_SaveCommitString(context, savename, table.concat(parts), #keys);
 end
 
-
 function LoadNicknamesStatsTable(context, savename)
-	local savestring = cm:load_value(savename, "", context);
+	local rows = MK1212_LoadSaveRows(context, savename);
 	local tab = {};
-	
-	if savestring ~= "" then
-		local first_split = SplitString(savestring, ";");
-
-		for i = 1, #first_split do
-			local second_split = SplitString(first_split[i], ",");
-
-			local nickname_stats_table = {["regions_taken"] = tonumber(second_split[2]), ["captives_killed"] = tonumber(second_split[3]), ["times_excommunicated"] = tonumber(second_split[4]), ["turns_without_revolt"] = tonumber(second_split[5]), ["heroic_victories"] = tonumber(second_split[6])};
-			tab[second_split[1]] = nickname_stats_table;
-		end
+	for i = 1, #rows do
+		local row = rows[i];
+		local key = MK1212_SaveUniqueRow(tab, row, 6, savename);
+		local values = {};
+		for j = 1, #nickname_save_fields do values[nickname_save_fields[j]] = MK1212_SaveNumber(row[j + 1], savename); end
+		tab[key] = values;
 	end
-
 	return tab;
 end
