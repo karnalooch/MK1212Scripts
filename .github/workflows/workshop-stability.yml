@@ -1,0 +1,60 @@
+name: Workshop stability proof
+
+on:
+  push:
+    branches: [fix/68-workshop-full-stability]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workshop-stability-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source_and_tests:
+    name: Exact source and Lua 5.1 checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Verify source identity
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Build vendored Lua 5.1 interpreter
+        run: |
+          set -euo pipefail
+          make -C native/twdll/docs/lua/lua_source/src generic
+          native/twdll/docs/lua/lua_source/src/lua -v
+      - name: Syntax-check campaign Lua
+        run: |
+          set -euo pipefail
+          find campaigns/main_attila -name '*.lua' -print0 | xargs -0 -n 1 native/twdll/docs/lua/lua_source/src/luac -p
+      - name: Existing MP source and dual-peer contracts
+        run: python -m unittest discover -s scripts/ci -p 'test_mp_*.py' -v
+      - name: Export tracked source for baseline comparison
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/workshop-source"
+          git archive --format=zip HEAD -o "$RUNNER_TEMP/workshop-source/source.zip"
+          printf '%s\n' "$SOURCE_SHA" > "$RUNNER_TEMP/workshop-source/commit.txt"
+          cd "$RUNNER_TEMP/workshop-source"
+          sha256sum source.zip > SHA256SUMS.txt
+      - name: Upload exact tracked source
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mk1212-workshop-source-${{ github.sha }}
+          path: ${{ runner.temp }}/workshop-source/
+          if-no-files-found: error
+          retention-days: 7
