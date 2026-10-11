@@ -30,17 +30,6 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
-      - name: Build vendored Lua 5.1 interpreter
-        run: |
-          set -euo pipefail
-          make -C native/twdll/docs/lua/lua_source/src generic
-          native/twdll/docs/lua/lua_source/src/lua -v
-      - name: Syntax-check campaign Lua
-        run: |
-          set -euo pipefail
-          find campaigns/main_attila -name '*.lua' -print0 | xargs -0 -n 1 native/twdll/docs/lua/lua_source/src/luac -p
-      - name: Existing MP source and dual-peer contracts
-        run: python -m unittest discover -s scripts/ci -p 'test_mp_*.py' -v
       - name: Export tracked source for baseline comparison
         env:
           SOURCE_SHA: ${{ github.sha }}
@@ -58,3 +47,18 @@ jobs:
           path: ${{ runner.temp }}/workshop-source/
           if-no-files-found: error
           retention-days: 7
+      - name: Build vendored Lua 5.1 interpreter
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd native/twdll/docs/lua/lua_source/src
+          mapfile -t sources < <(find . -maxdepth 1 -name '*.c' ! -name 'lua.c' ! -name 'luac.c' ! -name 'print.c' | sort)
+          gcc -O2 -std=gnu99 -o "$RUNNER_TEMP/lua51" "${sources[@]}" lua.c -lm -ldl
+          gcc -O2 -std=gnu99 -o "$RUNNER_TEMP/luac51" "${sources[@]}" luac.c print.c -lm -ldl
+          "$RUNNER_TEMP/lua51" -v
+      - name: Syntax-check campaign Lua
+        run: |
+          set -euo pipefail
+          find campaigns/main_attila -name '*.lua' -print0 | xargs -0 -n 1 "$RUNNER_TEMP/luac51" -p
+      - name: Existing MP source and dual-peer contracts
+        run: python -m unittest discover -s scripts/ci -p 'test_mp_*.py' -v
