@@ -253,7 +253,7 @@ function Byzantium_Regions_Check(faction_name)
 		if (cm:is_multiplayer() and not MKMP_SP_Parity_Enabled("kingdom_decisions")) or cm:model():world():faction_by_key(faction_name):is_human() == false then
 			Roman_Empire_Restored(faction_name);
 		elseif (not mkHRE or (mkHRE and HasValue(mkHRE.factions, faction_name) ~= true)) then
-			Enable_Decision("restore_roman_empire");
+			Enable_Decision("restore_roman_empire", faction_name);
 		end
 	end
 end
@@ -264,7 +264,7 @@ function Roman_Empire_Restored(faction_name)
 	FACTIONS_DFN_LEVEL[BYZANTINE_EMPIRE_FACTION] = 5;
 
 	if (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("kingdom_decisions")) then
-		Remove_Decision("restore_roman_empire");
+		Remove_Decision("restore_roman_empire", faction_name);
 
 		if IRONMAN_ENABLED then
 			Unlock_Achievement("achievement_basileia_rhomaion");

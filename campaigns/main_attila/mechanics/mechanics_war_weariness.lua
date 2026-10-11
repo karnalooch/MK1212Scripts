@@ -30,6 +30,31 @@ local function WW_Log(event, fields)
 	end
 end
 
+-- A bounded copy includes the private completed-phase ledger. Diagnostics must
+-- not hand another subsystem a mutable reference into campaign authority.
+function MKMP_War_Weariness_Get_State()
+	local function copy(source)
+		if type(source) ~= "table" then error("war weariness snapshot unavailable"); end
+		local result, count = {}, 0;
+		for key, value in pairs(source) do
+			count = count + 1;
+			if count > 4096 or type(key) ~= "string"
+				or (type(value) ~= "number" and type(value) ~= "string" and type(value) ~= "boolean") then
+				error("war weariness snapshot invalid or over budget");
+			end
+			result[key] = value;
+		end
+		return result;
+	end
+	return {
+		schema = 1, complete = ww_turn_state_valid, turn_schema = ww_turn_schema,
+		values = copy(PLAYER_WAR_WEARINESS), events = copy(PLAYER_WAR_WEARINESS_EVENTS),
+		turns_at_war = copy(PLAYER_WAR_WEARINESS_TURNS_AT_WAR),
+		completed_phase = copy(ww_last_turn), phase_semantics = "claimed_before_model_call",
+		passive_increment = TURN_AT_WAR
+	};
+end
+
 local function WW_Load_Turn_State(context)
 	ww_last_turn = {};
 	ww_turn_entries = 0;
@@ -127,6 +152,12 @@ function Add_War_Weariness_Listeners()
 	-- Own initialization before callbacks can re-enter it: no compounded
 	-- difficulty multiplier, duplicate listeners, or resetting a new campaign.
 	ww_initialized = true;
+	if MKMP_Debug_Register_State_Provider then
+		pcall(MKMP_Debug_Register_State_Provider, "war_weariness", function()
+			if ww_turn_state_valid then return MKMP_War_Weariness_Get_State(), "complete"; end
+			return MKMP_War_Weariness_Get_State(), "incomplete", "turn_ledger_invalid";
+		end);
+	end
 	cm:add_listener(
 		"FactionTurnStart_WW",
 		"FactionTurnStart",
@@ -245,7 +276,7 @@ function FactionTurnStart_WW(context)
 	
 	Update_War_Weariness(faction);
 	WW_Log("war_weariness_turn", {
-		faction = faction_name, phase = "faction_turn_start", turn = turn,
+		faction = faction_name, phase = "faction_turn_start", stage = "handler_exit",
 		value = PLAYER_WAR_WEARINESS[faction_name],
 		turns_at_war = PLAYER_WAR_WEARINESS_TURNS_AT_WAR[faction_name]
 	});

@@ -217,8 +217,9 @@ function OnComponentLClickUp_Decisions_UI(context)
 
 			UIComponent(context.component):SetState("inactive");
 
-			if REGISTRY_DECISIONS[decision_key].callback then
-				REGISTRY_DECISIONS[decision_key].callback(cm:get_local_faction());
+			local accepted, reason = MKMP_Decisions_Submit(decision_key, cm:get_local_faction());
+			if not accepted and MKMP_Actions_UI_Feedback then
+				MKMP_Actions_UI_Feedback(context.component, reason);
 			end
 		
 			RefreshDecisionsPanel();

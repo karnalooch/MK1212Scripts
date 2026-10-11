@@ -31,7 +31,11 @@ PAPAL_STATES_DEAD = false;
 POPE_CONTROLLING_FACTION = "mk_fact_papacy";
 POPE_DEAD = false;
 
+local pope_initialized = false;
+
 function Add_Pope_Listeners()
+	if pope_initialized then return; end
+	pope_initialized = true;
 	cm:add_listener(
 		"CharacterBecomesFactionLeader_Pope",
 		"CharacterBecomesFactionLeader",
@@ -199,7 +203,7 @@ function FactionTurnStart_Pope(context)
 end
 
 function Pope_Changeover_Automatic()
-	local age = cm:random_number(POPE_MAX_AGE, POPE_MIN_AGE);
+	local age = MK1212_Random_Int(POPE_MIN_AGE, POPE_MAX_AGE, "papal.pope_age:"..tostring(CURRENT_POPE));
 	local name = GENERIC_POPE_NAMES[cm:random_number(#GENERIC_POPE_NAMES)];
 
 	if POPE_LIST[CURRENT_POPE] then

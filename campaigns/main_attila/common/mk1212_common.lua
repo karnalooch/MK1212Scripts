@@ -196,6 +196,7 @@ function FactionTurnStart_Global(context)
 			"faction_turn_start",
 			{
 				faction = FACTION_TURN,
+				stage = "handler_entry", listener = "FactionTurnStart_Global",
 				human = context:faction():is_human()
 			}
 		);
@@ -226,6 +227,7 @@ function FactionTurnEnd_Global(context)
 			"faction_turn_end",
 			{
 				faction = context:faction():name(),
+				stage = "handler_entry", listener = "FactionTurnEnd_Global",
 				human = context:faction():is_human()
 			}
 		);
@@ -750,6 +752,11 @@ function Load_Region_Transfer_Queue(context)
 end
 
 local region_transfers_draining = false;
+
+function MKMP_Transfers_Get_State()
+	return MKMP_Diagnostic_Copy({schema = 1, queue = REGIONS_TO_TRANSFER,
+		draining = region_transfers_draining}), "complete";
+end
 
 function Drain_Region_Transfers()
 	if region_transfers_draining then return; end

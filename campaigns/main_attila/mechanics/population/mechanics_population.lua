@@ -11,6 +11,7 @@ require("mechanics/population/mechanics_population_economy");
 require("mechanics/population/mechanics_population_lists");
 require("mechanics/population/mechanics_population_ui");
 require("mechanics/population/mechanics_population_unit_lists");
+require("mechanics/population/mechanics_population_actions");
 
 POPULATION_MANPOWER_PERCENTAGE = 0.25; -- How much of a population should be eligible for military service?
 POPULATION_MANPOWER_SOFT_CAP = 1.25; -- How much should manpower be allowed to exceed its ratio by before its growth is stymied? 1.25 = 25% above its ratio.
@@ -35,8 +36,33 @@ POPULATION_FACTION_TECH_BONUSES = {};
 POPULATION_FACTION_TECH_RESEARCHED = {};
 POPULATION_FACTION_TOTAL_POPULATIONS = {};
 POPULATION_UNITS_IN_RECRUITMENT = {};
+local population_initialized = false;
+
+function MKMP_Population_Is_Active()
+	return population_initialized;
+end
+
+function MKMP_Population_Get_State()
+	if not population_initialized then return {schema = 1, enabled = false}, "complete"; end
+	local actions, status, reason = MKMP_Population_Actions_Get_State();
+	return MKMP_Diagnostic_Copy({schema = 1, enabled = true, recruitment = POPULATION_UNITS_IN_RECRUITMENT,
+		actions = actions}), status, reason;
+end
+
+function MKMP_Population_Counts_Get_State()
+	if not population_initialized then return {schema = 1, enabled = false}, "complete"; end
+	return MKMP_Diagnostic_Copy({schema = 1, enabled = true, regions = POPULATION_REGIONS_POPULATIONS}), "complete";
+end
+
+function MKMP_Population_Manpower_Get_State()
+	if not population_initialized then return {schema = 1, enabled = false}, "complete"; end
+	return MKMP_Diagnostic_Copy({schema = 1, enabled = true, regions = POPULATION_REGIONS_MANPOWER}), "complete";
+end
 
 function Add_Population_Listeners()
+	if population_initialized then return; end
+	population_initialized = true;
+	MKMP_Population_Actions_Initialize();
 	cm:add_listener(
 		"FactionTurnStart_Population",
 		"FactionTurnStart",
@@ -199,6 +225,7 @@ function Add_Population_Listeners()
 end
 
 function FactionTurnStart_Population(context)
+	if not MKMP_Population_Guard_Phase("faction_start", context:faction():name()) then return; end
 	--dev.log("\nFactionTurnStart_Population for faction "..context:faction():name());
 	
 	if cm:model():turn_number() ~= 1 then
@@ -243,40 +270,40 @@ function BattleCompleted_Population(context)
 	local defender_result = cm:model():pending_battle():defender_battle_result();
 
 	if attacker_result == "valiant_defeat" or attacker_result == "close_defeat" or attacker_result == "decisive_defeat" or attacker_result == "crushing_defeat" then
-		POPULATION_UNITS_IN_RECRUITMENT[tostring(attacker_cqi)] = nil;
+		MKMP_Population_Queue_Cleared(tostring(attacker_cqi));
 
 		if cm:pending_battle_cache_get_attacker(2)  then
 			attacker2_cqi, attacker_force2_cqi, attacker2_name = cm:pending_battle_cache_get_attacker(2);
-			POPULATION_UNITS_IN_RECRUITMENT[tostring(attacker2_cqi)] = nil;
+			MKMP_Population_Queue_Cleared(tostring(attacker2_cqi));
 		end
 
 		if cm:pending_battle_cache_get_attacker(3)  then
 			attacker3_cqi, attacker_force3_cqi, attacker3_name = cm:pending_battle_cache_get_attacker(3);
-			POPULATION_UNITS_IN_RECRUITMENT[tostring(attacker3_cqi)] = nil;
+			MKMP_Population_Queue_Cleared(tostring(attacker3_cqi));
 		end
 
 		if cm:pending_battle_cache_get_attacker(4)  then
 			attacker4_cqi, attacker_force4_cqi, attacker4_name = cm:pending_battle_cache_get_attacker(4);
-			POPULATION_UNITS_IN_RECRUITMENT[tostring(attacker4_cqi)] = nil;
+			MKMP_Population_Queue_Cleared(tostring(attacker4_cqi));
 		end
 	end
 
 	if defender_result == "valiant_defeat" or defender_result == "close_defeat" or defender_result == "decisive_defeat" or defender_result == "crushing_defeat" then
-		POPULATION_UNITS_IN_RECRUITMENT[tostring(defender_cqi)] = nil;
+		MKMP_Population_Queue_Cleared(tostring(defender_cqi));
 
 		if cm:pending_battle_cache_get_defender(2)  then
 			defender2_cqi, defender_force2_cqi, defender2_name = cm:pending_battle_cache_get_defender(2);
-			POPULATION_UNITS_IN_RECRUITMENT[tostring(defender2_cqi)] = nil;
+			MKMP_Population_Queue_Cleared(tostring(defender2_cqi));
 		end
 
 		if cm:pending_battle_cache_get_defender(3)  then
 			defender3_cqi, defender_force3_cqi, defender3_name = cm:pending_battle_cache_get_defender(3);
-			POPULATION_UNITS_IN_RECRUITMENT[tostring(defender3_cqi)] = nil;
+			MKMP_Population_Queue_Cleared(tostring(defender3_cqi));
 		end
 
 		if cm:pending_battle_cache_get_defender(4)  then
 			defender4_cqi, defender_force4_cqi, defender4_name = cm:pending_battle_cache_get_defender(4);
-			POPULATION_UNITS_IN_RECRUITMENT[tostring(defender4_cqi)] = nil;
+			MKMP_Population_Queue_Cleared(tostring(defender4_cqi));
 		end
 	end
 
@@ -288,29 +315,40 @@ function BattleCompleted_Population(context)
 end
 
 function CharacterTurnStart_Population(context)
-	CheckArmyReplenishment(context:character());
-
-	if context:character():region():owning_faction() ~= context:character():faction() then
-		POPULATION_UNITS_IN_RECRUITMENT[tostring(context:character():cqi())] = nil;
+	local character = context:character();
+	if not character or character:is_null_interface() then return; end
+	local cqi = tostring(character:cqi());
+	if not MKMP_Population_Guard_Phase("character_start", cqi) then return; end
+	CheckArmyReplenishment(character);
+	local region = character:has_region() and character:region() or nil;
+	if region and not region:is_null_interface() and not region:owning_faction():is_null_interface()
+		and region:owning_faction():name() ~= character:faction():name() then
+		MKMP_Population_Queue_Cleared(cqi);
 	end
 
-	if POPULATION_REGIONS_CHARACTERS_RAIDING[tostring(context:character():cqi())]  then
-		if POPULATION_REGIONS_CHARACTERS_RAIDING[tostring(context:character():cqi())] ~= context:character():region():name() or context:character():has_military_force() == false then
-			POPULATION_REGIONS_CHARACTERS_RAIDING[tostring(context:character():cqi())] = nil;
+	if POPULATION_REGIONS_CHARACTERS_RAIDING[cqi] then
+		if not region or region:is_null_interface() or POPULATION_REGIONS_CHARACTERS_RAIDING[cqi] ~= region:name()
+			or character:has_military_force() == false then
+			POPULATION_REGIONS_CHARACTERS_RAIDING[cqi] = nil;
 		end
 	end
 end
 
 function CharacterTurnEnd_Population(context)
-	CheckArmyReplenishment(context:character());
-
-	if context:character():region():owning_faction() ~= context:character():faction() then
-		POPULATION_UNITS_IN_RECRUITMENT[tostring(context:character():cqi())] = nil;
+	local character = context:character();
+	if not character or character:is_null_interface() then return; end
+	local cqi = tostring(character:cqi());
+	if not MKMP_Population_Guard_Phase("character_end", cqi) then return; end
+	CheckArmyReplenishment(character);
+	local region = character:has_region() and character:region() or nil;
+	if region and not region:is_null_interface() and not region:owning_faction():is_null_interface()
+		and region:owning_faction():name() ~= character:faction():name() then
+		MKMP_Population_Queue_Cleared(cqi);
 	end
 
-	if POPULATION_REGIONS_CHARACTERS_RAIDING[tostring(context:character():cqi())]  then
-		if not context:character():region():name() == POPULATION_REGIONS_CHARACTERS_RAIDING[tostring(context:character():cqi())] then
-			POPULATION_REGIONS_CHARACTERS_RAIDING[tostring(context:character():cqi())] = nil;
+	if POPULATION_REGIONS_CHARACTERS_RAIDING[cqi] then
+		if not region or region:is_null_interface() or region:name() ~= POPULATION_REGIONS_CHARACTERS_RAIDING[cqi] then
+			POPULATION_REGIONS_CHARACTERS_RAIDING[cqi] = nil;
 		end
 	end
 end
@@ -509,21 +547,10 @@ function ResearchCompleted_Population(context)
 end
 
 function UnitTrained_Population(context)
-	local unit = context:unit();
-
-	if unit:faction():is_human() then
-		local cqi = tostring(unit:force_commander():cqi());
-		
-		if POPULATION_UNITS_IN_RECRUITMENT[cqi]  then
-			for i = 1, #POPULATION_UNITS_IN_RECRUITMENT[cqi] do
-				if POPULATION_UNITS_IN_RECRUITMENT[cqi][i] == unit:unit_key() then
-					--dev.log("Removing "..unit:unit_key().." from queue.");
-					table.remove(POPULATION_UNITS_IN_RECRUITMENT[cqi], i);
-					break;
-				end
-			end
-		end
-	end
+	-- A native same-type event cannot identify an individual paid reservation.
+	-- The action owner retains debit records and persists an uncertain queue in
+	-- both SP and MP instead of silently consuming a guessed slot.
+	return MKMP_Population_Observe_Trained(context);
 end
 
 function Compute_Region_Growth(region)
@@ -872,6 +899,7 @@ end
 ------------------------------------------------
 cm:register_saving_game_callback(
 	function(context)
+		local prepared_actions, action_rows = MKMP_Population_Prepare_Actions();
 		SavePopulationNumbersTable(context, POPULATION_REGIONS_POPULATIONS, "POPULATION_REGIONS_POPULATIONS");
 		SavePopulationNumbersTable(context, POPULATION_REGIONS_MANPOWER, "POPULATION_REGIONS_MANPOWER");
 		SavePopulationNumbersTable(context, POPULATION_REGIONS_GROWTH_RATES, "POPULATION_REGIONS_GROWTH_RATES");
@@ -881,20 +909,31 @@ cm:register_saving_game_callback(
 		SaveKeyPairTable(context, POPULATION_REGIONS_CHARACTERS_RAIDING, "POPULATION_REGIONS_CHARACTERS_RAIDING");
 		SaveKeyPairTables(context, POPULATION_FACTION_TECH_RESEARCHED, "POPULATION_FACTION_TECH_RESEARCHED");
 		SaveKeyPairTables(context, POPULATION_UNITS_IN_RECRUITMENT, "POPULATION_UNITS_IN_RECRUITMENT");
+		MKMP_Population_Save_Actions(context, prepared_actions, action_rows);
 	end
 );
 
 cm:register_loading_game_callback(
 	function(context)
-		POPULATION_REGIONS_POPULATIONS = LoadPopulationNumbersTable(context, "POPULATION_REGIONS_POPULATIONS");
-		POPULATION_REGIONS_MANPOWER = LoadPopulationNumbersTable(context, "POPULATION_REGIONS_MANPOWER");
-		POPULATION_REGIONS_GROWTH_RATES = LoadPopulationNumbersTable(context, "POPULATION_REGIONS_GROWTH_RATES");
-		POPULATION_FACTION_TECH_BONUSES = LoadPopulationNumbersTable(context, "POPULATION_FACTION_TECH_BONUSES");
-		POPULATION_FACTION_TOTAL_POPULATIONS = LoadFactionPopulationNumbersTable(context, "POPULATION_FACTION_TOTAL_POPULATIONS");
-		POPULATION_REGIONS_GROWTH_FACTORS = LoadKeyPairTable(context, "POPULATION_REGIONS_GROWTH_FACTORS");
-		POPULATION_REGIONS_CHARACTERS_RAIDING = LoadKeyPairTable(context, "POPULATION_REGIONS_CHARACTERS_RAIDING");
-		POPULATION_FACTION_TECH_RESEARCHED = LoadKeyPairTables(context, "POPULATION_FACTION_TECH_RESEARCHED");
-		POPULATION_UNITS_IN_RECRUITMENT = LoadKeyPairTables(context, "POPULATION_UNITS_IN_RECRUITMENT");
+		local next_population_regions_populations = LoadPopulationNumbersTable(context, "POPULATION_REGIONS_POPULATIONS");
+		local next_population_regions_manpower = LoadPopulationNumbersTable(context, "POPULATION_REGIONS_MANPOWER");
+		local next_population_regions_growth_rates = LoadPopulationNumbersTable(context, "POPULATION_REGIONS_GROWTH_RATES");
+		local next_population_faction_tech_bonuses = LoadPopulationNumbersTable(context, "POPULATION_FACTION_TECH_BONUSES");
+		local next_population_faction_total_populations = LoadFactionPopulationNumbersTable(context, "POPULATION_FACTION_TOTAL_POPULATIONS");
+		local next_population_regions_growth_factors = LoadKeyPairTable(context, "POPULATION_REGIONS_GROWTH_FACTORS");
+		local next_population_regions_characters_raiding = LoadKeyPairTable(context, "POPULATION_REGIONS_CHARACTERS_RAIDING");
+		local next_population_faction_tech_researched = LoadKeyPairTables(context, "POPULATION_FACTION_TECH_RESEARCHED");
+		local next_population_units_in_recruitment = LoadKeyPairTables(context, "POPULATION_UNITS_IN_RECRUITMENT");
+		MKMP_Population_Load_Actions(context, next_population_units_in_recruitment);
+		POPULATION_REGIONS_POPULATIONS = next_population_regions_populations;
+		POPULATION_REGIONS_MANPOWER = next_population_regions_manpower;
+		POPULATION_REGIONS_GROWTH_RATES = next_population_regions_growth_rates;
+		POPULATION_FACTION_TECH_BONUSES = next_population_faction_tech_bonuses;
+		POPULATION_FACTION_TOTAL_POPULATIONS = next_population_faction_total_populations;
+		POPULATION_REGIONS_GROWTH_FACTORS = next_population_regions_growth_factors;
+		POPULATION_REGIONS_CHARACTERS_RAIDING = next_population_regions_characters_raiding;
+		POPULATION_FACTION_TECH_RESEARCHED = next_population_faction_tech_researched;
+		POPULATION_UNITS_IN_RECRUITMENT = next_population_units_in_recruitment;
 	end
 );
 

@@ -12,8 +12,10 @@
 MKMP_RUNTIME = {
 	initialized = false,
 	available = false,
+	module_loaded = false,
 	reason = "not_initialized",
 	module = nil,
+	game_name = "unknown",
 	game_build = "unknown",
 	twdll_sha = "unknown",
 	native_faction_count = nil
@@ -34,7 +36,7 @@ local function MKMP_Runtime_Log_Internal(message)
 	end
 
 	if MKMP_RUNTIME.module
-	and MKMP_RUNTIME.module.core
+	and type(MKMP_RUNTIME.module.core) == "table"
 	and type(MKMP_RUNTIME.module.core.Log) == "function" then
 		local ok = pcall(MKMP_RUNTIME.module.core.Log, text);
 
@@ -43,8 +45,8 @@ local function MKMP_Runtime_Log_Internal(message)
 		end
 	end
 
-	if dev and dev.log then
-		dev.log(text);
+	if type(dev) == "table" and type(dev.log) == "function" then
+		pcall(dev.log, text);
 	end
 end
 
@@ -62,7 +64,7 @@ local function MKMP_Runtime_Call(fn, ...)
 	return result, nil;
 end
 
-function MKMP_Runtime_Initialize()
+local function MKMP_Runtime_Initialize_Internal()
 	if MKMP_RUNTIME.initialized then
 		return MKMP_RUNTIME.available;
 	end
@@ -102,12 +104,16 @@ function MKMP_Runtime_Initialize()
 	end
 
 	MKMP_RUNTIME.module = module_or_error;
+	MKMP_RUNTIME.module_loaded = true;
 
-	if MKMP_RUNTIME.module.core then
-		local game_build = MKMP_Runtime_Call(MKMP_RUNTIME.module.core.GameBuild);
+	if type(MKMP_RUNTIME.module.core) == "table" then
+		-- The current native GameBuild function returns GAME_NAME ("Attila"),
+		-- not an executable version/hash. Exact binary identity belongs to the
+		-- external preflight and must never be inferred from successful loading.
+		local game_name = MKMP_Runtime_Call(MKMP_RUNTIME.module.core.GameBuild);
 
-		if game_build then
-			MKMP_RUNTIME.game_build = tostring(game_build);
+		if game_name then
+			MKMP_RUNTIME.game_name = tostring(game_name);
 		end
 
 		local twdll_sha = MKMP_Runtime_Call(MKMP_RUNTIME.module.core.GetBuildSha);
@@ -117,24 +123,37 @@ function MKMP_Runtime_Initialize()
 		end
 	end
 
-	if MKMP_RUNTIME.module.world then
+	if type(MKMP_RUNTIME.module.world) == "table" then
 		local faction_count = MKMP_Runtime_Call(MKMP_RUNTIME.module.world.GetFactionCount);
 
-		if faction_count ~= nil then
-			MKMP_RUNTIME.native_faction_count = tonumber(faction_count);
+		if type(faction_count) == "number" and faction_count == faction_count
+			and faction_count >= 1 and faction_count <= 4096 and faction_count == math.floor(faction_count) then
+			MKMP_RUNTIME.native_faction_count = faction_count;
 		end
 	end
 
-	MKMP_RUNTIME.available = true;
-	MKMP_RUNTIME.reason = "ready";
+	MKMP_RUNTIME.available = MKMP_RUNTIME.native_faction_count ~= nil;
+	MKMP_RUNTIME.reason = MKMP_RUNTIME.available and "ready" or "world_capability_unavailable";
 
 	MKMP_Runtime_Log_Internal(
-		"ready game="..MKMP_RUNTIME.game_build..
+		MKMP_RUNTIME.reason.." game_name="..MKMP_RUNTIME.game_name..
+		" game_build=unknown exact_environment=external_preflight_required"..
 		" twdll_sha="..MKMP_RUNTIME.twdll_sha..
 		" factions="..tostring(MKMP_RUNTIME.native_faction_count)
 	);
 
-	return true;
+	return MKMP_RUNTIME.available;
+end
+
+function MKMP_Runtime_Initialize()
+	local ok, result = pcall(MKMP_Runtime_Initialize_Internal);
+	if not ok then
+		MKMP_RUNTIME.available = false;
+		MKMP_RUNTIME.reason = "initialize_exception";
+		pcall(MKMP_Runtime_Log_Internal, MKMP_RUNTIME.reason);
+		return false;
+	end
+	return result;
 end
 
 function MKMP_Runtime_Available()
@@ -150,9 +169,11 @@ function MKMP_Runtime_Get_Environment_Fingerprint()
 
 	return table.concat(
 		{
-			"schema=1",
+			"schema=2",
 			"multiplayer="..tostring(cm:is_multiplayer()),
-			"game="..tostring(MKMP_RUNTIME.game_build),
+			"game_name="..tostring(MKMP_RUNTIME.game_name),
+			"game_build="..tostring(MKMP_RUNTIME.game_build),
+			"exact_environment=external_preflight_required",
 			"twdll="..tostring(MKMP_RUNTIME.twdll_sha),
 			limits
 		},
@@ -189,7 +210,13 @@ function MKMP_Runtime_Get_Campaign_Snapshot()
 		end
 	end
 
-	table.sort(factions);
+	table.sort(factions, function(a, b)
+		for i = 1, math.min(#a, #b) do
+			local first, second = string.byte(a, i), string.byte(b, i);
+			if first ~= second then return first < second; end
+		end
+		return #a < #b;
+	end);
 
 	for i = 1, #factions do
 		table.insert(parts, factions[i]);
@@ -198,10 +225,54 @@ function MKMP_Runtime_Get_Campaign_Snapshot()
 	return table.concat(parts, "|");
 end
 
+function MKMP_Runtime_Get_Region_Ownership_Snapshot()
+	-- Use the campaign scripting interface, independently of native DLL state.
+	-- The world region list includes all regions; faction counts alone cannot
+	-- detect two swapped owners. Null interfaces are incomplete evidence.
+	local ok, result, status, reason = pcall(function()
+		local regions = cm:model():world():region_manager():region_list();
+		local count = regions:num_items();
+		if type(count) ~= "number" or count ~= count or count < 1
+			or count > 4096 or count ~= math.floor(count) then
+			return nil, "incomplete", "region_count_invalid";
+		end
+		local owners = {};
+		for i = 0, count - 1 do
+			local region = regions:item_at(i);
+			if not region or region:is_null_interface() then return nil, "incomplete", "region_unavailable"; end
+			local name, owner = region:name(), region:owning_faction();
+			if type(name) ~= "string" or name == "" or owners[name] ~= nil then
+				return nil, "incomplete", "region_identity_invalid";
+			end
+			if not owner or owner:is_null_interface() then return nil, "incomplete", "region_owner_unavailable"; end
+			local owner_name = owner:name();
+			if type(owner_name) ~= "string" or owner_name == "" then
+				return nil, "incomplete", "region_owner_invalid";
+			end
+			owners[name] = owner_name;
+		end
+		return {schema = 1, region_count = count, owners = owners}, "complete";
+	end);
+	if not ok then return nil, "unavailable", "region_interface_unavailable"; end
+	return result, status, reason;
+end
+
+function MKMP_Runtime_Get_Campaign_Fingerprint()
+	local snapshot, status, reason = MKMP_Runtime_Get_Region_Ownership_Snapshot();
+	if status ~= "complete" or type(MKMP_Fingerprint_Capture) ~= "function" then
+		return {
+			schema = "mkfp-table-v1", complete = false,
+			status = status ~= "complete" and status or "unavailable",
+			reason = reason or "fingerprint_module_missing"
+		};
+	end
+	return MKMP_Fingerprint_Capture(snapshot);
+end
+
 function MKMP_Runtime_Get_Battle_Telemetry()
 	if not MKMP_RUNTIME.available
 	or not MKMP_RUNTIME.module
-	or not MKMP_RUNTIME.module.battle
+	or type(MKMP_RUNTIME.module.battle) ~= "table"
 	or type(MKMP_RUNTIME.module.battle.GetBattleInfo) ~= "function" then
 		return nil;
 	end
@@ -220,19 +291,20 @@ function MKMP_Runtime_Get_Battle_Telemetry()
 end
 
 function MKMP_Runtime_Log_Barrier(name)
-	MKMP_Runtime_Log_Internal(
-		"barrier="..tostring(name)..
-		" env="..MKMP_Runtime_Get_Environment_Fingerprint()..
-		" state="..MKMP_Runtime_Get_Campaign_Snapshot()
-	);
+	if MKMP_Debug_Barrier then
+		pcall(MKMP_Debug_Barrier, name, {stage = "handler_entry", listener = "MKMP_Runtime_Log_Barrier"});
+	end
 end
 
 function MKMP_Runtime_Status()
 	return {
 		initialized = MKMP_RUNTIME.initialized,
 		available = MKMP_RUNTIME.available,
+		module_loaded = MKMP_RUNTIME.module_loaded,
 		reason = MKMP_RUNTIME.reason,
+		game_name = MKMP_RUNTIME.game_name,
 		game_build = MKMP_RUNTIME.game_build,
+		exact_environment = "external_preflight_required",
 		twdll_sha = MKMP_RUNTIME.twdll_sha,
 		native_faction_count = MKMP_RUNTIME.native_faction_count
 	};

@@ -88,7 +88,7 @@ function Ilkhanate_Regions_Check(context)
 		if (cm:is_multiplayer() and not MKMP_SP_Parity_Enabled("kingdom_decisions")) or context:faction():is_human() == false then
 			Ilkhanate_Formed(faction_name);
 		elseif (not mkHRE or (mkHRE and HasValue(mkHRE.factions, faction_name) ~= true)) then
-			Enable_Decision("form_empire_ilkhanate");
+			Enable_Decision("form_empire_ilkhanate", faction_name);
 		end		
 	end
 end
@@ -99,7 +99,7 @@ function Ilkhanate_Formed(faction_name)
 	Rename_Faction(faction_name, faction_name.."_lvl"..tostring(FACTIONS_DFN_LEVEL[faction_name]));
 
 	if (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("kingdom_decisions")) then
-		Remove_Decision("form_empire_ilkhanate");
+		Remove_Decision("form_empire_ilkhanate", faction_name);
 	end
 
 	cm:show_message_event(

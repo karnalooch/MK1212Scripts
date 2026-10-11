@@ -14,6 +14,14 @@ experimental gates enabled. Both profiles contain the script-action fixes below.
 The baseline profile is a control for the experimental gates; it is not a copy
 of the original unmodified scripts.
 
+The subsequent [N0–N4 tranche](MP_N0_N4_IMPLEMENTATION.md), Issue #69, adds an
+unconditional MP authority boundary for captured local actions. Enabling an
+initialization gate can display a feature but cannot enable its unproven local
+script mutation. This includes decision/Papal-loan submission, Buffer State
+creation, region trades, annex start/cancel and the captured Population actions.
+N4 candidate-batch receipt is not gameplay execution. The shared codec remains
+schema 3, while new owner metadata also requires a pre-update save for rollback.
+
 The user's control observation — synchronization worked with scripts disabled —
 prioritizes script execution, local inputs and save state. The earlier PR45
 `no-dll` ZIP is a different control: scripts were enabled and its sessions were SP.

@@ -44,6 +44,25 @@ Change Capital ani starego helpera sieciowego. Pełny stan funkcji i ograniczeń
 opisuje [eksperyment SP → MP](../research/MP_SP_PARITY_EXPERIMENT.md).
 Używaj nowej kampanii, której utrata nie zabierze właściwej rozgrywki.
 
+W transzy N0–N4 rejestr akcji **blokuje skryptowe efekty lokalnych kliknięć w MP**
+do czasu wykazania natywnego dostarczenia i bezpiecznej fazy wykonania. Dotyczy
+decyzji i pożyczki papieskiej, państw buforowych, handlu regionami, rozpoczynania
+i anulowania aneksji oraz objętych zmianą akcji Population. Wariant pełny może
+pokazać ich interfejs, ale jego przełącznik nie otwiera tej granicy. Natywny
+przycisk gry może nadal wykonać własną operację. Nie traktuj tego wydania jako
+gotowej kampanii z kompletnym parytetem SP/MP.
+
+W SP niejednoznaczne zdarzenie wyszkolenia jednostki zachowuje rezerwacje
+Population i blokuje dalsze niepotwierdzone rozliczenia tej kolejki; nie zgaduje,
+która z identycznych jednostek została wyszkolona. Dodatkowe metadane właścicieli
+akcji wymagają kopii zapisu sprzed **tej** aktualizacji także przy cofnięciu do
+wcześniejszego wydania używającego wspólnego schematu 3.
+
+Zakres, wersje zapisu i granice dowodu opisuje
+[wdrożenie N0–N4](../research/MP_N0_N4_IMPLEMENTATION.md). Dodatkowy koordynator
+i bufor są narzędziem eksperymentalnym; instrukcja jednego wspólnego przebiegu
+po N4 znajduje się w [MP_HOST_COORDINATOR.md](MP_HOST_COORDINATOR.md).
+
 ## Instalacja na Windows — oba komputery
 
 1. Zamknij grę. Zachowaj dotychczasowy działający zapis i jego zestaw modów.

@@ -55,8 +55,36 @@ local function Buffer_Resolve_Action(action)
 	return region, master, vassal, owner:name() == action.vassal;
 end
 
+local function Buffer_Complete(action)
+	if buffer_pending ~= action then return; end
+	if action.action_id and not MKMP_Actions_Matches(action.action_id, "buffer_state", action.master,
+		{region = action.region, master = action.master, vassal = action.vassal, turn = action.turn}) then return; end
+	buffer_pending, buffer_timer_armed = nil, false;
+	buffer_blocked, buffer_preserve_raw = false, false;
+	if action.action_id then MKMP_Actions_Confirm(action.action_id, "confirmed"); end
+	Buffer_Log("buffer_transfer_complete", action);
+end
+
+local function Buffer_Mark_Uncertain(action, event)
+	action.phase = "blocked";
+	if action.action_id then MKMP_Actions_Confirm(action.action_id, "uncertain"); end
+	Buffer_Log(event, action);
+end
+
+local function Buffer_Observe_Transfer()
+	local action = buffer_pending;
+	if cm:is_multiplayer() or buffer_preserve_raw or not action
+		or (action.phase ~= "applying" and action.phase ~= "waiting_transfer") then return; end
+	local ok, region, _, _, already_owned = pcall(Buffer_Resolve_Action, action);
+	if ok and region and already_owned then Buffer_Complete(action); end
+end
+
 local function Buffer_Arm_Transfer()
 	local action = buffer_pending;
+	if cm:is_multiplayer() and action then
+		Buffer_Log("buffer_transfer_delivery_unproven", action);
+		return;
+	end
 	if buffer_blocked or buffer_timer_armed or not action or action.phase ~= "waiting_transfer" then return; end
 	local region, _, _, already_owned = Buffer_Resolve_Action(action);
 	if not region then
@@ -64,7 +92,7 @@ local function Buffer_Arm_Transfer()
 		Buffer_Log("buffer_transfer_invalid_owner", action);
 		return;
 	elseif already_owned then
-		buffer_pending = nil;
+		Buffer_Complete(action);
 		return;
 	end
 	-- The same namespaced token may be delivered twice after loading; only the
@@ -80,15 +108,22 @@ local function Buffer_Apply_Transfer(action)
 		Buffer_Log("buffer_transfer_invalid_owner", action);
 		return;
 	end
-	if already_owned then buffer_pending = nil; return; end
+	if already_owned then Buffer_Complete(action); return; end
 	-- Retain the claim if the engine/helper fails. Neither another timer nor
 	-- loading this phase is allowed to retry a potentially partial mutation.
 	action.phase = "applying";
-	if Transfer_Region_To_Faction(action.region, action.vassal) == true then
-		buffer_pending = nil;
-		Buffer_Log("buffer_transfer_complete", action);
+	local ok, accepted = pcall(Transfer_Region_To_Faction, action.region, action.vassal);
+	if ok and accepted == true then
+		local current = cm:model():world():region_manager():region_by_key(action.region);
+		if current and not current:is_null_interface() and current:owning_faction():name() == action.vassal then
+			Buffer_Complete(action);
+		else
+			-- Request accepted/queued is not ownership confirmation; never issue
+			-- a second transfer merely because an asynchronous callback is late.
+			Buffer_Log("buffer_transfer_requested", action);
+		end
 	else
-		Buffer_Log("buffer_transfer_blocked", action);
+		Buffer_Mark_Uncertain(action, "buffer_transfer_blocked");
 	end
 end
 
@@ -108,12 +143,92 @@ local function Buffer_Capture_Intent()
 	return action;
 end
 
+local function Buffer_Validate_Local(actor, action)
+	if action.master ~= actor or buffer_pending or buffer_blocked or buffer_serial >= BUFFER_MAX_SERIAL
+		or action.turn ~= cm:model():turn_number() or FACTION_TURN ~= actor then return false, "buffer_precondition"; end
+	local region, _, _, already_owned = Buffer_Resolve_Action(action);
+	return region ~= nil and not already_owned, "buffer_target_invalid";
+end
+
+local function Buffer_Execute_Local(actor, action, action_id)
+	local region = Buffer_Resolve_Action(action);
+	buffer_serial = buffer_serial + 1;
+	action.serial, action.phase, action.action_id = buffer_serial, "started", action_id;
+	buffer_pending = action;
+	local faction_name = action.master;
+	local vassal_faction_name = action.vassal;
+	local spear_unit = BUFFER_STATE_SPEAR_UNITS[vassal_faction_name];
+	local unit_list = "";
+
+	if spear_unit then
+		unit_list = spear_unit..","..spear_unit..","..spear_unit..","..spear_unit;
+	else
+		-- We need to give them something even if it's inaccurate, otherwise the army will not spawn.
+		unit_list = "att_rom_cohors";
+	end
+
+	if not FactionIsAlive(vassal_faction_name) then
+		local settlement = region:settlement();
+		if not settlement or settlement:is_null_interface() then
+			action.phase = "blocked";
+			return false, "settlement_unavailable";
+		end
+		local region_x = settlement:logical_position_x();
+		local region_y = settlement:logical_position_y();
+
+		cm:create_force(
+			vassal_faction_name,
+			unit_list,
+			action.region,
+			region_x,
+			region_y,
+			"VassalArmy_"..action.region..action.turn,
+			true,
+			function(cqi)
+				if buffer_pending ~= action or action.phase ~= "started" then return; end
+				local created_cqi = tonumber(cqi);
+				if not created_cqi or created_cqi <= 0 or created_cqi > 16777215
+					or created_cqi ~= math.floor(created_cqi) then
+					Buffer_Mark_Uncertain(action, "buffer_spawn_invalid_cqi");
+					return;
+				end
+				local current_region, _, _, transferred = Buffer_Resolve_Action(action);
+				if not current_region or transferred then
+					Buffer_Mark_Uncertain(action, "buffer_spawn_invalid_owner");
+					return;
+				end
+				action.phase = "applying";
+				local applied = pcall(function()
+					cm:force_make_vassal(faction_name, vassal_faction_name);
+					if FACTIONS_TO_FACTIONS_VASSALIZED then
+						Faction_Vassalized(faction_name, vassal_faction_name, true, false, false);
+					end
+				end);
+				if not applied then Buffer_Mark_Uncertain(action, "buffer_vassal_result_uncertain"); return; end
+				action.phase = "waiting_transfer";
+				Buffer_Arm_Transfer();
+			end
+		);
+	else
+		Buffer_Apply_Transfer(action);
+	end
+	return true, buffer_pending and "requested" or "confirmed";
+end
+
+function MKMP_Buffer_Get_State()
+	-- Unconfirmed local dialog selection is deliberately outside shared state.
+	return MKMP_Diagnostic_Copy({schema = 1, enabled = buffer_initialized,
+		serial = buffer_serial, blocked = buffer_blocked, pending = buffer_pending or {}}),
+		buffer_preserve_raw and "incomplete" or "complete";
+end
+
 function Add_Buffer_States_Listeners()
 	if buffer_initialized then
 		Buffer_Arm_Transfer();
 		return;
 	end
 	buffer_initialized = true;
+	MKMP_Actions_Register("buffer_state", {validate = Buffer_Validate_Local, execute = Buffer_Execute_Local});
 	cm:add_listener(
 		"OnComponentLClickUp_Buffer_UI",
 		"ComponentLClickUp",
@@ -142,6 +257,8 @@ function Add_Buffer_States_Listeners()
 		function(context) OnTimeTrigger_Buffer(context) end,
 		true
 	);
+	cm:add_listener("FactionTurnStart_Buffer_Observe", "FactionTurnStart", true,
+		function() Buffer_Observe_Transfer(); end, true);
 
 	CreateBufferStateUI();
 	Buffer_Arm_Transfer();
@@ -196,79 +313,15 @@ function OnComponentLClickUp_Buffer_UI(context)
 		end
 	elseif context.string == "button_buffer_confirm" then
 		local action = buffer_intent;
-		if not action or buffer_pending or buffer_blocked then return; end
+		if not action then return; end
 		buffer_intent = nil;
-		local region, _, _, already_owned = Buffer_Resolve_Action(action);
-		if not region or already_owned or FACTION_TURN ~= action.master
-			or buffer_serial >= BUFFER_MAX_SERIAL then
-			BufferPanelClosed(false);
-			return;
-		end
-		buffer_serial = buffer_serial + 1;
-		action.serial, action.phase = buffer_serial, "started";
-		buffer_pending = action;
-		local root = cm:ui_root();
-		local btnBuffer = UIComponent(root:Find("button_release_buffer_state"));
-		local faction_name = action.master;
-		local vassal_faction_name = action.vassal;
-		local spear_unit = BUFFER_STATE_SPEAR_UNITS[vassal_faction_name];
-		local unit_list = "";
-
-		if spear_unit then
-			unit_list = spear_unit..","..spear_unit..","..spear_unit..","..spear_unit;
-		else
-			-- We need to give them something even if it's inaccurate, otherwise the army will not spawn.
-			unit_list = "att_rom_cohors";
-		end
-
-		if not FactionIsAlive(vassal_faction_name) then
-			local settlement = region:settlement();
-			if not settlement or settlement:is_null_interface() then
-				action.phase = "blocked";
-				BufferPanelClosed(false);
-				return;
-			end
-			local region_x = settlement:logical_position_x();
-			local region_y = settlement:logical_position_y();
-
-			cm:create_force(
-				vassal_faction_name,
-				unit_list,
-				action.region,
-				region_x,
-				region_y,
-				"VassalArmy_"..action.region..action.turn,
-				true,
-				function(cqi)
-					if buffer_pending ~= action or action.phase ~= "started" then return; end
-					local created_cqi = tonumber(cqi);
-					if not created_cqi or created_cqi <= 0 or created_cqi == math.huge
-						or created_cqi ~= math.floor(created_cqi) then
-						action.phase = "blocked";
-						Buffer_Log("buffer_spawn_invalid_cqi", action);
-						return;
-					end
-					local current_region, _, _, transferred = Buffer_Resolve_Action(action);
-					if not current_region or transferred then
-						action.phase = "blocked";
-						Buffer_Log("buffer_spawn_invalid_owner", action);
-						return;
-					end
-					action.phase = "applying";
-					cm:force_make_vassal(faction_name, vassal_faction_name);
-					if FACTIONS_TO_FACTIONS_VASSALIZED then
-						Faction_Vassalized(faction_name, vassal_faction_name, true, false, false);
-					end
-					action.phase = "waiting_transfer";
-					Buffer_Arm_Transfer();
-				end
-			);
-		else
-			Buffer_Apply_Transfer(action);
-		end
-
+		local accepted, reason = MKMP_Actions_Submit_Local("buffer_state", action.master, action);
 		BufferPanelClosed(false);
-		btnBuffer:SetVisible(false);
+		if accepted then
+			UIComponent(cm:ui_root():Find("button_release_buffer_state")):SetVisible(false);
+		else
+			MKMP_Actions_UI_Feedback(context.component, reason);
+		end
 	elseif context.string == "button_buffer_cancel" then
 		BufferPanelClosed(false);
 	elseif context.string == "root" then
@@ -345,6 +398,7 @@ function OnSettlementDeselected_Buffer(context)
 end
 
 function OnTimeTrigger_Buffer(context)
+	if cm:is_multiplayer() then return; end
 	local action = buffer_pending;
 	if buffer_blocked or not action or action.phase ~= "waiting_transfer"
 		or context.string ~= Buffer_Timer_Name(action) then return; end
@@ -367,10 +421,11 @@ function BufferPanelClosed(hover)
 	end
 end
 
--- Owned action schema 1, stored through the common framed array codec:
--- {"1", serial, "idle"} or
--- {"1", serial, phase, master_key, vassal_key, region_key, start_turn}.
--- At most seven scalar fields / 4096 encoded bytes, one pending action, no
+-- Owned action schema 2, stored through the common framed array codec:
+-- {"2", serial, "idle"} or
+-- {"2", serial, phase, master_key, vassal_key, region_key, start_turn, action_id}.
+-- Schema 1 remains readable, with no invented link to the new action ledger.
+-- At most eight scalar fields / 4096 encoded bytes, one pending action, no
 -- retry list. Local unconfirmed modal intent is intentionally never persisted.
 local function Buffer_Saved_Integer(value)
 	if type(value) ~= "string" or not string.match(value, "^%d+$") then return nil; end
@@ -392,18 +447,18 @@ cm:register_saving_game_callback(
 			cm:save_value(BUFFER_STATE_KEY.."__schema", buffer_raw_schema, context);
 			return;
 		end
-		local record = {"1", tostring(buffer_serial), "idle"};
+		local record = {"2", tostring(buffer_serial), "idle"};
 		if buffer_pending then
 			local action = buffer_pending;
 			if not Buffer_Valid_Phase(action.phase) or action.serial ~= buffer_serial then
 				error("MK1212 buffer action has invalid phase/serial");
 			end
-			record = {"1", tostring(buffer_serial), action.phase, action.master,
-				action.vassal, action.region, tostring(action.turn)};
+			record = {"2", tostring(buffer_serial), action.phase, action.master,
+				action.vassal, action.region, tostring(action.turn), action.action_id or "none"};
 		end
 		-- All fields are bounded before the common codec writes the value.
 		for i = 1, #record do
-			if type(record[i]) ~= "string" or record[i] == "" or #record[i] > 256 then
+			if type(record[i]) ~= "string" or record[i] == "" or #record[i] > (i == 8 and 512 or 256) then
 				error("MK1212 buffer action has invalid/oversized field");
 			end
 		end
@@ -430,7 +485,7 @@ cm:register_loading_game_callback(
 			return;
 		end
 		local ok, record = pcall(LoadTable, context, BUFFER_STATE_KEY);
-		if not ok or record[1] ~= "1" or not Buffer_Saved_Integer(record[2]) then
+		if not ok or (record[1] ~= "1" and record[1] ~= "2") or not Buffer_Saved_Integer(record[2]) then
 			Buffer_Log("buffer_action_invalid_save");
 			return;
 		end
@@ -440,8 +495,9 @@ cm:register_loading_game_callback(
 			buffer_blocked, buffer_preserve_raw = false, false;
 			return;
 		end
-		if #record ~= 7 or serial < 1 or not Buffer_Valid_Phase(phase)
-			or not Buffer_Saved_Integer(record[7]) or Buffer_Saved_Integer(record[7]) < 1 then
+		if #record ~= (record[1] == "1" and 7 or 8) or serial < 1 or not Buffer_Valid_Phase(phase)
+			or not Buffer_Saved_Integer(record[7]) or Buffer_Saved_Integer(record[7]) < 1
+			or Buffer_Saved_Integer(record[7]) > cm:model():turn_number() then
 			Buffer_Log("buffer_action_invalid_save");
 			return;
 		end
@@ -451,9 +507,24 @@ cm:register_loading_game_callback(
 				return;
 			end
 		end
+		local action_id = record[1] == "2" and record[8] ~= "none" and record[8] or nil;
+		if action_id then
+			local prefix = "sp:"..record[4]..":";
+			local serial_text = string.sub(action_id, #prefix + 1);
+			if #action_id > 512 or string.sub(action_id, 1, #prefix) ~= prefix
+				or not Buffer_Saved_Integer(serial_text) or Buffer_Saved_Integer(serial_text) < 1 then
+				Buffer_Log("buffer_action_invalid_save");
+				return;
+			end
+			if not MKMP_Actions_Matches(action_id, "buffer_state", record[4],
+				{region = record[6], master = record[4], vassal = record[5], turn = Buffer_Saved_Integer(record[7])}) then
+				Buffer_Log("buffer_action_ledger_mismatch");
+				return;
+			end
+		end
 		buffer_serial = serial;
 		buffer_pending = {serial = serial, phase = phase, master = record[4],
-			vassal = record[5], region = record[6], turn = Buffer_Saved_Integer(record[7])};
+			vassal = record[5], region = record[6], turn = Buffer_Saved_Integer(record[7]), action_id = action_id};
 		if phase == "waiting_transfer" then
 			-- First-tick initialization validates current entities/owner and arms
 			-- one timer. No model commands or timers are issued while loading.

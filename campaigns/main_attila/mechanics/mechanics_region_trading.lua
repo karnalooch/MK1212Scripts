@@ -11,8 +11,113 @@ local min_gift_value = 1500; -- Minimum value of a region before the AI will acc
 local regions_giving = {}; -- Regions being given to the AI.
 local regions_recieving = {}; -- Regions being demanded by the player.
 local region_trade_panel_open = false;
+local region_trade_initialized = false;
+local region_trade_pending = {};
+local REGION_TRADE_KEY = "MKMP_REGION_TRADE_PENDING";
+local REGION_TRADE_MAX_PENDING = 32;
+local REGION_TRADE_MAX_BYTES = 131072;
+
+local function Region_Trade_Key(value)
+	return type(value) == "string" and #value > 0 and #value <= 256
+		and string.match(value, "^[A-Za-z0-9_]+$") ~= nil;
+end
+
+local function Region_Trade_Log(claim, stage)
+	if MKMP_Debug_Trace then
+		pcall(MKMP_Debug_Trace, "shared_candidate", "region_trade", {
+			action_id = claim.id, actor = claim.actor, target = claim.payload.target,
+			stage = stage, phase = claim.phase, native_delivery = "unproven"
+		});
+	end
+end
+
+local function Region_Trade_Serialize(claims)
+	local keys = MK1212_SaveSortedKeys(claims);
+	if #keys > REGION_TRADE_MAX_PENDING then error("region trade pending budget"); end
+	local parts = {};
+	for i = 1, #keys do
+		local id, claim = keys[i], claims[keys[i]];
+		local payload = claim.payload;
+		if type(id) ~= "string" or #id > 512 or claim.id ~= id or not Region_Trade_Key(claim.actor)
+			or type(payload) ~= "table" or #MK1212_SaveSortedKeys(payload) ~= 4
+			or not Region_Trade_Key(payload.target) or claim.actor == payload.target
+			or not MK1212_IsFiniteNumber(payload.turn) or payload.turn < 1 or payload.turn > cm:model():turn_number()
+			or payload.turn ~= math.floor(payload.turn) or (claim.phase ~= "requested" and claim.phase ~= "uncertain") then
+			error("invalid region trade pending claim");
+		end
+		local prefix = "sp:"..claim.actor..":";
+		local serial_text = string.sub(id, #prefix + 1);
+		local serial = tonumber(serial_text);
+		if string.sub(id, 1, #prefix) ~= prefix or not MK1212_IsFiniteNumber(serial) or serial < 1
+			or serial > 1000000 or serial ~= math.floor(serial) or tostring(serial) ~= serial_text then
+			error("invalid region trade action identity");
+		end
+		local giving = MK1212_SaveDenseLength(payload.giving, 32);
+		local receiving = MK1212_SaveDenseLength(payload.receiving, 32);
+		if giving + receiving == 0 then error("empty region trade claim"); end
+		MK1212_SaveAppend(parts, id, ",");
+		MK1212_SaveAppend(parts, claim.actor, ",");
+		MK1212_SaveAppend(parts, payload.target, ",");
+		MK1212_SaveAppend(parts, payload.turn, ",");
+		MK1212_SaveAppend(parts, claim.phase, ",");
+		MK1212_SaveAppend(parts, giving, ",");
+		MK1212_SaveAppend(parts, receiving, ",");
+		local seen = {};
+		for _, list in ipairs({payload.giving, payload.receiving}) do
+			for j = 1, #list do
+				local key = list[j];
+				if not Region_Trade_Key(key) or seen[key] then error("invalid/duplicate region trade region"); end
+				seen[key] = true;
+				MK1212_SaveAppend(parts, key, ",");
+			end
+		end
+		MK1212_SaveEndRow(parts);
+	end
+	local payload = table.concat(parts);
+	if #payload > REGION_TRADE_MAX_BYTES then error("region trade pending save budget"); end
+	return payload, #keys;
+end
+
+local function Region_Trade_Ownership_Observed(claim)
+	local world = cm:model():world();
+	local lists, targets = {claim.payload.giving, claim.payload.receiving}, {claim.payload.target, claim.actor};
+	for side = 1, 2 do
+		for i = 1, #lists[side] do
+			local region = world:region_manager():region_by_key(lists[side][i]);
+			if not region or region:is_null_interface() then return false; end
+			local owner = region:owning_faction();
+			if not owner or owner:is_null_interface() or owner:name() ~= targets[side] then return false; end
+		end
+	end
+	return true;
+end
+
+function MKMP_Region_Trade_Observe()
+	if cm:is_multiplayer() then return; end
+	local ids = MK1212_SaveSortedKeys(region_trade_pending);
+	for i = 1, #ids do
+		local claim = region_trade_pending[ids[i]];
+		local matches = MKMP_Actions_Matches and MKMP_Actions_Matches(claim.id, "region_trade", claim.actor, claim.payload);
+		if matches then
+			local ok, observed = pcall(Region_Trade_Ownership_Observed, claim);
+			if ok and observed and MKMP_Actions_Confirm(claim.id, "confirmed") then
+				-- Observation retires only this exact captured operation. It never
+				-- issues another region transfer or consumes a sidecar ACK.
+				region_trade_pending[claim.id] = nil;
+				Region_Trade_Log(claim, "ownership_observed");
+			end
+		end
+	end
+end
+
+function MKMP_Region_Trade_Get_State()
+	return MKMP_Diagnostic_Copy({schema = 1, enabled = region_trade_initialized, pending = region_trade_pending}), "complete";
+end
 
 function Add_Region_Trading_Listeners()
+	if region_trade_initialized then return; end
+	region_trade_initialized = true;
+	MKMP_Actions_Register("region_trade", {validate = MKMP_Region_Trade_Validate, execute = MKMP_Region_Trade_Execute});
 	cm:add_listener(
 		"OnComponentLClickUp_Region_Trading_UI",
 		"ComponentLClickUp",
@@ -34,6 +139,8 @@ function Add_Region_Trading_Listeners()
 		function(context) TimeTrigger_Region_Trading_UI(context) end,
 		true
 	);
+	cm:add_listener("FactionTurnStart_Region_Trade_Observe", "FactionTurnStart", true,
+		function() MKMP_Region_Trade_Observe(); end, true);
 end
 
 local function Calculate_Region_Value(region, purchaser_name)
@@ -174,6 +281,68 @@ local function Calculate_Region_Trade_Value()
 	end
 end
 
+function MKMP_Region_Trade_Validate(actor, payload)
+	if #MK1212_SaveSortedKeys(payload) ~= 4 or not Region_Trade_Key(payload.target) or actor == payload.target
+		or payload.turn ~= cm:model():turn_number() then return false, "trade_actor_or_turn"; end
+	local world = cm:model():world();
+	local source, target = world:faction_by_key(actor), world:faction_by_key(payload.target);
+	if not source or source:is_null_interface() or not target or target:is_null_interface()
+		or source:is_horde() or target:is_horde() or source:at_war_with(target) then return false, "trade_relation"; end
+	if FACTIONS_VASSALIZED_ANNEXING and FACTIONS_VASSALIZED_ANNEXING[payload.target] then return false, "trade_annexing"; end
+	local ids = MK1212_SaveSortedKeys(region_trade_pending);
+	if #ids >= REGION_TRADE_MAX_PENDING then return false, "trade_pending_budget"; end
+	for i = 1, #ids do
+		if region_trade_pending[ids[i]].actor == actor then return false, "trade_prior_ownership_unconfirmed"; end
+	end
+	local seen, count, values = {}, 0, {0, 0};
+	local lists, owners = {payload.giving, payload.receiving}, {source, target};
+	for side = 1, 2 do
+		local length = MK1212_SaveDenseLength(lists[side], 32);
+		for i = 1, length do
+			local key = lists[side][i];
+			if type(key) ~= "string" or seen[key] then return false, "trade_duplicate_region"; end
+			seen[key], count = true, count + 1;
+			local region = world:region_manager():region_by_key(key);
+			if not region or region:is_null_interface() or region:owning_faction():name() ~= owners[side]:name()
+				or (owners[side]:has_home_region() and owners[side]:home_region():name() == key)
+				or region:garrison_residence():is_under_siege() then return false, "trade_region_changed"; end
+			values[side] = values[side] + Calculate_Region_Value(region, side == 1 and payload.target or nil);
+		end
+	end
+	if count == 0 or #REGIONS_TO_TRANSFER + count > MAX_PENDING_REGION_TRANSFERS then return false, "trade_queue_budget"; end
+	if values[1] < values[2] or (values[2] <= 0 and values[1] < min_gift_value) then return false, "trade_value_changed"; end
+	return true;
+end
+
+function MKMP_Region_Trade_Execute(actor, payload, action_id)
+	local claim = {id = action_id, actor = actor, payload = MKMP_Actions_Copy(payload), phase = "uncertain"};
+	if region_trade_pending[action_id] or not MKMP_Actions_Matches(action_id, "region_trade", actor, payload) then
+		return false, "trade_action_identity";
+	end
+	region_trade_pending[action_id] = claim;
+	if not pcall(Region_Trade_Serialize, region_trade_pending) then
+		region_trade_pending[action_id] = nil;
+		return false, "trade_pending_save_budget";
+	end
+	Region_Trade_Log(claim, "claimed_before_command");
+	local ok, accepted = pcall(function()
+		local lists, targets = {payload.giving, payload.receiving}, {payload.target, actor};
+		for side = 1, 2 do
+			for i = 1, #lists[side] do
+				if Transfer_Region_To_Faction(lists[side][i], targets[side]) ~= true then return false; end
+			end
+		end
+		return true;
+	end);
+	if not ok or not accepted then
+		Region_Trade_Log(claim, "uncertain");
+		return false, "trade_transfer_unknown";
+	end
+	claim.phase = "requested";
+	MKMP_Region_Trade_Observe();
+	return true, region_trade_pending[action_id] and "requested" or "confirmed";
+end
+
 local function Process_Region_Trade()
 	local root = cm:ui_root();
 	local diplomacy_dropdown_uic = UIComponent(root:Find("diplomacy_dropdown"));
@@ -187,16 +356,15 @@ local function Process_Region_Trade()
 	local button_set1_uic = UIComponent(offers_panel_uic:Find("button_set1"));
 	local faction_name = cm:get_local_faction();
 
-	if #regions_giving > 0 then
-		for i = 1, #regions_giving do
-			Transfer_Region_To_Faction(regions_giving[i], DIPLOMACY_SELECTED_FACTION);
-		end
-	end
-
-	if #regions_recieving > 0 then
-		for i = 1, #regions_recieving do
-			Transfer_Region_To_Faction(regions_recieving[i], faction_name);
-		end
+	local giving = MKMP_Actions_Copy(regions_giving);
+	local receiving = MKMP_Actions_Copy(regions_recieving);
+	table.sort(giving, MK1212_SaveByteLess);
+	table.sort(receiving, MK1212_SaveByteLess);
+	local accepted, reason = MKMP_Actions_Submit_Local("region_trade", faction_name,
+		{target = DIPLOMACY_SELECTED_FACTION, giving = giving, receiving = receiving, turn = cm:model():turn_number()});
+	if not accepted then
+		MKMP_Actions_UI_Feedback(button_set1_uic:Find("button_send"), reason);
+		return false;
 	end
 
 	UIComponent(button_set1_uic:Find("button_counteroffer")):SetVisible(true);
@@ -205,6 +373,7 @@ local function Process_Region_Trade()
 	list_demands_list_box_uic:DestroyChildren();
 	list_demands_uic:SetVisible(false);
 	tx_likelihood_uic:SetVisible(false);
+	return true;
 end
 
 local function Open_Region_Trading_Panel()
@@ -311,9 +480,7 @@ function OnComponentLClickUp_Region_Trading_UI(context)
 
 				region_trade_panel_open = false;
 			elseif context.string == "button_send" then
-				Process_Region_Trade();
-
-				region_trade_panel_open = false;
+				if Process_Region_Trade() then region_trade_panel_open = false; end
 			elseif context.string == "checkbox" then
 				Calculate_Region_Trade_Value();
 			end
@@ -362,3 +529,44 @@ function TimeTrigger_Region_Trading_UI(context)
 		Open_Region_Trading_Panel();
 	end
 end
+
+-- New saves retain the exact operation payload only while ownership has not
+-- been observed. Legacy saves have no such claim; local UI selection is never
+-- migrated into a pending command. Loading never submits any region transfer.
+cm:register_saving_game_callback(function(context)
+	local payload, count = Region_Trade_Serialize(region_trade_pending);
+	MK1212_SaveCommitString(context, REGION_TRADE_KEY, payload, count);
+	cm:save_value(REGION_TRADE_KEY.."_VERSION", 1, context);
+end);
+
+cm:register_loading_game_callback(function(context)
+	local version = cm:load_value(REGION_TRADE_KEY.."_VERSION", 0, context);
+	local raw = cm:load_value(REGION_TRADE_KEY, "", context);
+	local outer = cm:load_value(REGION_TRADE_KEY.."__schema", 0, context);
+	local claims = {};
+	if version == 0 and raw == "" and outer == 0 then
+		-- No owner-managed trade observation state in pre-N4 saves.
+	elseif version == 1 and outer == 3 and type(raw) == "string" and raw ~= "" then
+		local rows = MK1212_LoadSaveRows(context, REGION_TRADE_KEY);
+		if #rows > REGION_TRADE_MAX_PENDING then error("region trade pending budget"); end
+		for i = 1, #rows do
+			local row = rows[i];
+			if #row < 8 or #row > 71 or claims[row[1]] then error("invalid region trade pending row"); end
+			local giving = MK1212_SaveNumber(row[6], REGION_TRADE_KEY);
+			local receiving = MK1212_SaveNumber(row[7], REGION_TRADE_KEY);
+			if giving < 0 or receiving < 0 or giving > 32 or receiving > 32
+				or giving ~= math.floor(giving) or receiving ~= math.floor(receiving)
+				or giving + receiving == 0 or #row ~= 7 + giving + receiving
+				or (row[5] ~= "requested" and row[5] ~= "uncertain") then error("invalid region trade pending shape"); end
+			local payload = {target = row[3], turn = MK1212_SaveNumber(row[4], REGION_TRADE_KEY), giving = {}, receiving = {}};
+			for j = 1, giving do payload.giving[j] = row[7 + j]; end
+			for j = 1, receiving do payload.receiving[j] = row[7 + giving + j]; end
+			claims[row[1]] = {id = row[1], actor = row[2], phase = "uncertain", payload = payload};
+		end
+		Region_Trade_Serialize(claims); -- Validate the entire next snapshot first.
+	else
+		error("MK1212 load refused: region trade pending schema");
+	end
+	region_trade_pending = claims;
+	regions_giving, regions_recieving, region_trade_panel_open = {}, {}, false;
+end);

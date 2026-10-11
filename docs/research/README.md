@@ -74,6 +74,11 @@ flowchart LR
 
 ## Documents
 
+- [N0–N4 implementation and save compatibility](MP_N0_N4_IMPLEMENTATION.md)
+- [N0 Papal actions and nickname order](MP_N0_PAPAL_ACTIONS.md)
+- [N1 component checkpoints and comparator](MP_N1_DIAGNOSTICS.md)
+- [Native diplomacy payment audit and missing dump boundary](MP_NATIVE_DIPLOMACY_CHANNEL.md)
+- [N2/N4 native event probe, buffered coordinator and final run](../runtime/MP_HOST_COORDINATOR.md)
 - [ATTILA Assembly Kit and scripting authority](ATTILA_ASSEMBLY_KIT.md)
 - [WH3 debug drawing reference and compatibility boundary](WH3_DEBUG_DRAWING_REFERENCE.md)
 - [Historical Attila CE table research notes](ATTILA_CE_TABLE_1_6_0_9824.md)

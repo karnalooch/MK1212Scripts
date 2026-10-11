@@ -88,7 +88,7 @@ function Golden_Horde_Regions_Check(context)
 		if (cm:is_multiplayer() and not MKMP_SP_Parity_Enabled("kingdom_decisions")) or context:faction():is_human() == false then
 			Golden_Horde_Formed(faction_name);
 		elseif (not mkHRE or (mkHRE and HasValue(mkHRE.factions, faction_name) ~= true)) then
-			Enable_Decision("form_empire_golden_horde");
+			Enable_Decision("form_empire_golden_horde", faction_name);
 		end	
 	end
 end
@@ -99,7 +99,7 @@ function Golden_Horde_Formed(faction_name)
 	Rename_Faction(faction_name, faction_name.."_lvl"..tostring(FACTIONS_DFN_LEVEL[faction_name]));
 
 	if (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("kingdom_decisions")) then
-		Remove_Decision("form_empire_golden_horde");
+		Remove_Decision("form_empire_golden_horde", faction_name);
 	end
 
 	cm:show_message_event(

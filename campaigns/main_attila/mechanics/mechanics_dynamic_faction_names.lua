@@ -165,11 +165,11 @@ function Global_DFN_Check()
 							if faction:is_human() == false or (cm:is_multiplayer() and not MKMP_SP_Parity_Enabled("dynamic_faction_decisions")) then
 								DFN_Set_Faction_Rank(faction_name, 2);
 							else
-								Enable_Decision("found_a_kingdom");
+								Enable_Decision("found_a_kingdom", faction_name);
 							end
 						else
 							if faction:is_human() == true and (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("dynamic_faction_decisions")) then
-								Disable_Decision("found_a_kingdom");
+								Disable_Decision("found_a_kingdom", faction_name);
 							end
 						end
 					end
@@ -179,11 +179,11 @@ function Global_DFN_Check()
 							if faction:is_human() == false or (cm:is_multiplayer() and not MKMP_SP_Parity_Enabled("dynamic_faction_decisions")) then
 								DFN_Set_Faction_Rank(faction_name, 3);
 							else
-								Enable_Decision("found_an_empire");
+								Enable_Decision("found_an_empire", faction_name);
 							end
 						else
 							if faction:is_human() == true and (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("dynamic_faction_decisions")) then
-								Disable_Decision("found_an_empire");
+								Disable_Decision("found_an_empire", faction_name);
 							end
 						end
 					end
@@ -192,11 +192,11 @@ function Global_DFN_Check()
 						if faction:is_human() == false or (cm:is_multiplayer() and not MKMP_SP_Parity_Enabled("dynamic_faction_decisions")) then
 							DFN_Set_Faction_Rank(faction_name, 5);
 						else
-							Enable_Decision("found_an_empire");
+							Enable_Decision("found_an_empire", faction_name);
 						end
 					else
 						if faction:is_human() == true and (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("dynamic_faction_decisions")) then
-							Disable_Decision("found_an_empire");
+							Disable_Decision("found_an_empire", faction_name);
 						end
 					end
 				end
@@ -254,9 +254,9 @@ function DFN_Set_Faction_Rank(faction_name, set_rank)
 
 	if (not cm:is_multiplayer() or MKMP_SP_Parity_Enabled("dynamic_faction_decisions")) then
 		if rank == 2 or rank == 4 then
-			Remove_Decision("found_a_kingdom");
+			Remove_Decision("found_a_kingdom", faction_name);
 		elseif rank == 3 or rank == 5 then
-			Remove_Decision("found_an_empire");
+			Remove_Decision("found_an_empire", faction_name);
 		end
 	end
 
@@ -281,8 +281,8 @@ function DFN_Disable_Forming_Kingdoms(faction_name)
 		local faction = cm:model():world():faction_by_key(faction_name);
 
 		if faction:is_human() then
-			Remove_Decision("found_a_kingdom");
-			Remove_Decision("found_an_empire");
+			Remove_Decision("found_a_kingdom", faction_name);
+			Remove_Decision("found_an_empire", faction_name);
 		end
 	end
 end
