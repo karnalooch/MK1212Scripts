@@ -6,7 +6,8 @@ This is the documentation router and authority map for this fork.
 
 - [Attila research authority](research/README.md) — source hierarchy for Assembly Kit, scripting, multiplayer, runtime instrumentation and cross-title research.
 - [Upstream author handoff: multiplayer hardening](research/MULTIPLAYER_HARDENING_AUTHOR_HANDOFF.md) — detailed English report covering findings, merged fixes, remaining MP gates and final validation status.
-- [twdll observability backend](research/TWDLL_OBSERVABILITY_BACKEND.md) — native Lua↔C++↔Attila architecture, safety boundaries, fallback contract and MP fingerprint plan.
+- [twdll observability backend](research/TWDLL_OBSERVABILITY_BACKEND.md)
+- [Ghidra/optional IDA engine research](research/GHIDRA_IDA_WORKFLOW.md) — SHA-pinned static analysis of a locally owned Attila DLL/EXE. — native Lua↔C++↔Attila architecture, safety boundaries, fallback contract and MP fingerprint plan.
 - [twdll monorepo migration audit](research/TWDLL_MONOREPO_AUDIT.md) — post-merge import integrity, CI proof semantics, build identity and security-exception evidence.
 - [twdll runtime/code audit](research/TWDLL_RUNTIME_AUDIT.md) — active Attila C++/hook/Lua-ABI safety findings, fixes, remaining runtime risks and MP boundaries.
 - [`native/twdll/`](../native/twdll/) — canonical MK1212 native source; provenance is pinned in [`native/twdll/UPSTREAM.md`](../native/twdll/UPSTREAM.md).

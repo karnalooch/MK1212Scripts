@@ -18,6 +18,7 @@ Uses the Rome 2 Total Realism Scripting Toolkit courtesy of the R2TR development
 - twdll API docs: https://bukowa.github.io/twdll/
 - ATTILA Assembly Kit: https://wiki.totalwar.com/w/Assembly_Kit_(TWA).html
 - Research docs: [docs/research/README.md](docs/research/README.md)
+- [Offline Ghidra/IDA research](docs/research/GHIDRA_IDA_WORKFLOW.md) — portable installation on D:, original game file required, no dump needed.
 - twdll observability architecture: [docs/research/TWDLL_OBSERVABILITY_BACKEND.md](docs/research/TWDLL_OBSERVABILITY_BACKEND.md)
 - MP/OOS safety guardrails: [docs/research/SCRIPT_SAFETY_GUARDRAILS.md](docs/research/SCRIPT_SAFETY_GUARDRAILS.md)
 - Upstream author handoff: [docs/research/MULTIPLAYER_HARDENING_AUTHOR_HANDOFF.md](docs/research/MULTIPLAYER_HARDENING_AUTHOR_HANDOFF.md)
