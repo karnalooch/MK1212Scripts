@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "purpose": "local-static-analysis-only",
+  "ghidra": {
+    "name": "Ghidra",
+    "version": "12.0.1",
+    "tag": "Ghidra_12.0.1_build",
+    "archive": "ghidra_12.0.1_PUBLIC_20260114.zip",
+    "folder": "ghidra_12.0.1_PUBLIC",
+    "executable": "support\\analyzeHeadless.bat",
+    "url": "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.0.1_build/ghidra_12.0.1_PUBLIC_20260114.zip",
+    "sha256": "85bd2990945f3a78df4d1e09f1bb1f40ab77be3bac62c6e7678900788c7f0f41",
+    "license": "Apache-2.0",
+    "source": "https://github.com/NationalSecurityAgency/ghidra"
+  },
+  "jdk": {
+    "name": "Eclipse Temurin",
+    "version": "25.0.4.1+1",
+    "tag": "jdk-25.0.4.1+1",
+    "archive": "OpenJDK25U-jdk_x64_windows_hotspot_25.0.4.1_1.zip",
+    "folder": "jdk-25.0.4.1+1",
+    "executable": "bin\\java.exe",
+    "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jdk_x64_windows_hotspot_25.0.4.1_1.zip",
+    "sha256": "00c847d804f4a78e9f04f2683faf14fed898535b177b7fc704486cb0284e9283",
+    "license": "GPL-2.0-with-classpath-exception",
+    "source": "https://github.com/adoptium/temurin25-binaries"
+  }
+}
